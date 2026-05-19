@@ -83,6 +83,225 @@ Scoped visibility (committee chairs see only their committee's data) is enforced
 
 ---
 
+# PHASE 0 — App Shell, Theme & Navigation
+> Goal: Blank app with a working navigation structure, design system, and theme engine ready before any feature work begins.
+
+## 0.1 Expo & Project Config
+
+- [ ] Confirm `app.json` has correct `name`, `slug`, `scheme`, `ios.bundleIdentifier`, `android.package`
+- [ ] Set up `babel.config.js` with path aliases (`@/components`, `@/lib`, `@/stores`, `@/types`)
+- [ ] Configure `tsconfig.json` with strict mode + path aliases matching Babel config
+- [ ] Set up `.env` with `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_API_URL`
+- [ ] Add `react-native-dotenv` or `expo-constants` for env var access
+
+## 0.2 Dependencies
+
+Install all core dependencies up front so they don't interrupt feature phases:
+
+```bash
+# Navigation
+npx expo install expo-router react-native-safe-area-context react-native-screens expo-linking expo-constants expo-status-bar
+
+# UI & Styling
+npx expo install react-native-reanimated react-native-gesture-handler
+
+# State
+npm install zustand
+
+# Supabase
+npm install @supabase/supabase-js
+npx expo install expo-secure-store
+
+# Utilities
+npx expo install expo-image expo-haptics @expo/vector-icons
+```
+
+## 0.3 Design Tokens & Theme System
+
+Create `mobile/lib/theme.ts` — the single source of truth for all visual constants:
+
+```typescript
+export const defaultTheme = {
+  colors: {
+    primary:    '#6366f1',
+    secondary:  '#a5b4fc',
+    accent:     '#f472b6',
+    background: '#0f0f1a',
+    surface:    '#1a1a2e',
+    surfaceAlt: '#16213e',
+    text:       '#ffffff',
+    textMuted:  '#94a3b8',
+    textSubtle: '#475569',
+    border:     '#1e293b',
+    error:      '#ef4444',
+    warning:    '#f59e0b',
+    success:    '#22c55e',
+  },
+  typography: {
+    fontFamily: {
+      regular: 'System',
+      medium:  'System',
+      bold:    'System',
+    },
+    size: {
+      xs:  11,
+      sm:  13,
+      md:  15,
+      lg:  17,
+      xl:  20,
+      xxl: 26,
+      h1:  32,
+    },
+    lineHeight: {
+      tight:  1.2,
+      normal: 1.5,
+      loose:  1.8,
+    },
+  },
+  spacing: {
+    xs:  4,
+    sm:  8,
+    md:  16,
+    lg:  24,
+    xl:  32,
+    xxl: 48,
+  },
+  radius: {
+    sm:   6,
+    md:   12,
+    lg:   18,
+    full: 9999,
+  },
+  shadow: {
+    sm: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4,  elevation: 2 },
+    md: { shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8,  elevation: 4 },
+    lg: { shadowColor: '#000', shadowOpacity: 0.2,  shadowRadius: 16, elevation: 8 },
+  },
+};
+
+export type AppTheme = typeof defaultTheme;
+```
+
+## 0.4 Theme Store (Zustand)
+
+Create `mobile/stores/themeStore.ts`:
+
+```typescript
+// Org branding from Supabase overrides default tokens at login.
+// defaultTheme is the fallback used before branding loads.
+import { create } from 'zustand';
+import { defaultTheme, AppTheme } from '@/lib/theme';
+
+interface ThemeStore {
+  theme: AppTheme;
+  setOrgBranding: (branding: Partial<AppTheme['colors']>) => void;
+  reset: () => void;
+}
+
+export const useThemeStore = create<ThemeStore>((set) => ({
+  theme: defaultTheme,
+  setOrgBranding: (branding) =>
+    set((state) => ({
+      theme: { ...state.theme, colors: { ...state.theme.colors, ...branding } },
+    })),
+  reset: () => set({ theme: defaultTheme }),
+}));
+```
+
+## 0.5 Core UI Components
+
+Build these once. Every feature phase uses them — never inline raw styles.
+
+| Component | File | Notes |
+|-----------|------|-------|
+| `Button` | `components/ui/Button.tsx` | variants: primary, secondary, ghost, danger |
+| `Text` | `components/ui/Text.tsx` | wraps RN Text, pulls from theme typography |
+| `Card` | `components/ui/Card.tsx` | themed surface container with optional shadow |
+| `Input` | `components/ui/Input.tsx` | labeled, error state, themed border |
+| `Badge` | `components/ui/Badge.tsx` | small color pill for status labels |
+| `Avatar` | `components/ui/Avatar.tsx` | image with fallback initials |
+| `Divider` | `components/ui/Divider.tsx` | horizontal rule from theme border color |
+| `ScreenContainer` | `components/ui/ScreenContainer.tsx` | safe area + background color wrapper |
+| `Header` | `components/ui/Header.tsx` | top nav bar — logo/title, optional right action |
+| `EmptyState` | `components/ui/EmptyState.tsx` | icon + message for empty lists |
+| `LoadingSpinner` | `components/ui/LoadingSpinner.tsx` | centered activity indicator |
+
+All components accept a `style` override prop. None hard-code colors or spacing.
+
+## 0.6 Navigation Structure
+
+Set up all route groups now so file creation during feature phases just fills in screens:
+
+```
+mobile/app/
+├── _layout.tsx               # Root layout — loads theme, checks auth, redirects
+├── (auth)/
+│   ├── _layout.tsx           # No tab bar, no header
+│   ├── login.tsx
+│   ├── register.tsx
+│   └── onboarding.tsx
+├── (member)/
+│   ├── _layout.tsx           # Bottom tab bar: Home, Calendar, Compliance, Profile
+│   ├── index.tsx             # Home / announcements feed
+│   ├── calendar.tsx
+│   ├── compliance.tsx
+│   ├── profile.tsx
+│   └── event/[id].tsx
+├── (officer)/
+│   ├── _layout.tsx           # Bottom tab bar: Events, Attendance, Excuses, Members
+│   ├── events/
+│   ├── attendance/
+│   ├── excuses/
+│   └── members/
+└── (admin)/
+    ├── _layout.tsx           # Bottom tab bar: Dashboard, Members, Roles, Settings
+    ├── dashboard.tsx
+    ├── members/
+    ├── roles/
+    ├── committees/
+    ├── dues/
+    ├── compliance/
+    └── settings.tsx
+```
+
+Root `_layout.tsx` logic:
+1. Check for active Supabase session
+2. If no session → redirect to `/(auth)/login`
+3. If session → load membership + org branding → apply to theme store → redirect to role-appropriate tab group
+
+## 0.7 Placeholder Screens
+
+Add a placeholder to every route above so navigation works end-to-end before features are built:
+
+```typescript
+// Example placeholder — same pattern for every screen
+import { ScreenContainer } from '@/components/ui/ScreenContainer';
+import { Text } from '@/components/ui/Text';
+
+export default function CalendarScreen() {
+  return (
+    <ScreenContainer>
+      <Text>Calendar — coming soon</Text>
+    </ScreenContainer>
+  );
+}
+```
+
+## 0.8 Phase 0 Checklist
+
+- [ ] `app.json` configured
+- [ ] Path aliases working (`@/` resolves)
+- [ ] All dependencies installed, no Expo SDK conflicts
+- [ ] `theme.ts` created with full default token set
+- [ ] `themeStore.ts` created
+- [ ] All core UI components scaffolded (can be minimal stubs)
+- [ ] All route groups and `_layout.tsx` files created
+- [ ] Placeholder screen in every route
+- [ ] App boots, navigation works, no red screens
+- [ ] Theme tokens visibly applied (background color, text color correct)
+
+---
+
 # PHASE 1 — Foundation, Auth & Org Branding
 > Goal: Supabase running, auth working, chapter onboarding under 10 minutes, org branding fully configurable.
 
