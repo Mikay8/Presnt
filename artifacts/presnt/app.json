@@ -1,24 +1,50 @@
 {
   "expo": {
-    "name": "presnt",
+    "name": "Presnt",
     "slug": "presnt",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon-1024-dark.png",
     "scheme": "presnt",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "image": "./assets/images/splash-1290x2796-dark.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#1A1411"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.presnt.app",
+      "icon": "./assets/images/icon-1024-dark.png",
+      "splash": {
+        "image": "./assets/images/splash-1290x2796-light.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#FBF6EE",
+        "dark": {
+          "image": "./assets/images/splash-1290x2796-dark.png",
+          "backgroundColor": "#1A1411"
+        }
+      }
     },
-    "android": {},
+    "android": {
+      "package": "com.presnt.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon-1024-square-dark.png",
+        "backgroundColor": "#1A1411"
+      },
+      "splash": {
+        "image": "./assets/images/splash-1290x2796-light.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#FBF6EE",
+        "dark": {
+          "image": "./assets/images/splash-1290x2796-dark.png",
+          "backgroundColor": "#1A1411"
+        }
+      }
+    },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/icon-256-dark.png"
     },
     "plugins": [
       [
@@ -28,7 +54,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
