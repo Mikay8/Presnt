@@ -25,6 +25,8 @@ export function Input({ label, error, style, rightElement, ...props }: Props) {
     ? theme.colors.primary
     : theme.colors.border;
 
+  const borderWidth = focused || !!error ? 2 : 1;
+
   return (
     <View style={[{ gap: 6 }, style]}>
       {label && (
@@ -37,7 +39,7 @@ export function Input({ label, error, style, rightElement, ...props }: Props) {
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: theme.colors.surface,
-          borderWidth: 1,
+          borderWidth,
           borderColor,
           borderRadius: theme.radius.md,
           paddingHorizontal: theme.spacing.md,
@@ -50,6 +52,9 @@ export function Input({ label, error, style, rightElement, ...props }: Props) {
             fontFamily: theme.typography.fontFamily.regular,
             fontSize: theme.typography.size.md,
             color: theme.colors.text,
+            // Remove the browser's native blue focus outline on web
+            // @ts-ignore — web-only property
+            outline: 'none',
           }}
           placeholderTextColor={theme.colors.textSubtle}
           onFocus={() => setFocused(true)}

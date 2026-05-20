@@ -34,7 +34,7 @@ export default function LoginScreen() {
     <ScreenContainer scroll contentStyle={styles.content}>
       <View style={styles.logoRow}>
         <Image
-          source={require('@/assets/images/wordmark-dark.svg')}
+          source={require('@/assets/images/wordmark-dark.png')}
           style={styles.wordmark}
           resizeMode="contain"
         />
@@ -117,8 +117,8 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   wordmark: {
-    width: 120,
-    height: 36,
+    width: 240,
+    height: 72,
   },
   heading: {
     marginBottom: 8,

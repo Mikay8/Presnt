@@ -18,7 +18,7 @@ export function Header({
   onBack,
   style,
 }: Props) {
-  const { theme } = useThemeStore();
+  const { theme, colorScheme } = useThemeStore();
 
   return (
     <View
@@ -48,7 +48,11 @@ export function Header({
       <View style={{ alignItems: 'center' }}>
         {showLogo ? (
           <Image
-            source={require('../../assets/images/wordmark-dark.svg')}
+            source={
+              colorScheme === 'dark'
+                ? require('../../assets/images/wordmark-light.png')
+                : require('../../assets/images/wordmark-dark.png')
+            }
             style={{ height: 24, width: 80 }}
             resizeMode="contain"
           />
