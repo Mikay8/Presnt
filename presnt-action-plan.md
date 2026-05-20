@@ -88,11 +88,11 @@ Scoped visibility (committee chairs see only their committee's data) is enforced
 
 ## 0.1 Expo & Project Config
 
-- [ ] Confirm `app.json` has correct `name`, `slug`, `scheme`, `ios.bundleIdentifier`, `android.package`
-- [ ] Set up `babel.config.js` with path aliases (`@/components`, `@/lib`, `@/stores`, `@/types`)
-- [ ] Configure `tsconfig.json` with strict mode + path aliases matching Babel config
-- [ ] Set up `.env` with `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_API_URL`
-- [ ] Add `react-native-dotenv` or `expo-constants` for env var access
+- [x] Confirm `app.json` has correct `name`, `slug`, `scheme`, `ios.bundleIdentifier`, `android.package`
+- [x] Set up `babel.config.js` with path aliases (`@/components`, `@/lib`, `@/stores`, `@/types`)
+- [x] Configure `tsconfig.json` with strict mode + path aliases matching Babel config
+- [x] Set up `.env` with `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_API_URL`
+- [x] Add `react-native-dotenv` or `expo-constants` for env var access
 
 ## 0.2 Dependencies
 
@@ -289,16 +289,16 @@ export default function CalendarScreen() {
 
 ## 0.8 Phase 0 Checklist
 
-- [ ] `app.json` configured
-- [ ] Path aliases working (`@/` resolves)
-- [ ] All dependencies installed, no Expo SDK conflicts
-- [ ] `theme.ts` created with full default token set
-- [ ] `themeStore.ts` created
-- [ ] All core UI components scaffolded (can be minimal stubs)
-- [ ] All route groups and `_layout.tsx` files created
-- [ ] Placeholder screen in every route
-- [ ] App boots, navigation works, no red screens
-- [ ] Theme tokens visibly applied (background color, text color correct)
+- [x] `app.json` configured
+- [x] Path aliases working (`@/` resolves)
+- [x] All dependencies installed, no Expo SDK conflicts
+- [x] `theme.ts` created with full default token set
+- [x] `themeStore.ts` created
+- [x] All core UI components scaffolded (can be minimal stubs)
+- [x] All route groups and `_layout.tsx` files created
+- [x] Placeholder screen in every route
+- [x] App boots, navigation works, no red screens
+- [x] Theme tokens visibly applied (background color, text color correct)
 
 ---
 

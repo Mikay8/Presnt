@@ -12,9 +12,10 @@ interface Props extends TextInputProps {
   label?: string;
   error?: string;
   style?: ViewStyle;
+  rightElement?: React.ReactNode;
 }
 
-export function Input({ label, error, style, ...props }: Props) {
+export function Input({ label, error, style, rightElement, ...props }: Props) {
   const { theme } = useThemeStore();
   const [focused, setFocused] = useState(false);
 
@@ -31,23 +32,34 @@ export function Input({ label, error, style, ...props }: Props) {
           {label}
         </Text>
       )}
-      <TextInput
+      <View
         style={{
+          flexDirection: 'row',
+          alignItems: 'center',
           backgroundColor: theme.colors.surface,
           borderWidth: 1,
           borderColor,
           borderRadius: theme.radius.md,
-          paddingVertical: 12,
           paddingHorizontal: theme.spacing.md,
-          fontFamily: theme.typography.fontFamily.regular,
-          fontSize: theme.typography.size.md,
-          color: theme.colors.text,
         }}
-        placeholderTextColor={theme.colors.textSubtle}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        {...props}
-      />
+      >
+        <TextInput
+          style={{
+            flex: 1,
+            paddingVertical: 12,
+            fontFamily: theme.typography.fontFamily.regular,
+            fontSize: theme.typography.size.md,
+            color: theme.colors.text,
+          }}
+          placeholderTextColor={theme.colors.textSubtle}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          {...props}
+        />
+        {rightElement && (
+          <View style={{ paddingLeft: 8 }}>{rightElement}</View>
+        )}
+      </View>
       {error && (
         <Text size="sm" color={theme.colors.error}>
           {error}
