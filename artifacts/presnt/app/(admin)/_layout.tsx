@@ -60,7 +60,7 @@ export default function AdminLayout() {
       />
       <Tabs.Screen name="committees" options={{ href: null }} />
       <Tabs.Screen name="dues" options={{ href: null }} />
-      <Tabs.Screen name="compliance" options={{ href: null }} />
+      <Tabs.Screen name="status" options={{ href: null }} />
     </Tabs>
   );
 }

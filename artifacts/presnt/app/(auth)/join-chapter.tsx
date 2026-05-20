@@ -46,14 +46,26 @@ export default function JoinChapterScreen() {
   }
 
   async function handleJoin() {
-    if (!selected || !user) return;
+    if (!selected) return;
+
+    // Use store user if available, otherwise fetch the live session
+    let userId = user?.id;
+    if (!userId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id;
+    }
+    if (!userId) {
+      setError('Not logged in. Please restart the app.');
+      return;
+    }
+
     setError('');
     setJoining(true);
 
     const { data: membership, error: joinError } = await supabase
       .from('memberships')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         org_id: selected.id,
         status: 'pending',
         joined_at: new Date().toISOString().split('T')[0],

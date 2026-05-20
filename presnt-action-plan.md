@@ -228,6 +228,7 @@ Build these once. Every feature phase uses them — never inline raw styles.
 
 All components accept a `style` override prop. None hard-code colors or spacing.
 
+
 ## 0.6 Navigation Structure
 
 Set up all route groups now so file creation during feature phases just fills in screens:
@@ -241,10 +242,10 @@ mobile/app/
 │   ├── register.tsx
 │   └── onboarding.tsx
 ├── (member)/
-│   ├── _layout.tsx           # Bottom tab bar: Home, Calendar, Compliance, Profile
+│   ├── _layout.tsx           # Bottom tab bar: Home, Calendar, Status, Profile
 │   ├── index.tsx             # Home / announcements feed
 │   ├── calendar.tsx
-│   ├── compliance.tsx
+│   ├── status.tsx
 │   ├── profile.tsx
 │   └── event/[id].tsx
 ├── (officer)/
@@ -254,14 +255,14 @@ mobile/app/
 │   ├── excuses/
 │   └── members/
 └── (admin)/
-    ├── _layout.tsx           # Bottom tab bar: Dashboard, Members, Roles, Settings
-    ├── dashboard.tsx
-    ├── members/
-    ├── roles/
-    ├── committees/
-    ├── dues/
-    ├── compliance/
-    └── settings.tsx
+  ├── _layout.tsx           # Bottom tab bar: Dashboard, Members, Roles, Settings
+  ├── dashboard.tsx
+  ├── members/
+  ├── roles/
+  ├── committees/
+  ├── dues/
+  ├── status/
+  └── settings.tsx
 ```
 
 Root `_layout.tsx` logic:
@@ -523,7 +524,7 @@ CREATE TRIGGER on_auth_user_created
 - [ ] Join chapter screen: search by name/slug, request pending approval
 - [ ] Onboarding completes in under 10 minutes
 
-## 1.7 Phase 1 API Routes
+# 1.7 Phase 1 API Routes
 
 ```
 POST   /auth/register
@@ -539,6 +540,16 @@ PATCH  /orgs/{org_id}/members/{membership_id}
 GET    /orgs/{org_id}/terms
 POST   /orgs/{org_id}/terms
 ```
+
+## 1.8 Rename Compliance to Status in Mobile App
+
+- [ ] Update all references to "compliance" in the mobile app layout, navigation, and screen names to "status" for clarity and consistency.
+- [ ] Example changes:
+  - `(member)/compliance.tsx` → `(member)/status.tsx`
+  - `(officer)/compliance/index.tsx` → `(officer)/status/index.tsx`
+  - `(officer)/compliance/at-risk.tsx` → `(officer)/status/at-risk.tsx`
+  - `(admin)/compliance/requirements.tsx` → `(admin)/status/requirements.tsx`
+- [ ] Update navigation tab labels and any in-app references from "Compliance" to "Status".
 
 ---
 
@@ -1089,13 +1100,18 @@ PATCH  /attendance/{record_id}
 GET    /events/{event_id}/attendance
 ```
 
+
 ## 3.5 Mobile Screens
 
 - [ ] `(member)/calendar.tsx`
 - [ ] `(member)/event/[id].tsx`
+- [ ] `(member)/status.tsx`
 - [ ] `(officer)/events/create.tsx`
 - [ ] `(officer)/events/[id]/manage.tsx`
 - [ ] `(officer)/events/[id]/qr.tsx`
+- [ ] `(officer)/status/index.tsx`
+- [ ] `(officer)/status/at-risk.tsx`
+- [ ] `(admin)/status/requirements.tsx`
 
 ---
 
@@ -1199,12 +1215,22 @@ POST   /orgs/{org_id}/compliance/reports
 GET    /orgs/{org_id}/compliance/reports
 ```
 
+
 ## 4.4 Mobile Screens
 
-- [ ] `(member)/compliance.tsx`
-- [ ] `(officer)/compliance/index.tsx`
-- [ ] `(officer)/compliance/at-risk.tsx`
-- [ ] `(admin)/compliance/requirements.tsx`
+- [ ] `(member)/status.tsx`
+- [ ] `(officer)/status/index.tsx`
+- [ ] `(officer)/status/at-risk.tsx`
+- [ ] `(admin)/status/requirements.tsx`
+# 1.8 Rename Compliance to Status in Mobile App
+
+- [ ] Update all references to "compliance" in the mobile app layout, navigation, and screen names to "status" for clarity and consistency.
+- [ ] Example changes:
+  - `(member)/compliance.tsx` → `(member)/status.tsx`
+  - `(officer)/compliance/index.tsx` → `(officer)/status/index.tsx`
+  - `(officer)/compliance/at-risk.tsx` → `(officer)/status/at-risk.tsx`
+  - `(admin)/compliance/requirements.tsx` → `(admin)/status/requirements.tsx`
+- [ ] Update navigation tab labels and any in-app references from "Compliance" to "Status".
 
 ---
 

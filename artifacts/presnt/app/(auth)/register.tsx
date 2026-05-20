@@ -5,10 +5,12 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { Button, Input, ScreenContainer, Text } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 
 export default function RegisterScreen() {
   const theme = useThemeStore((s) => s.theme);
+  const setSession = useAuthStore((s) => s.setSession);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -29,7 +31,7 @@ export default function RegisterScreen() {
     setError('');
     setLoading(true);
 
-    const { error: authError } = await supabase.auth.signUp({
+    const { data: signUpData, error: authError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
@@ -42,6 +44,17 @@ export default function RegisterScreen() {
       setError(authError.message);
       return;
     }
+
+    if (!signUpData.session) {
+      // Email confirmation is enabled — user must confirm before logging in.
+      setError('Check your email for a confirmation link, then come back to sign in.');
+      return;
+    }
+
+    // Email confirmation is disabled — we have a live session.
+    // Eagerly populate the store so create/join screens see the user immediately.
+    setSession(signUpData.session);
+
     // Profile is auto-created by the DB trigger.
     // Redirect to onboarding to create/join a chapter.
     router.replace('/(auth)/onboarding');

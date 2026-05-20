@@ -56,7 +56,14 @@ export default function CreateChapterScreen() {
       setError('Chapter name and institution are required.');
       return;
     }
-    if (!user) {
+
+    // Use store user if available, otherwise fetch the live session
+    let userId = user?.id;
+    if (!userId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      userId = session?.user?.id;
+    }
+    if (!userId) {
       setError('Not logged in. Please restart the app.');
       return;
     }
@@ -90,7 +97,7 @@ export default function CreateChapterScreen() {
     const { data: membership, error: membershipError } = await supabase
       .from('memberships')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         org_id: org.id,
         status: 'active',
         joined_at: new Date().toISOString().split('T')[0],

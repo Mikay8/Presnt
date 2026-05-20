@@ -30,13 +30,24 @@ A blank Expo mobile app with a companion API server in the same pnpm workspace.
 
 ### Local secrets and environment variables
 
-- Use the Replit secrets/environment panel to set local values for the project
-- Store shared non-sensitive config as environment variables
-- Store sensitive values as secrets
-- The app currently expects `TEST_SECRET` for testing/config checks
-- The backend requires `DATABASE_URL`
-- Keep secret names consistent between the app and backend
-- Do not commit secret values to the repo
+**API server** — set these in your environment before running `dev`:
+
+| Variable | Description |
+|---|---|
+| `PORT` | Port for the Express server (e.g. `3000`) |
+| `DATABASE_URL` | Postgres connection string (Supabase direct URL) |
+| `SUPABASE_URL` | Your Supabase project URL (`https://<ref>.supabase.co`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key from Supabase dashboard → Settings → API |
+
+**Mobile app** — set these in `.env.local` at `artifacts/presnt/`:
+
+| Variable | Description |
+|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | Same as `SUPABASE_URL` above |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Anon/public key from Supabase dashboard → Settings → API |
+
+- Do not commit `.env.local` or any secrets to the repo
+- `SUPABASE_SERVICE_ROLE_KEY` is server-only — never expose it to the mobile client
 
 ## Stack
 
@@ -49,7 +60,15 @@ A blank Expo mobile app with a companion API server in the same pnpm workspace.
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+| What | Path |
+|---|---|
+| Mobile app screens | `artifacts/presnt/app/` |
+| Mobile Supabase client | `artifacts/presnt/lib/supabase.ts` |
+| Mobile auth + theme stores | `artifacts/presnt/stores/` |
+| API server routes | `artifacts/api-server/src/routes/` |
+| API auth middleware | `artifacts/api-server/src/middlewares/auth.ts` |
+| DB schema (Drizzle) | `lib/db/src/schema/` |
+| Supabase migrations | Applied via MCP — check Supabase dashboard for history |
 
 ## Architecture decisions
 
@@ -66,7 +85,10 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run `pnpm run typecheck:libs` from the root before typechecking the API server — it builds the `lib/db` and `lib/api-zod` type declarations that the server imports.
+- Drizzle schema files must use `import { z } from 'zod/v4'` (not `'zod'`) — `drizzle-zod@0.8.x` requires the Zod v4 API.
+- `SUPABASE_SERVICE_ROLE_KEY` bypasses all RLS — only used in the Express server, never in the mobile app.
+- Never hard-delete rows — use `is_deleted = true` + `deleted_at`. Audit logs and transaction ledgers are append-only (no UPDATE/DELETE).
 
 ## Pointers
 

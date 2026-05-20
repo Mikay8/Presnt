@@ -1,9 +1,9 @@
 import { ScreenContainer, Text } from '@/components/ui';
 
-export default function AdminComplianceScreen() {
+export default function AdminStatusScreen() {
   return (
     <ScreenContainer>
-      <Text>Compliance — coming soon</Text>
+      <Text>Status — coming soon</Text>
     </ScreenContainer>
   );
 }

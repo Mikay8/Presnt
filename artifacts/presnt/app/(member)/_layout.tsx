@@ -41,9 +41,9 @@ export default function MemberLayout() {
         }}
       />
       <Tabs.Screen
-        name="compliance"
+        name="status"
         options={{
-          title: 'Compliance',
+          title: 'Status',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="checkmark-circle-outline" size={size} color={color} />
           ),
