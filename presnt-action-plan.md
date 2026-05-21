@@ -560,9 +560,29 @@ POST   /orgs/{org_id}/terms
 
 ---
 
-## 1.5.0 App Architecture
+## 1.5.0 What the Superuser Is & Architecture
+
+The superuser is **not** an org role. It is a platform-level flag (`profiles.is_superuser = true`) that bypasses all RLS, all org-scoped permissions, and all feature flag gates. It is set manually — never through the app UI. There is no way for any chapter admin or member to grant or discover superuser status. There should only ever be one or two superuser accounts. Treat them like production database credentials.
+
+### Granting Superuser Access
+
+Set directly in Supabase dashboard or via a one-time seed script. **Never via an API route.**
+
+```sql
+-- Run in Supabase SQL editor. Replace with your actual user UUID.
+UPDATE profiles
+SET is_superuser = true, superuser_since = now()
+WHERE id = '<your-profile-uuid>';
+
+-- To find your UUID after registering:
+SELECT id, email FROM profiles WHERE email = 'your@email.com';
+```
+
+### App Architecture
 
 The superuser UI is built inside the **existing Expo app** as a new route group `(superuser)/`, protected by a guard in `_layout.tsx` that redirects non-superusers to a 403 screen. On web (≥ 800 px) it renders the dark sidebar layout shown in the mockups. On mobile it renders a bottom-tab shell with the same screens.
+
+> **Deployment note:** While the superuser route group lives in the same Expo codebase, it is deployed on a separate subdomain (`superadmin.presnt.app`) and never shipped as part of the chapter-facing mobile bundle. The route group guard is the first line of defense; Supabase RLS and the `require_superuser` FastAPI dependency are the enforcement layer.
 
 ```
 app/
@@ -610,21 +630,62 @@ app/
 
 ---
 
-## 1.5.1 Database — Superuser Audit Log
+## 1.5.1 Database — Superuser Audit Log & RLS Bypass
 
-This migration is prerequisite to everything else in 1.5. See also Migration 014 in Phase 12 for the full schema. Apply this first.
+### Migration 014 — Superuser Audit Log
+
+This migration is prerequisite to everything else in 1.5. Apply before building any superuser screen.
 
 ```sql
--- Already defined in Phase 12 Migration 014 — apply it here in Phase 1.5 build order.
--- Key points for UI:
---   action values used by UI: 'org.viewed', 'org.deactivated', 'org.reactivated',
---     'org.field_edited', 'org.impersonated', 'profile.viewed', 'profile.edited',
---     'profile.force_logged_out', 'profile.impersonated',
---     'subscription.plan_overridden', 'subscription.pro_granted', 'subscription.pro_revoked',
---     'feature_flag.toggled_global', 'feature_flag.org_override_added',
---     'feature_flag.org_override_removed', 'support.excuse_overridden',
---     'support.attendance_overridden', 'support.compliance_recalculated',
---     'support.qr_inspected', 'support.push_sent'
+CREATE TABLE superuser_audit_log (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  performed_by   uuid REFERENCES profiles(id) NOT NULL,
+  action         text NOT NULL,
+  -- action values used in UI:
+  --   'org.viewed', 'org.deactivated', 'org.reactivated', 'org.field_edited', 'org.impersonated'
+  --   'profile.viewed', 'profile.edited', 'profile.force_logged_out', 'profile.impersonated'
+  --   'subscription.plan_overridden', 'subscription.pro_granted', 'subscription.pro_revoked'
+  --   'feature_flag.toggled_global', 'feature_flag.org_override_added', 'feature_flag.org_override_removed'
+  --   'support.excuse_overridden', 'support.attendance_overridden', 'support.compliance_recalculated'
+  --   'support.qr_inspected', 'support.push_sent'
+  target_type    text,             -- 'org', 'profile', 'membership', 'subscription', etc.
+  target_id      uuid,
+  previous_value jsonb,
+  new_value      jsonb,
+  notes          text,
+  ip_address     inet,
+  created_at     timestamptz DEFAULT now()
+  -- append only. No updates. No deletes. Ever.
+);
+
+CREATE INDEX idx_superuser_audit_performer ON superuser_audit_log(performed_by);
+CREATE INDEX idx_superuser_audit_target    ON superuser_audit_log(target_type, target_id);
+CREATE INDEX idx_superuser_audit_created   ON superuser_audit_log(created_at DESC);
+```
+
+Every superuser route **must** write to `superuser_audit_log` before returning. No exceptions.
+
+### RLS Bypass Pattern
+
+Add this policy pattern to every table so superusers bypass all row-level restrictions:
+
+```sql
+-- Helper function — keeps policies DRY
+CREATE OR REPLACE FUNCTION is_superuser()
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND is_superuser = true
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Apply to each table after creation:
+-- CREATE POLICY "superuser_bypass" ON <table> USING (is_superuser());
+
+-- Example for organizations:
+CREATE POLICY "superuser_bypass" ON organizations
+  USING (is_superuser());
 ```
 
 ---
@@ -809,6 +870,48 @@ USAGE
 - `Exit impersonation` button always visible in top-right corner
 - Impersonation token: 15-min expiry, generated by `POST /superadmin/orgs/{org_id}/impersonate`
 - Every action inside impersonation is tagged with the superuser's ID in `superuser_audit_log`
+
+**API implementation:**
+```python
+@router.post("/superadmin/profiles/{profile_id}/impersonate")
+def impersonate_user(profile_id: str, su = Depends(require_superuser)):
+    target = db.query("SELECT email FROM profiles WHERE id = %s", [profile_id])
+    # Generate a short-lived magic link token for the target user
+    token = supabase.auth.admin.generate_link(type='magiclink', email=target['email'])
+
+    # Always log before returning
+    insert_superuser_audit_log(
+        performed_by=su['id'],
+        action='profile.impersonated',
+        target_type='profile',
+        target_id=profile_id,
+        notes="Impersonation token generated"
+    )
+
+    # Return 15-minute token
+    return { "token": token, "expires_in": 900 }
+
+# Same pattern for org-level impersonation:
+@router.post("/superadmin/orgs/{org_id}/impersonate")
+def impersonate_org_admin(org_id: str, su = Depends(require_superuser)):
+    # Find the chapter admin profile for this org
+    admin = db.query("""
+        SELECT p.email, p.id FROM profiles p
+        JOIN memberships m ON m.user_id = p.id
+        JOIN member_roles mr ON mr.membership_id = m.id
+        JOIN org_roles or_ ON mr.org_role_id = or_.id
+        WHERE m.org_id = %s AND or_.name = 'Chapter Admin' AND mr.is_active = true
+        LIMIT 1
+    """, [org_id])
+    token = supabase.auth.admin.generate_link(type='magiclink', email=admin['email'])
+    insert_superuser_audit_log(performed_by=su['id'], action='org.impersonated',
+        target_type='org', target_id=org_id, notes="Org admin impersonation token generated")
+    return { "token": token, "expires_in": 900 }
+```
+
+**Rules:**
+- Impersonation is read-only by default. Destructive actions during impersonation require an explicit `?force=true` param which itself gets logged.
+- 15-minute countdown timer is shown in the persistent red banner. Auto-exits on expiry.
 
 ---
 
@@ -1072,6 +1175,7 @@ PATCH  /superadmin/orgs/{org_id}
 POST   /superadmin/orgs/{org_id}/deactivate
 POST   /superadmin/orgs/{org_id}/reactivate
 POST   /superadmin/orgs/{org_id}/impersonate
+DELETE /superadmin/orgs/{org_id}                 # hard delete — last resort only, requires double confirmation
 
 # Org data (read-only debug access)
 GET    /superadmin/orgs/{org_id}/members
@@ -1130,6 +1234,39 @@ PATCH  /superadmin/config/email-templates/{key}
 
 ---
 
+## 1.5.5.1 FastAPI Superuser Middleware
+
+Add this dependency to every `/superadmin/*` route. Never skip it.
+
+```python
+# api/dependencies/auth.py
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    """Validate JWT and return profile row."""
+    user = supabase.auth.get_user(token)
+    profile = db.query("SELECT * FROM profiles WHERE id = %s", [user.id])
+    return profile
+
+def require_superuser(current_user = Depends(get_current_user)):
+    """
+    Raises 403 if the authenticated user is not a platform superuser.
+    Use as a FastAPI dependency on every /superadmin/* route.
+    """
+    if not current_user.get('is_superuser'):
+        raise HTTPException(status_code=403, detail="Superuser access required.")
+    return current_user
+
+# Usage on any superuser route:
+# @router.get("/superadmin/orgs")
+# def list_all_orgs(su = Depends(require_superuser)):
+#     insert_superuser_audit_log(performed_by=su['id'], action='org.viewed', ...)
+#     ...
+```
+
+All `/superadmin/*` routes are rate-limited to **60 requests/minute** per IP.
+
+---
+
 ## 1.5.6 UI Design Tokens for Superuser App
 
 The superuser app uses its own dark color palette — distinct from org branding so there's no confusion when impersonating.
@@ -1155,8 +1292,9 @@ Impersonation mode overlays a persistent `4px top border` in `danger` red + a fl
 
 ---
 
-## 1.5.7 Security Rules (UI Layer)
+## 1.5.7 Security Rules
 
+### UI Layer
 - Superuser route group checks `is_superuser` on every screen mount — does not trust the layout guard alone
 - All destructive actions (deactivate org, force logout, plan override) require:
   1. Confirmation modal with action description
@@ -1166,6 +1304,16 @@ Impersonation mode overlays a persistent `4px top border` in `danger` red + a fl
 - No `is_superuser` value is displayed anywhere in the superuser UI — the presence of the UI itself is the indicator
 - Every form `Save` is disabled until a change is actually made (no accidental saves)
 - Tab-switching away from a dirty form shows "Unsaved changes" warning
+
+### API & Database Layer
+- `is_superuser` is **never returned** in any API response that non-superuser clients can access — never include it in member/officer API payloads
+- There is no API route to set `is_superuser = true` — only direct Supabase SQL editor or seed script
+- Superuser accounts must use a strong password + **MFA enforced** in Supabase Auth settings (Authentication → Users → enable MFA requirement for superuser emails)
+- Superuser sessions expire after **1 hour** — set shorter JWT expiry for superuser accounts in Supabase Auth settings
+- All `/superadmin/*` routes are **rate-limited to 60 requests/minute**
+- Superadmin web app is on a **separate subdomain** (`superadmin.presnt.app`) and is not bundled in the chapter-facing mobile app
+- Never log or return raw `is_superuser` values in error messages or API responses
+- Every `/superadmin/*` route writes to `superuser_audit_log` before returning — no exceptions, no shortcuts
 
 ---
 
@@ -2422,228 +2570,6 @@ GET    /orgs/{org_id}/audit-log
 
 ---
 
-# PHASE 12 — Platform Superuser (You)
-> Goal: A single God-mode account that can read and write everything across all orgs, view all logs, impersonate any org for debugging, and manage the platform itself.
-
-## 12.1 What the Superuser Is
-
-The superuser is **not** an org role. It is a platform-level flag (`profiles.is_superuser = true`) that bypasses all RLS, all org-scoped permissions, and all feature flag gates. It is set manually — never through the app UI. There is no way for any chapter admin or member to grant or discover superuser status.
-
-There should only ever be one or two superuser accounts. Treat them like production database credentials.
-
-## 12.2 How to Grant Superuser Access
-
-Set directly in Supabase dashboard or via a one-time seed script. Never via an API route.
-
-```sql
--- Run in Supabase SQL editor. Replace with your actual user UUID.
-UPDATE profiles
-SET is_superuser = true, superuser_since = now()
-WHERE id = '<your-profile-uuid>';
-```
-
-To find your UUID after registering:
-```sql
-SELECT id, email FROM profiles WHERE email = 'your@email.com';
-```
-
-## 12.3 Superuser RLS Bypass
-
-Add this policy to every table so superusers bypass all row-level restrictions:
-
-```sql
--- Apply this pattern to every table after creation
--- Example for organizations:
-CREATE POLICY "superuser_bypass" ON organizations
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-        AND profiles.is_superuser = true
-    )
-  );
-```
-
-Create a helper function to keep policies DRY:
-
-```sql
-CREATE OR REPLACE FUNCTION is_superuser()
-RETURNS boolean AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM profiles
-    WHERE id = auth.uid()
-      AND is_superuser = true
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- Then each table just uses:
--- CREATE POLICY "superuser_bypass" ON <table> USING (is_superuser());
-```
-
-## 12.4 Superuser Middleware (FastAPI)
-
-```python
-# api/dependencies/auth.py
-
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    user = supabase.auth.get_user(token)
-    profile = db.query("SELECT * FROM profiles WHERE id = %s", [user.id])
-    return profile
-
-def require_superuser(current_user = Depends(get_current_user)):
-    if not current_user.get('is_superuser'):
-        raise HTTPException(status_code=403, detail="Superuser access required.")
-    return current_user
-
-# Usage on any superuser-only route:
-# @router.get("/superadmin/orgs")
-# def list_all_orgs(su = Depends(require_superuser)):
-#     ...
-```
-
-## 12.5 Superuser Action Log
-
-All superuser actions write to a dedicated log. Separate from the org-level `audit_log` so there is always a clean record of platform-level changes.
-
-### Migration 014 — Superuser Audit Log
-```sql
-CREATE TABLE superuser_audit_log (
-  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  performed_by   uuid REFERENCES profiles(id) NOT NULL,
-  action         text NOT NULL,
-  -- e.g. 'org.force_deactivated', 'member.impersonated', 'subscription.overridden',
-  --      'feature_flag.toggled', 'org.branding_reset', 'billing.plan_changed'
-  target_type    text,             -- 'org', 'profile', 'membership', 'subscription', etc.
-  target_id      uuid,
-  previous_value jsonb,
-  new_value      jsonb,
-  notes          text,
-  ip_address     inet,
-  created_at     timestamptz DEFAULT now()
-  -- append only. No updates. No deletes. Ever.
-);
-
-CREATE INDEX idx_superuser_audit_performer ON superuser_audit_log(performed_by);
-CREATE INDEX idx_superuser_audit_target    ON superuser_audit_log(target_type, target_id);
-CREATE INDEX idx_superuser_audit_created   ON superuser_audit_log(created_at DESC);
-```
-
-Every superuser route **must** write to `superuser_audit_log` before returning. No exceptions.
-
-## 12.6 Superuser Capabilities & Routes
-
-### Org Management
-```
-GET    /superadmin/orgs                          # list all orgs, any status
-GET    /superadmin/orgs/{org_id}                 # full org detail inc. billing + branding
-PATCH  /superadmin/orgs/{org_id}                 # edit any org field
-POST   /superadmin/orgs/{org_id}/deactivate      # force deactivate org
-POST   /superadmin/orgs/{org_id}/reactivate
-DELETE /superadmin/orgs/{org_id}                 # hard delete (last resort only)
-```
-
-### Member & Profile Management
-```
-GET    /superadmin/profiles                      # search all users across all orgs
-GET    /superadmin/profiles/{profile_id}
-PATCH  /superadmin/profiles/{profile_id}         # edit any profile field
-POST   /superadmin/profiles/{profile_id}/impersonate  # generate a scoped token to act as user
-POST   /superadmin/profiles/{profile_id}/reset-password
-```
-
-### Subscription & Billing Overrides
-```
-GET    /superadmin/subscriptions                 # all subscriptions across all orgs
-PATCH  /superadmin/subscriptions/{org_id}        # manually override plan/status
-POST   /superadmin/subscriptions/{org_id}/grant-pro    # grant Pro without Stripe
-POST   /superadmin/subscriptions/{org_id}/revoke-pro
-```
-
-### Feature Flag Management
-```
-GET    /superadmin/feature-flags
-PATCH  /superadmin/feature-flags/{key}           # toggle globally or per org
-POST   /superadmin/feature-flags/{key}/enable-for-org/{org_id}
-DELETE /superadmin/feature-flags/{key}/org/{org_id}
-```
-
-### Platform Logs (read-only)
-```
-GET    /superadmin/logs/superuser                # superuser_audit_log
-GET    /superadmin/logs/audit                    # all org audit_logs across all orgs
-GET    /superadmin/logs/billing                  # all billing_events
-GET    /superadmin/logs/restrictions             # all restriction_audit_logs
-GET    /superadmin/logs/errors                   # Sentry error feed (proxied)
-```
-
-### Org Data Access (read-only for debugging)
-```
-GET    /superadmin/orgs/{org_id}/members
-GET    /superadmin/orgs/{org_id}/events
-GET    /superadmin/orgs/{org_id}/attendance
-GET    /superadmin/orgs/{org_id}/compliance
-GET    /superadmin/orgs/{org_id}/excuses
-GET    /superadmin/orgs/{org_id}/dues
-GET    /superadmin/orgs/{org_id}/restrictions
-GET    /superadmin/orgs/{org_id}/audit-log
-```
-
-## 12.7 Impersonation
-
-Lets you act as any user in any org for debugging without knowing their password.
-
-```python
-@router.post("/superadmin/profiles/{profile_id}/impersonate")
-def impersonate_user(profile_id: str, su = Depends(require_superuser)):
-    # 1. Generate a short-lived Supabase token scoped to the target user
-    token = supabase.auth.admin.generate_link(type='magiclink', email=target_email)
-
-    # 2. Log it — always
-    insert_superuser_audit_log(
-        performed_by=su.id,
-        action='member.impersonated',
-        target_type='profile',
-        target_id=profile_id,
-        notes=f"Impersonation token generated"
-    )
-
-    # 3. Return short-lived token (expires in 15 minutes)
-    return { "token": token, "expires_in": 900 }
-```
-
-**Rules:**
-- Impersonation tokens expire in 15 minutes
-- Every impersonation writes to `superuser_audit_log`
-- Impersonation is read-only by default — destructive actions during impersonation require an explicit `?force=true` query param which itself gets logged
-
-## 12.8 Superuser Web Dashboard
-
-Build as a **separate web app** — not part of the mobile app. Keep it completely isolated.
-
-```
-superadmin.presnt.com   (or localhost:3001 in dev)
-```
-
-- [ ] Separate Next.js or React app in `/superadmin` directory
-- [ ] Auth: same Supabase project, but login page checks `is_superuser = true` — redirects to 403 if not
-- [ ] Never ship superadmin routes or UI inside the main mobile app bundle
-- [ ] Screens:
-  - `Dashboard` — total orgs, active subscriptions, MRR, recent errors
-  - `Orgs` — searchable list of all chapters with status, plan, member count
-  - `Org Detail` — full read/write access to all org data
-  - `Users` — search all profiles, view membership history
-  - `Feature Flags` — toggle flags globally or per org
-  - `Billing` — subscription overrides, Stripe status
-  - `Logs` — tabbed view of all audit logs across all tables
-  - `Impersonate` — look up user → generate token → open in test browser tab
-
-## 12.9 Security Rules for Superuser
-
-- `is_superuser` is never returned in any API response that non-superuser clients can access
-- There is no API route to set `is_superuser = true` — only direct DB access
-- Superuser accounts must use a strong password + MFA enforced in Supabase Auth settings
-- Superuser sessions expire after 1 hour (set shorter JWT expiry for superuser accounts)
-- All `/superadmin/*` routes are rate-limited to 60 requests/minute
-- Superadmin web app is on a separate subdomain, not bundled in the mobile app
-- Never log or return raw `is_superuser` values in error messages or API responses
+# PHASE 12 — Platform Superuser
+> **Merged into Phase 1.5.** All superuser infrastructure — database schema, RLS bypass, FastAPI middleware, API routes, UI screens, impersonation, and security rules — is fully specified in **Phase 1.5 — Super User Platform Dashboard**. Build it in Phase 1.5 order; there is nothing left here that is not already covered there.
 

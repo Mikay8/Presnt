@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar, Button, Card, Text } from '@/components/ui';
+import { Button, Card, Text } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useThemeStore } from '@/stores/themeStore';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 // ─── Dummy data ───────────────────────────────────────────────────────────────
 
@@ -44,13 +46,24 @@ const ACCOUNT_ITEMS: {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
-  const { theme } = useThemeStore();
-  const { width } = useWindowDimensions();
-  const insets    = useSafeAreaInsets();
-  const isWide    = width >= 800;
+  const { theme }   = useThemeStore();
+  const { width }   = useWindowDimensions();
+  const insets      = useSafeAreaInsets();
+  const isWide      = width >= 800;
+  const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    console.log('[handleSignOut] Button pressed');
+    setSigningOut(true);
+    try {
+      console.log('[signOut] Signing out locally with Supabase...');
+      await supabase.auth.signOut();
+      console.log('[signOut] Complete - user should be redirected');
+    } catch (error) {
+      console.error('[signOut] Error:', error);
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   // ── Desktop ──
@@ -91,6 +104,14 @@ export default function ProfileScreen() {
                 </View>
               ))}
             </View>
+            <Button
+              label="Sign out"
+              variant="outline"
+              size="sm"
+              style={{ marginTop: 20, alignSelf: 'stretch' }}
+              loading={signingOut}
+              onPress={handleSignOut}
+            />
           </Card>
 
           {/* Right: info + committees */}
@@ -217,6 +238,7 @@ export default function ProfileScreen() {
         label="Sign out"
         variant="outline"
         style={{ marginTop: 20 }}
+        loading={signingOut}
         onPress={handleSignOut}
       />
     </ScrollView>

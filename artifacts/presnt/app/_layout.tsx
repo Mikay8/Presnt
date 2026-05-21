@@ -6,9 +6,9 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Session } from '@supabase/supabase-js';
-import { Redirect, Stack } from 'expo-router';
+import { Redirect, Stack, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -23,30 +23,46 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+// Only runs after isLoading:false (RootLayout returns null until then).
+// Uses segment awareness so it only navigates when actually needed.
+
 function RootLayoutNav() {
-  const { session, membership, isLoading } = useAuthStore();
+  const { session, membership } = useAuthStore();
+  const segments = useSegments();
 
-  if (isLoading) return null;
+  const inAuth = segments[0] === '(auth)';
 
-  if (!session) {
+  // No session → must be on login/register/onboarding
+  if (!session && !inAuth) {
     return <Redirect href="/(auth)/login" />;
   }
 
-  // If authenticated but no membership, go to onboarding to create/join a chapter
-  if (!membership) {
+  // Session but no membership → needs to join/create a chapter
+  if (session && !membership && !inAuth) {
     return <Redirect href="/(auth)/onboarding" />;
   }
 
-  // Role-based redirect — placeholder until Phase 2 roles are built
-  // For now all members go to the member tab group
-  return <Redirect href="/(member)" />;
+  // Fully authenticated + has membership but sitting on auth screen → go home
+  if (session && membership && inAuth) {
+    return <Redirect href="/(member)" />;
+  }
+
+  // Already on the right screen — do nothing
+  return null;
 }
 
+// ─── Root layout ──────────────────────────────────────────────────────────────
+
 export default function RootLayout() {
-  const systemScheme = useColorScheme();
-  const setColorScheme = useThemeStore((s) => s.setColorScheme);
-  const { setSession, setProfile, setMembership, setLoading, clear } = useAuthStore();
-  const setOrgBranding = useThemeStore((s) => s.setOrgBranding);
+  const systemScheme    = useColorScheme();
+  const setColorScheme  = useThemeStore((s) => s.setColorScheme);
+  const setOrgBranding  = useThemeStore((s) => s.setOrgBranding);
+
+  const {
+    isLoading,
+    setSession, setProfile, setMembership, setLoading, clear,
+  } = useAuthStore();
 
   const [fontsLoaded, fontError] = useFonts({
     SpaceGrotesk_400Regular,
@@ -54,18 +70,22 @@ export default function RootLayout() {
     SpaceGrotesk_600SemiBold,
   });
 
+  // Sync system color scheme
   useEffect(() => {
     setColorScheme(systemScheme === 'light' ? 'light' : 'dark');
   }, [systemScheme]);
 
+  // ── Only hide the splash screen after BOTH fonts AND auth check are done.
+  //    This prevents the member home from flashing before the login redirect fires.
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if ((fontsLoaded || fontError) && !isLoading) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, isLoading]);
 
+  // ── Auth state listener
   useEffect(() => {
-    // Initial session
+    // Resolve initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
@@ -75,7 +95,7 @@ export default function RootLayout() {
       }
     });
 
-    // Listen for auth changes
+    // Keep in sync with Supabase auth events (sign-in, sign-out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
@@ -91,25 +111,28 @@ export default function RootLayout() {
   async function loadUserData(session: Session) {
     setLoading(true);
 
-    // Load profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
+    // Fetch both profile and membership in parallel
+    const [profileResult, membershipResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single(),
+      supabase
+        .from('memberships')
+        .select('*, organizations(*)')
+        .eq('user_id', session.user.id)
+        .eq('is_deleted', false)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+    ]);
+
+    const { data: profile } = profileResult;
+    const { data: membership } = membershipResult;
 
     if (profile) setProfile(profile);
-
-    // Load most recent active membership + org
-    const { data: membership } = await supabase
-      .from('memberships')
-      .select('*, organizations(*)')
-      .eq('user_id', session.user.id)
-      .eq('is_deleted', false)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
 
     if (membership) {
       const { organizations: org, ...membershipOnly } = membership as typeof membership & {
@@ -117,14 +140,13 @@ export default function RootLayout() {
       };
       setMembership(membershipOnly, org ?? null);
 
-      // Apply org branding to theme
       if (org) {
         const branding: Record<string, string> = {};
-        if (org.primary_color) branding.primary = org.primary_color;
-        if (org.secondary_color) branding.secondary = org.secondary_color;
-        if (org.accent_color) branding.accent = org.accent_color;
+        if (org.primary_color)    branding.primary    = org.primary_color;
+        if (org.secondary_color)  branding.secondary  = org.secondary_color;
+        if (org.accent_color)     branding.accent     = org.accent_color;
         if (org.background_color) branding.background = org.background_color;
-        if (org.text_color) branding.text = org.text_color;
+        if (org.text_color)       branding.text       = org.text_color;
         if (Object.keys(branding).length > 0) setOrgBranding(branding);
       }
     } else {
@@ -134,7 +156,11 @@ export default function RootLayout() {
     setLoading(false);
   }
 
+  // ── Block rendering entirely until fonts AND auth resolve.
+  //    The native splash screen (preventAutoHideAsync) covers this window —
+  //    no blank or wrong-route flash is visible to the user.
   if (!fontsLoaded && !fontError) return null;
+  if (isLoading) return null;
 
   return (
     <SafeAreaProvider>
@@ -143,10 +169,10 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(auth)"   />
                 <Stack.Screen name="(member)" />
                 <Stack.Screen name="(officer)" />
-                <Stack.Screen name="(admin)" />
+                <Stack.Screen name="(admin)"  />
                 <Stack.Screen name="+not-found" />
               </Stack>
               <RootLayoutNav />
