@@ -6,7 +6,7 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Session } from '@supabase/supabase-js';
-import { Redirect, Stack, useSegments } from 'expo-router';
+import { Redirect, Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
@@ -23,41 +23,47 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-// ─── Auth guard ───────────────────────────────────────────────────────────────
-// Only runs after isLoading:false (RootLayout returns null until then).
-// Uses segment awareness so it only navigates when actually needed.
+// ─── Auth guard ────────────────────────────────────────────────────────────────
+// Runs after isLoading:false. Uses pathname (always resolves to the real URL)
+// rather than segments (which can be empty on initial render).
 
 function RootLayoutNav() {
   const { session, membership } = useAuthStore();
   const segments = useSegments();
+  const pathname = usePathname();
 
-  const inAuth = segments[0] === '(auth)';
+  const inAuth      = segments[0] === '(auth)';
+  // pathname-based check is reliable even before segments resolve
+  const inSuperuser = pathname === '/super-user'
+                   || pathname.startsWith('/(superuser)');
 
-  // No session → must be on login/register/onboarding
+  // Superuser routes manage their own auth — never redirect away from them
+  if (inSuperuser) return null;
+
+  // No session → send to login
   if (!session && !inAuth) {
     return <Redirect href="/(auth)/login" />;
   }
 
-  // Session but no membership → needs to join/create a chapter
+  // Session but no membership → needs onboarding
   if (session && !membership && !inAuth) {
     return <Redirect href="/(auth)/onboarding" />;
   }
 
-  // Fully authenticated + has membership but sitting on auth screen → go home
+  // Authenticated + membership but sitting on an auth screen → go home
   if (session && membership && inAuth) {
     return <Redirect href="/(member)" />;
   }
 
-  // Already on the right screen — do nothing
   return null;
 }
 
-// ─── Root layout ──────────────────────────────────────────────────────────────
+// ─── Root layout ───────────────────────────────────────────────────────────────
 
 export default function RootLayout() {
-  const systemScheme    = useColorScheme();
-  const setColorScheme  = useThemeStore((s) => s.setColorScheme);
-  const setOrgBranding  = useThemeStore((s) => s.setOrgBranding);
+  const systemScheme   = useColorScheme();
+  const setColorScheme = useThemeStore((s) => s.setColorScheme);
+  const setOrgBranding = useThemeStore((s) => s.setOrgBranding);
 
   const {
     isLoading,
@@ -75,31 +81,34 @@ export default function RootLayout() {
     setColorScheme(systemScheme === 'light' ? 'light' : 'dark');
   }, [systemScheme]);
 
-  // ── Only hide the splash screen after BOTH fonts AND auth check are done.
-  //    This prevents the member home from flashing before the login redirect fires.
+  // Hide splash only after fonts + initial auth are both done
   useEffect(() => {
     if ((fontsLoaded || fontError) && !isLoading) {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError, isLoading]);
 
-  // ── Auth state listener
+  // ── Auth listener ─────────────────────────────────────────────────────────
   useEffect(() => {
-    // Resolve initial session
+    // Resolve the initial session once on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
-        loadUserData(session);
+        loadUserData(session, true);
       } else {
         setLoading(false);
       }
     });
 
-    // Keep in sync with Supabase auth events (sign-in, sign-out, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // React to auth events — but don't re-block the UI for token refreshes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session) {
-        loadUserData(session);
+        // TOKEN_REFRESHED fires on every window focus in dev and periodically
+        // in prod. Silently update session but skip the full data reload +
+        // loading spinner so the screen doesn't flash white.
+        if (event === 'TOKEN_REFRESHED') return;
+        loadUserData(session, false); // silent refresh — no spinner
       } else {
         clear();
       }
@@ -108,10 +117,10 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function loadUserData(session: Session) {
-    setLoading(true);
+  // showSpinner = true only for the very first load on cold start
+  async function loadUserData(session: Session, showSpinner: boolean) {
+    if (showSpinner) setLoading(true);
 
-    // Fetch both profile and membership in parallel
     const [profileResult, membershipResult] = await Promise.all([
       supabase
         .from('profiles')
@@ -129,7 +138,7 @@ export default function RootLayout() {
         .single(),
     ]);
 
-    const { data: profile } = profileResult;
+    const { data: profile }    = profileResult;
     const { data: membership } = membershipResult;
 
     if (profile) setProfile(profile);
@@ -153,12 +162,11 @@ export default function RootLayout() {
       setMembership(null, null);
     }
 
-    setLoading(false);
+    if (showSpinner) setLoading(false);
   }
 
-  // ── Block rendering entirely until fonts AND auth resolve.
-  //    The native splash screen (preventAutoHideAsync) covers this window —
-  //    no blank or wrong-route flash is visible to the user.
+  // Block render on cold start until fonts + first auth check are done.
+  // TOKEN_REFRESHED events no longer trigger isLoading so this only fires once.
   if (!fontsLoaded && !fontError) return null;
   if (isLoading) return null;
 
@@ -169,12 +177,13 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(auth)"       />
-                <Stack.Screen name="(member)"     />
-                <Stack.Screen name="(officer)"    />
-                <Stack.Screen name="(admin)"      />
-                <Stack.Screen name="(superuser)"  />
-                <Stack.Screen name="+not-found"   />
+                <Stack.Screen name="(auth)"      />
+                <Stack.Screen name="(member)"    />
+                <Stack.Screen name="(officer)"   />
+                <Stack.Screen name="(admin)"     />
+                <Stack.Screen name="(superuser)" />
+                <Stack.Screen name="super-user"  />
+                <Stack.Screen name="+not-found"  />
               </Stack>
               <RootLayoutNav />
             </KeyboardProvider>

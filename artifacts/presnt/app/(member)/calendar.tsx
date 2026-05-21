@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
@@ -11,82 +13,59 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, Text } from '@/components/ui';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 
-// ─── Types & data ─────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type EventType = 'mandatory' | 'social' | 'optional';
 
-interface CalEvent {
-  id:    string;
-  title: string;
-  type:  EventType;
-  time?: string;
-}
-
-// Key format: YYYY-M-D (no zero-pad so it's easy to construct)
-const EVENTS: Record<string, CalEvent[]> = {
-  '2026-5-10': [{ id: 'e1', title: 'Chapter Meeting',     type: 'mandatory', time: '7:00 PM' }],
-  '2026-5-13': [{ id: 'e2', title: 'Philanthropy Event',  type: 'mandatory', time: '3:00 PM' }],
-  '2026-5-17': [{ id: 'e3', title: 'Spring Formal',       type: 'social',    time: '8:00 PM' }],
-  '2026-5-19': [{ id: 'e4', title: 'Risk Mgmt Training',  type: 'mandatory', time: '6:00 PM' }],
-  '2026-5-23': [{ id: 'e5', title: 'Community Service',   type: 'optional',  time: '10:00 AM' }],
-  '2026-5-26': [{ id: 'e6', title: 'Social Event',        type: 'social',    time: '7:00 PM' }],
-  '2026-6-2':  [{ id: 'e7', title: 'End of Year Banquet', type: 'social',    time: '6:30 PM' }],
+type CalEvent = {
+  id:         string;
+  title:      string;
+  type:       EventType;
+  start_time: string;
+  location:   string | null;
 };
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-const DAY_LABELS_WIDE   = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-const DAY_LABELS_MOBILE = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// ─── Calendar helpers ─────────────────────────────────────────────────────────
+const MONTH_NAMES     = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_LABELS_WIDE = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const DAY_LABELS_MOB  = ['S','M','T','W','T','F','S'];
 
 function buildGrid(year: number, month: number): (Date | null)[] {
   const firstDay    = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const grid: (Date | null)[] = [];
   for (let i = 0; i < firstDay; i++) grid.push(null);
-  for (let d = 1; d <= daysInMonth; d++)  grid.push(new Date(year, month, d));
+  for (let d = 1; d <= daysInMonth; d++) grid.push(new Date(year, month, d));
   return grid;
 }
 
-function eventsForDate(date: Date): CalEvent[] {
-  const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-  return EVENTS[key] ?? [];
+function dateKey(d: Date) {
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-function isToday(date: Date): boolean {
+function isToday(d: Date) {
   const t = new Date();
-  return (
-    date.getFullYear() === t.getFullYear() &&
-    date.getMonth()    === t.getMonth()    &&
-    date.getDate()     === t.getDate()
-  );
+  return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function EventPill({
-  event,
-  onPress,
-}: {
-  event: CalEvent;
-  onPress: () => void;
-}) {
+function EventPill({ event, onPress }: { event: CalEvent; onPress: () => void }) {
   const { theme } = useThemeStore();
   const bg = event.type === 'social' ? theme.colors.surfaceAlt : theme.colors.primary;
   const fg = event.type === 'social' ? theme.colors.text : '#FFF';
   return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.pill, { backgroundColor: bg }]}
-    >
+    <Pressable onPress={onPress} style={[styles.pill, { backgroundColor: bg }]}>
       <Text size="xs" weight="medium" color={fg} numberOfLines={1}>
         {event.title}
-        {event.time ? ` · ${event.time.replace(':00', '')}` : ''}
+        {event.start_time
+          ? ` · ${new Date(event.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+          : ''}
       </Text>
     </Pressable>
   );
@@ -95,16 +74,65 @@ function EventPill({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function CalendarScreen() {
-  const { theme } = useThemeStore();
-  const { width } = useWindowDimensions();
-  const insets    = useSafeAreaInsets();
-  const isWide    = width >= 800;
+  const { theme }       = useThemeStore();
+  const { width }       = useWindowDimensions();
+  const insets          = useSafeAreaInsets();
+  const isWide          = width >= 800;
+  const { organization } = useAuthStore();
 
   const today = new Date();
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
+  const [events, setEvents]       = useState<CalEvent[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const orgId = organization?.id;
+
+  // Fetch events whenever the displayed month changes
+  const load = useCallback(async () => {
+    if (!orgId) { setLoading(false); return; }
+
+    // Fetch events for the current month ± 1 day buffer
+    const start = new Date(year, month, 1).toISOString();
+    const end   = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+
+    const { data } = await supabase
+      .from('events')
+      .select('id, title, type, start_time, location')
+      .eq('org_id', orgId)
+      .eq('is_deleted', false)
+      .eq('is_cancelled', false)
+      .gte('start_time', start)
+      .lte('start_time', end)
+      .order('start_time');
+
+    setEvents((data ?? []) as CalEvent[]);
+    setLoading(false);
+    setRefreshing(false);
+  }, [orgId, year, month]);
+
+  useEffect(() => { load(); }, [load]);
 
   const grid = useMemo(() => buildGrid(year, month), [year, month]);
+
+  // Map date key → events
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, CalEvent[]> = {};
+    for (const ev of events) {
+      const k = dateKey(new Date(ev.start_time));
+      if (!map[k]) map[k] = [];
+      map[k].push(ev);
+    }
+    return map;
+  }, [events]);
+
+  // Upcoming events from today
+  const upcomingEvents = useMemo(() => {
+    return events
+      .filter((ev) => new Date(ev.start_time) >= today)
+      .slice(0, 5);
+  }, [events]);
 
   const prevMonth = () => {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
@@ -115,23 +143,11 @@ export default function CalendarScreen() {
     else               { setMonth((m) => m + 1); }
   };
 
-  // Upcoming events in this month (from today or from month start)
-  const upcomingEvents = useMemo(() => {
-    return Object.entries(EVENTS)
-      .flatMap(([key, evs]) => {
-        const [y, m, d] = key.split('-').map(Number);
-        const date = new Date(y, m - 1, d);
-        if (date >= today) return evs.map((e) => ({ ...e, date }));
-        return [];
-      })
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .slice(0, 5);
-  }, []);
+  function onRefresh() { setRefreshing(true); load(); }
 
   // ── Desktop grid ──
   const desktopGrid = (
     <View style={[styles.gridWrapper, { borderColor: theme.colors.border }]}>
-      {/* Day headers */}
       <View style={styles.dayHeaderRow}>
         {DAY_LABELS_WIDE.map((d) => (
           <View key={d} style={[styles.dayHeaderCell, { borderColor: theme.colors.border }]}>
@@ -139,48 +155,29 @@ export default function CalendarScreen() {
           </View>
         ))}
       </View>
-
-      {/* Day cells */}
       <View style={styles.gridRows}>
         {Array.from({ length: Math.ceil(grid.length / 7) }).map((_, rowIdx) => (
           <View key={rowIdx} style={[styles.gridRow, { borderColor: theme.colors.border }]}>
             {grid.slice(rowIdx * 7, rowIdx * 7 + 7).map((date, colIdx) => {
               if (!date) {
-                return (
-                  <View
-                    key={`blank-${rowIdx}-${colIdx}`}
-                    style={[styles.dayCell, { borderColor: theme.colors.border }]}
-                  />
-                );
+                return <View key={`blank-${rowIdx}-${colIdx}`} style={[styles.dayCell, { borderColor: theme.colors.border }]} />;
               }
-              const evs        = eventsForDate(date);
-              const todayStyle = isToday(date)
-                ? { backgroundColor: theme.colors.primary + '18' }
-                : {};
+              const evs      = eventsByDate[dateKey(date)] ?? [];
+              const todayBg  = isToday(date) ? { backgroundColor: theme.colors.primary + '18' } : {};
               return (
-                <View
-                  key={date.toISOString()}
-                  style={[styles.dayCell, { borderColor: theme.colors.border }, todayStyle]}
-                >
-                  <Text
-                    size="sm"
+                <View key={date.toISOString()} style={[styles.dayCell, { borderColor: theme.colors.border }, todayBg]}>
+                  <Text size="sm"
                     weight={isToday(date) ? 'bold' : 'regular'}
                     color={isToday(date) ? theme.colors.primary : theme.colors.text}
-                    style={{ marginBottom: 4 }}
-                  >
+                    style={{ marginBottom: 4 }}>
                     {date.getDate()}
                   </Text>
                   {evs.map((ev) => (
-                    <EventPill
-                      key={ev.id}
-                      event={ev}
-                      onPress={() => router.push(`/(member)/event/${ev.id}` as any)}
-                    />
+                    <EventPill key={ev.id} event={ev} onPress={() => router.push(`/(member)/event/${ev.id}` as any)} />
                   ))}
                 </View>
               );
             })}
-            {/* Pad remaining cells in last partial row */}
             {Array.from({ length: 7 - grid.slice(rowIdx * 7, rowIdx * 7 + 7).length }).map((_, i) => (
               <View key={`pad-${i}`} style={[styles.dayCell, { borderColor: theme.colors.border }]} />
             ))}
@@ -194,24 +191,21 @@ export default function CalendarScreen() {
   const CELL_SIZE = Math.floor((width - 32) / 7);
   const mobileGrid = (
     <View>
-      {/* Day headers */}
       <View style={styles.mobileDayHeaderRow}>
-        {DAY_LABELS_MOBILE.map((d, i) => (
+        {DAY_LABELS_MOB.map((d, i) => (
           <View key={i} style={{ width: CELL_SIZE, alignItems: 'center', paddingVertical: 6 }}>
             <Text size="xs" color={theme.colors.textSubtle}>{d}</Text>
           </View>
         ))}
       </View>
-
-      {/* Cells */}
       {Array.from({ length: Math.ceil(grid.length / 7) }).map((_, rowIdx) => (
         <View key={rowIdx} style={{ flexDirection: 'row' }}>
           {grid.slice(rowIdx * 7, rowIdx * 7 + 7).map((date, colIdx) => {
             if (!date) {
               return <View key={`b-${rowIdx}-${colIdx}`} style={{ width: CELL_SIZE, height: CELL_SIZE }} />;
             }
-            const evs    = eventsForDate(date);
-            const isT    = isToday(date);
+            const evs = eventsByDate[dateKey(date)] ?? [];
+            const isT = isToday(date);
             return (
               <Pressable
                 key={date.toISOString()}
@@ -221,14 +215,11 @@ export default function CalendarScreen() {
                   isT && { backgroundColor: theme.colors.primary + '20', borderRadius: 8 },
                 ]}
                 onPress={() => {
-                  if (evs.length > 0) router.push(`/(member)/event/${evs[0].id}` as any);
+                  if (evs.length === 1) router.push(`/(member)/event/${evs[0].id}` as any);
                 }}
               >
-                <Text
-                  size="sm"
-                  weight={isT ? 'bold' : 'regular'}
-                  color={isT ? theme.colors.primary : theme.colors.text}
-                >
+                <Text size="sm" weight={isT ? 'bold' : 'regular'}
+                  color={isT ? theme.colors.primary : theme.colors.text}>
                   {date.getDate()}
                 </Text>
                 {evs.length > 0 && (
@@ -237,7 +228,6 @@ export default function CalendarScreen() {
               </Pressable>
             );
           })}
-          {/* Pad last row */}
           {Array.from({ length: 7 - grid.slice(rowIdx * 7, rowIdx * 7 + 7).length }).map((_, i) => (
             <View key={`p-${i}`} style={{ width: CELL_SIZE, height: CELL_SIZE }} />
           ))}
@@ -246,7 +236,6 @@ export default function CalendarScreen() {
     </View>
   );
 
-  // ── Shared nav header ──
   const navHeader = (
     <View style={styles.navHeader}>
       <Pressable onPress={prevMonth} style={[styles.navBtn, { borderColor: theme.colors.border }]}>
@@ -261,6 +250,14 @@ export default function CalendarScreen() {
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={theme.colors.primary} />
+      </View>
+    );
+  }
+
   // ── Desktop ──
   if (isWide) {
     return (
@@ -268,35 +265,22 @@ export default function CalendarScreen() {
         style={{ flex: 1, backgroundColor: theme.colors.background }}
         contentContainerStyle={styles.widePad}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
-        {/* Page heading row */}
         <View style={styles.wideTitleRow}>
           <Text size="h1" weight="bold">Calendar</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             {navHeader}
-            {/* View toggles */}
             <View style={[styles.viewToggle, { borderColor: theme.colors.border }]}>
               {(['Month', 'Week', 'List'] as const).map((v) => (
-                <Pressable
-                  key={v}
-                  style={[
-                    styles.viewToggleBtn,
-                    v === 'Month' && { backgroundColor: theme.colors.primary },
-                  ]}
-                >
-                  <Text
-                    size="sm"
-                    weight="medium"
-                    color={v === 'Month' ? '#FFF' : theme.colors.text}
-                  >
-                    {v}
-                  </Text>
+                <Pressable key={v}
+                  style={[styles.viewToggleBtn, v === 'Month' && { backgroundColor: theme.colors.primary }]}>
+                  <Text size="sm" weight="medium" color={v === 'Month' ? '#FFF' : theme.colors.text}>{v}</Text>
                 </Pressable>
               ))}
             </View>
           </View>
         </View>
-
         {desktopGrid}
       </ScrollView>
     );
@@ -306,59 +290,52 @@ export default function CalendarScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
-      contentContainerStyle={[
-        styles.mobilePad,
-        { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 },
-      ]}
+      contentContainerStyle={[styles.mobilePad, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
     >
       <Text size="h1" weight="bold" style={{ marginBottom: 16 }}>Calendar</Text>
-
-      {/* Nav */}
       <View style={[styles.mobileNavRow, { borderColor: theme.colors.border }]}>
-        <Pressable onPress={prevMonth}>
-          <Ionicons name="chevron-back-outline" size={20} color={theme.colors.text} />
-        </Pressable>
+        <Pressable onPress={prevMonth}><Ionicons name="chevron-back-outline" size={20} color={theme.colors.text} /></Pressable>
         <Text size="md" weight="medium">{MONTH_NAMES[month]} {year}</Text>
-        <Pressable onPress={nextMonth}>
-          <Ionicons name="chevron-forward-outline" size={20} color={theme.colors.text} />
-        </Pressable>
+        <Pressable onPress={nextMonth}><Ionicons name="chevron-forward-outline" size={20} color={theme.colors.text} /></Pressable>
       </View>
-
       {mobileGrid}
 
-      {/* Upcoming section */}
-      <Text
-        size="xs"
-        weight="medium"
-        color={theme.colors.textMuted}
-        style={{ textTransform: 'uppercase', letterSpacing: 1, marginTop: 28, marginBottom: 12 }}
-      >
+      <Text size="xs" weight="medium" color={theme.colors.textMuted}
+        style={{ textTransform: 'uppercase', letterSpacing: 1, marginTop: 28, marginBottom: 12 }}>
         Upcoming
       </Text>
 
-      <View style={{ gap: 10 }}>
-        {upcomingEvents.map((ev) => (
-          <Pressable
-            key={ev.id}
-            onPress={() => router.push(`/(member)/event/${ev.id}` as any)}
-          >
-            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <View style={[styles.upcomingIcon, { backgroundColor: theme.colors.primary + '20' }]}>
-                <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text size="md" weight="medium">{ev.title}</Text>
-                <Text size="sm" color={theme.colors.textMuted}>
-                  {MONTH_NAMES[ev.date.getMonth()].slice(0, 3)} {ev.date.getDate()}
-                  {ev.time ? ` · ${ev.time}` : ''}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward-outline" size={16} color={theme.colors.textSubtle} />
-            </Card>
-          </Pressable>
-        ))}
-      </View>
+      {upcomingEvents.length === 0 ? (
+        <Card style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
+          <Ionicons name="calendar-outline" size={28} color={theme.colors.textSubtle} />
+          <Text size="sm" color={theme.colors.textMuted}>No upcoming events</Text>
+        </Card>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {upcomingEvents.map((ev) => {
+            const d = new Date(ev.start_time);
+            return (
+              <Pressable key={ev.id} onPress={() => router.push(`/(member)/event/${ev.id}` as any)}>
+                <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                  <View style={[styles.upcomingIcon, { backgroundColor: theme.colors.primary + '20' }]}>
+                    <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text size="md" weight="medium">{ev.title}</Text>
+                    <Text size="sm" color={theme.colors.textMuted}>
+                      {MONTH_NAMES[d.getMonth()].slice(0, 3)} {d.getDate()}
+                      {` · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward-outline" size={16} color={theme.colors.textSubtle} />
+                </Card>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -366,36 +343,23 @@ export default function CalendarScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  // Desktop
   widePad:      { padding: 32 },
   wideTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 },
-
   gridWrapper:    { borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
   dayHeaderRow:   { flexDirection: 'row', borderBottomWidth: 1 },
   dayHeaderCell:  { flex: 1, alignItems: 'center', paddingVertical: 10, borderRightWidth: 1 },
   gridRows:       {},
   gridRow:        { flexDirection: 'row', borderTopWidth: 1 },
   dayCell:        { flex: 1, minHeight: 100, padding: 8, borderRightWidth: 1, gap: 4 },
-
-  pill: {
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginTop: 2,
-  },
-
-  navHeader:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  navBtn:     { width: 32, height: 32, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-
-  viewToggle:    { flexDirection: 'row', borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
-  viewToggleBtn: { paddingHorizontal: 14, paddingVertical: 8 },
-
-  // Mobile
+  pill:           { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2 },
+  navHeader:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  navBtn:         { width: 32, height: 32, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  viewToggle:     { flexDirection: 'row', borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
+  viewToggleBtn:  { paddingHorizontal: 14, paddingVertical: 8 },
   mobilePad:         { paddingHorizontal: 16 },
   mobileNavRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, marginBottom: 8 },
   mobileDayHeaderRow:{ flexDirection: 'row' },
   mobileDayCell:     { alignItems: 'center', justifyContent: 'center', gap: 3 },
   eventDot:          { width: 5, height: 5, borderRadius: 3 },
-
-  upcomingIcon: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  upcomingIcon:      { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });

@@ -4,6 +4,7 @@ import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuthStore } from '@/stores/authStore';
 import { Text } from './Text';
 
 const DARK_BG   = '#272018';
@@ -18,14 +19,13 @@ const NAV_ITEMS: { label: string; segment: string; icon: IconName }[] = [
   { label: 'Profile',  segment: 'profile',  icon: 'person-outline' },
 ];
 
-interface Props {
-  orgName?:    string;
-  institution?: string;
-}
-
-export function Sidebar({ orgName = 'Kappa Sigma', institution = 'UCLA' }: Props) {
+export function Sidebar() {
   const insets   = useSafeAreaInsets();
   const pathname = usePathname();
+  const { organization, membership } = useAuthStore();
+
+  const orgName    = organization?.name        ?? 'My Chapter';
+  const institution = organization?.institution ?? '';
 
   // Match active item: pathname is like "/" for index, "/calendar", "/status", "/profile"
   const isActive = (segment: string) => {
@@ -55,7 +55,11 @@ export function Sidebar({ orgName = 'Kappa Sigma', institution = 'UCLA' }: Props
         </View>
         <View>
           <Text size="lg" weight="bold" color="#FBF6EE">presnt</Text>
-          <Text size="xs" color="#6E5E54" style={styles.roleLabel}>Member</Text>
+          <Text size="xs" color="#6E5E54" style={styles.roleLabel}>
+            {membership?.role
+              ? membership.role.charAt(0).toUpperCase() + membership.role.slice(1).replace('_', ' ')
+              : 'Member'}
+          </Text>
         </View>
       </View>
 
@@ -90,8 +94,10 @@ export function Sidebar({ orgName = 'Kappa Sigma', institution = 'UCLA' }: Props
       <View style={styles.orgRow}>
         <View style={styles.orgAvatar} />
         <View style={{ flex: 1 }}>
-          <Text size="sm" weight="medium" color="#FBF6EE">{orgName}</Text>
-          <Text size="xs" color="#6E5E54">{institution}</Text>
+          <Text size="sm" weight="medium" color="#FBF6EE" numberOfLines={1}>{orgName}</Text>
+          {!!institution && (
+            <Text size="xs" color="#6E5E54" numberOfLines={1}>{institution}</Text>
+          )}
         </View>
       </View>
     </View>

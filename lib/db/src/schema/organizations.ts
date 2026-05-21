@@ -1,6 +1,7 @@
 import { boolean, index, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod/v4';
+import { profiles } from './profiles';
 
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -8,6 +9,8 @@ export const organizations = pgTable('organizations', {
   slug: text('slug').unique().notNull(),
   type: text('type').notNull(),
   parentOrgId: uuid('parent_org_id').references((): any => organizations.id),
+  createdBy: uuid('created_by').references(() => profiles.id),
+  joinCode: text('join_code').unique(),
   greekLetterOrg: text('greek_letter_org'),
   institution: text('institution'),
   foundingYear: numeric('founding_year'),
@@ -50,7 +53,7 @@ export const academicTerms = pgTable(
 );
 
 export const insertOrgSchema = createInsertSchema(organizations, {
-  type: z.enum(['chapter', 'council', 'national_hq']),
+  type: z.enum(['chapter', 'council', 'national_hq', 'organization']),
   colorScheme: z.enum(['dark', 'light', 'system']).optional(),
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),

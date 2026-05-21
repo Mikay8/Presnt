@@ -219,7 +219,7 @@ export default function SuperuserLayout() {
       });
   }, [session]);
 
-  if (!session) return <Redirect href="/(auth)/login" />;
+  if (!session) return <Redirect href="/super-user" />;
 
   if (checking) {
     return (

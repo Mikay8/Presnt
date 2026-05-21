@@ -28,6 +28,12 @@ function slugify(text: string) {
   return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+function generateJoinCode(name: string): string {
+  const base = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `${base}-${rand}`;
+}
+
 function getCurrentSemester() {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -70,13 +76,15 @@ export default function CreateChapterScreen() {
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .insert({
-        name: name.trim(),
-        slug: slugify(name),
-        type: 'chapter',
-        institution: institution.trim(),
+        name:             name.trim(),
+        slug:             slugify(name),
+        type:             'chapter',
+        institution:      institution.trim(),
         greek_letter_org: greekLetterOrg.trim() || null,
-        primary_color: primaryColor,
-        timezone: 'America/New_York',
+        primary_color:    primaryColor,
+        timezone:         'America/New_York',
+        join_code:        generateJoinCode(name),
+        created_by:       userId,
       })
       .select()
       .single();
@@ -90,9 +98,10 @@ export default function CreateChapterScreen() {
     const { data: membership, error: membershipError } = await supabase
       .from('memberships')
       .insert({
-        user_id: userId,
-        org_id: org.id,
-        status: 'active',
+        user_id:   userId,
+        org_id:    org.id,
+        status:    'active',
+        role:      'admin',
         joined_at: new Date().toISOString().split('T')[0],
       })
       .select()

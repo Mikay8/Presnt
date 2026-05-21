@@ -50,6 +50,15 @@ export default function AdminLayout() {
         }}
       />
       <Tabs.Screen
+        name="organization"
+        options={{
+          title: 'Organization',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="globe-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
@@ -60,7 +69,6 @@ export default function AdminLayout() {
       />
       <Tabs.Screen name="committees" options={{ href: null }} />
       <Tabs.Screen name="dues" options={{ href: null }} />
-      <Tabs.Screen name="status" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -2,16 +2,24 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { Text } from './Text';
 
-interface Props {
-  userName?: string;
-  role?:     string;
-}
-
-export function TopBar({ userName = 'A. Reyes', role = 'MEMBER' }: Props) {
+export function TopBar() {
   const { theme } = useThemeStore();
+  const { profile, membership } = useAuthStore();
+
+  const firstName = profile?.first_name ?? '';
+  const lastName  = profile?.last_name  ?? '';
+  // Display as "F. LastName" if both exist, otherwise fall back gracefully
+  const userName  = firstName && lastName
+    ? `${firstName[0]}. ${lastName}`
+    : firstName || lastName || 'Member';
+
+  const role = membership?.role
+    ? membership.role.toUpperCase().replace('_', ' ')
+    : 'MEMBER';
 
   return (
     <View
@@ -61,7 +69,13 @@ export function TopBar({ userName = 'A. Reyes', role = 'MEMBER' }: Props) {
         <View style={styles.userRow}>
           <View
             style={[styles.avatar, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}
-          />
+          >
+            <Text size="xs" weight="medium" color={theme.colors.textMuted}>
+              {firstName && lastName
+                ? `${firstName[0]}${lastName[0]}`
+                : (firstName[0] ?? '?')}
+            </Text>
+          </View>
           <View>
             <Text size="sm" weight="medium">{userName}</Text>
             <Text
@@ -121,9 +135,11 @@ const styles = StyleSheet.create({
     gap:           10,
   },
   avatar: {
-    width:        36,
-    height:       36,
-    borderRadius: 18,
-    borderWidth:  1,
+    width:           36,
+    height:          36,
+    borderRadius:    18,
+    borderWidth:     1,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
 });

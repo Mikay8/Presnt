@@ -26,6 +26,7 @@ export const memberships = pgTable(
     duesHold: boolean('dues_hold').default(false),
     duesHoldSince: timestamp('dues_hold_since', { withTimezone: true }),
     duesHoldThreshold: numeric('dues_hold_threshold', { precision: 10, scale: 2 }),
+    role: text('role').notNull().default('member'),
     joinedAt: text('joined_at'),
     initiatedAt: text('initiated_at'),
     graduatedAt: text('graduated_at'),
@@ -47,6 +48,9 @@ export const memberships = pgTable(
 export const insertMembershipSchema = createInsertSchema(memberships, {
   status: z
     .enum(['active', 'inactive', 'alumni', 'suspended', 'pending', 'new_member'])
+    .optional(),
+  role: z
+    .enum(['member', 'new_member', 'officer', 'admin', 'org_admin'])
     .optional(),
   duesStatus: z
     .enum(['current', 'overdue', 'delinquent', 'waived', 'payment_plan'])
