@@ -11,7 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
+  Modal,
   Pressable,
   ScrollView,
   useWindowDimensions,
@@ -405,6 +407,139 @@ function FilterBar({
   );
 }
 
+// ─── Clear sheet ──────────────────────────────────────────────────────────────
+
+const CLEAR_OPTIONS = [
+  { label: 'Last hour',  hours: 1,    desc: 'Delete entries from the past hour' },
+  { label: 'Last 24 h',  hours: 24,   desc: 'Delete entries from the past day' },
+  { label: 'Last 7 days', hours: 168,  desc: 'Delete entries from the past week' },
+  { label: 'Last 30 days', hours: 720, desc: 'Delete entries from the past month' },
+  { label: 'All logs',   hours: null,  desc: 'Permanently delete every API log entry' },
+] as const;
+
+function ClearSheet({
+  visible,
+  onClose,
+  onCleared,
+}: {
+  visible:   boolean;
+  onClose:   () => void;
+  onCleared: (count: number) => void;
+}) {
+  const [clearing, setClearing] = useState(false);
+
+  async function confirm(hours: number | null, label: string) {
+    Alert.alert(
+      'Clear logs',
+      hours === null
+        ? 'This will permanently delete all API log entries. Cannot be undone.'
+        : `Delete all API log entries older than ${label.toLowerCase()}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            setClearing(true);
+            try {
+              const { data, error } = await supabase
+                .rpc('clear_api_request_log', { older_than_hours: hours });
+              if (error) throw error;
+              onCleared(data as number ?? 0);
+            } catch (e: any) {
+              Alert.alert('Error', e.message ?? 'Could not clear logs.');
+            } finally {
+              setClearing(false);
+              onClose();
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      presentationStyle="overFullScreen"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+        onPress={onClose}
+      >
+        <Pressable onPress={() => {}}>
+          <View style={{
+            backgroundColor: su.surface,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            paddingTop: 12,
+            paddingBottom: 40,
+          }}>
+            {/* Handle */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: su.border, alignSelf: 'center', marginBottom: 20 }} />
+
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 6 }}>
+              <Ionicons name="trash-outline" size={18} color={su.danger} style={{ marginRight: 8 }} />
+              <Text style={{ color: su.text, fontSize: 17, fontWeight: '700', flex: 1 }}>Clear API logs</Text>
+              <Pressable onPress={onClose} style={{ padding: 6 }}>
+                <Ionicons name="close" size={20} color={su.textMuted} />
+              </Pressable>
+            </View>
+
+            <Text style={{ color: su.textMuted, fontSize: 13, paddingHorizontal: 20, marginBottom: 20, lineHeight: 19 }}>
+              Entries are auto-cleared after 7 days. You can also manually remove them below.
+            </Text>
+
+            {clearing ? (
+              <ActivityIndicator color={su.primary} style={{ paddingVertical: 32 }} />
+            ) : (
+              CLEAR_OPTIONS.map((opt, i) => {
+                const isLast = i === CLEAR_OPTIONS.length - 1;
+                return (
+                  <Pressable
+                    key={String(opt.hours)}
+                    onPress={() => confirm(opt.hours as number | null, opt.label)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 20,
+                      paddingVertical: 15,
+                      backgroundColor: pressed ? su.surfaceAlt : 'transparent',
+                      borderTopWidth: 1,
+                      borderTopColor: su.border,
+                      ...(isLast ? { borderBottomWidth: 1, borderBottomColor: su.border } : {}),
+                    })}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{
+                        color: isLast ? su.danger : su.text,
+                        fontSize: 15,
+                        fontWeight: isLast ? '600' : '400',
+                      }}>
+                        {opt.label}
+                      </Text>
+                      <Text style={{ color: su.textSubtle, fontSize: 12, marginTop: 2 }}>{opt.desc}</Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={isLast ? su.danger : su.textSubtle}
+                    />
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ─── Main screen ───────────────────────────────────────────────────────────────
 
 const TABS = ['Platform audit', 'API logs', 'Errors'] as const;
@@ -424,6 +559,10 @@ export default function SuperuserLogsScreen() {
   const [apiLogs,    setApiLogs]    = useState<ApiLogEntry[]>([]);
   const [apiLoading, setApiLoading] = useState(false);
   const [methodFilter, setMethodFilter] = useState<string>('ALL');
+
+  // Clear sheet
+  const [showClear, setShowClear] = useState(false);
+  const [lastCleared, setLastCleared] = useState<{ count: number; at: Date } | null>(null);
 
   useEffect(() => {
     if (activeTab === 'Platform audit') loadAudit();
@@ -479,6 +618,29 @@ export default function SuperuserLogsScreen() {
       <View style={{ paddingHorizontal: isWide ? 32 : 16, paddingTop: isWide ? 32 : 20, paddingBottom: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
           <Text style={{ color: su.text, fontSize: 26, fontWeight: '700', flex: 1 }}>Logs & Audit</Text>
+
+          {/* Clear — only shown on API tabs */}
+          {activeTab !== 'Platform audit' && (
+            <Pressable
+              onPress={() => setShowClear(true)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: su.danger + '55',
+                marginRight: 8,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="trash-outline" size={14} color={su.danger} />
+              <Text style={{ color: su.danger, fontSize: 13, fontWeight: '500' }}>Clear</Text>
+            </Pressable>
+          )}
+
           {/* Refresh */}
           <Pressable
             onPress={() => { if (activeTab === 'Platform audit') loadAudit(); else loadApiLogs(); }}
@@ -493,6 +655,30 @@ export default function SuperuserLogsScreen() {
             <Ionicons name="refresh-outline" size={16} color={su.textMuted} />
           </Pressable>
         </View>
+
+        {/* Last cleared notice */}
+        {lastCleared && (
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            backgroundColor: su.success + '18',
+            borderRadius: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: su.success + '44',
+          }}>
+            <Ionicons name="checkmark-circle-outline" size={14} color={su.success} />
+            <Text style={{ color: su.success, fontSize: 12 }}>
+              Cleared {lastCleared.count} {lastCleared.count === 1 ? 'entry' : 'entries'} · {timeAgo(lastCleared.at.toISOString())}
+            </Text>
+            <Pressable onPress={() => setLastCleared(null)} style={{ marginLeft: 'auto' }}>
+              <Ionicons name="close" size={14} color={su.success} />
+            </Pressable>
+          </View>
+        )}
 
         {/* Tabs */}
         <View style={{ flexDirection: 'row', gap: 0 }}>
@@ -581,6 +767,15 @@ export default function SuperuserLogsScreen() {
             </ScrollView>
           )
       )}
+      {/* ── Clear sheet ── */}
+      <ClearSheet
+        visible={showClear}
+        onClose={() => setShowClear(false)}
+        onCleared={(count) => {
+          setLastCleared({ count, at: new Date() });
+          loadApiLogs();
+        }}
+      />
     </View>
   );
 }
