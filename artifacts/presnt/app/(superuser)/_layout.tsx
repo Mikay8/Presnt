@@ -3,6 +3,7 @@ import { router, Stack, usePathname, Redirect } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   useWindowDimensions,
@@ -69,12 +70,22 @@ function SuperuserGate() {
 
 // ─── Sidebar (desktop ≥ 800) ───────────────────────────────────────────────────
 function Sidebar({ profile }: { profile: { first_name: string; last_name: string; email: string } | null }) {
-  const pathname = usePathname();
-  const insets = useSafeAreaInsets();
+  const pathname    = usePathname();
+  const insets      = useSafeAreaInsets();
+  const [signingOut, setSigningOut] = useState(false);
 
   function isActive(href: string) {
     if (href === '/(superuser)/') return pathname === '/(superuser)' || pathname === '/(superuser)/';
     return pathname.startsWith(href.replace(/\/$/, ''));
+  }
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -86,15 +97,14 @@ function Sidebar({ profile }: { profile: { first_name: string; last_name: string
       paddingTop: insets.top + 20,
       paddingBottom: insets.bottom + 20,
     }}>
-      {/* Logo */}
+      {/* Wordmark */}
       <View style={{ paddingHorizontal: 20, marginBottom: 28 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: su.primary, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="checkmark" size={18} color="#fff" />
-          </View>
-          <Text style={{ color: su.text, fontSize: 18, fontWeight: '700' }}>presnt</Text>
-        </View>
-        <Text style={{ color: su.textSubtle, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6, marginLeft: 40 }}>
+        <Image
+          source={require('@/assets/images/wordmark-dark.png')}
+          style={{ width: 100, height: 24 }}
+          resizeMode="contain"
+        />
+        <Text style={{ color: su.textSubtle, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6 }}>
           SUPER USER
         </Text>
       </View>
@@ -131,6 +141,31 @@ function Sidebar({ profile }: { profile: { first_name: string; last_name: string
           );
         })}
       </ScrollView>
+
+      {/* Sign out button */}
+      <Pressable
+        onPress={handleSignOut}
+        disabled={signingOut}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          marginHorizontal: 12,
+          marginBottom: 8,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          borderRadius: 8,
+          borderWidth: 1,
+          borderColor: su.border,
+          opacity: pressed || signingOut ? 0.6 : 1,
+        })}
+      >
+        {signingOut
+          ? <ActivityIndicator size="small" color={su.textMuted} />
+          : <Ionicons name="log-out-outline" size={16} color={su.textMuted} />
+        }
+        <Text style={{ color: su.textMuted, fontSize: 14 }}>Sign out</Text>
+      </Pressable>
 
       {/* User footer */}
       {profile && (
