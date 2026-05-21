@@ -9,7 +9,7 @@ import {
 import { useThemeStore } from '@/stores/themeStore';
 import { Text } from './Text';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
 interface Props extends PressableProps {
@@ -34,6 +34,7 @@ export function Button({
   const bgColor: Record<Variant, string> = {
     primary:   theme.colors.primary,
     secondary: theme.colors.surface,
+    outline:   'transparent',
     ghost:     'transparent',
     danger:    theme.colors.error,
   };
@@ -41,6 +42,7 @@ export function Button({
   const textColor: Record<Variant, string> = {
     primary:   '#ffffff',
     secondary: theme.colors.text,
+    outline:   theme.colors.text,
     ghost:     theme.colors.primary,
     danger:    '#ffffff',
   };
@@ -48,7 +50,8 @@ export function Button({
   const borderColor: Record<Variant, string | undefined> = {
     primary:   undefined,
     secondary: theme.colors.border,
-    ghost:     theme.colors.primary,
+    outline:   theme.colors.border,
+    ghost:     undefined,
     danger:    undefined,
   };
 

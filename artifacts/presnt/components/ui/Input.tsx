@@ -8,14 +8,16 @@ import {
 import { useThemeStore } from '@/stores/themeStore';
 import { Text } from './Text';
 
-interface Props extends TextInputProps {
+interface Props extends Omit<TextInputProps, 'style'> {
   label?: string;
+  labelRight?: React.ReactNode;
   error?: string;
+  /** Style applied to the outer container View, not the TextInput itself. */
   style?: ViewStyle;
   rightElement?: React.ReactNode;
 }
 
-export function Input({ label, error, style, rightElement, ...props }: Props) {
+export function Input({ label, labelRight, error, style, rightElement, ...props }: Props) {
   const { theme } = useThemeStore();
   const [focused, setFocused] = useState(false);
 
@@ -30,9 +32,17 @@ export function Input({ label, error, style, rightElement, ...props }: Props) {
   return (
     <View style={[{ gap: 6 }, style]}>
       {label && (
-        <Text size="sm" weight="medium" color={theme.colors.textMuted}>
-          {label}
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text
+            size="xs"
+            weight="medium"
+            color={theme.colors.textMuted}
+            style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}
+          >
+            {label}
+          </Text>
+          {labelRight}
+        </View>
       )}
       <View
         style={{

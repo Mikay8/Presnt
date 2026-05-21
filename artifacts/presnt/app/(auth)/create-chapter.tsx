@@ -1,7 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Input, Text } from '@/components/ui';
@@ -9,80 +15,68 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 
-const TIMEZONES = [
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Anchorage',
-  'Pacific/Honolulu',
+const BRAND_COLORS = [
+  '#E26B4A', // orange (default)
+  '#3B82F6', // blue
+  '#22C55E', // green
+  '#A855F7', // purple
+  '#CA8A04', // gold
+  '#1C1917', // near-black
 ];
 
 function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 function getCurrentSemester() {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
-  if (month <= 5) {
-    return { name: `Spring ${year}`, start: `${year}-01-15`, end: `${year}-05-15` };
-  } else if (month <= 7) {
-    return { name: `Summer ${year}`, start: `${year}-05-16`, end: `${year}-08-15` };
-  } else {
-    return { name: `Fall ${year}`, start: `${year}-08-16`, end: `${year}-12-20` };
-  }
+  if (month <= 5)  return { name: `Spring ${year}`, start: `${year}-01-15`, end: `${year}-05-15` };
+  if (month <= 7)  return { name: `Summer ${year}`, start: `${year}-05-16`, end: `${year}-08-15` };
+  return { name: `Fall ${year}`, start: `${year}-08-16`, end: `${year}-12-20` };
 }
 
 export default function CreateChapterScreen() {
   const theme = useThemeStore((s) => s.theme);
   const { user, setMembership } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 800;
 
   const [name, setName] = useState('');
   const [institution, setInstitution] = useState('');
   const [greekLetterOrg, setGreekLetterOrg] = useState('');
-  const [timezone, setTimezone] = useState('America/New_York');
+  const [primaryColor, setPrimaryColor] = useState(BRAND_COLORS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   async function handleCreate() {
     if (!name.trim() || !institution.trim()) {
-      setError('Chapter name and institution are required.');
+      setError('Chapter name and school are required.');
       return;
     }
 
-    // Use store user if available, otherwise fetch the live session
     let userId = user?.id;
     if (!userId) {
       const { data: { session } } = await supabase.auth.getSession();
       userId = session?.user?.id;
     }
-    if (!userId) {
-      setError('Not logged in. Please restart the app.');
-      return;
-    }
+    if (!userId) { setError('Not logged in. Please restart the app.'); return; }
 
     setError('');
     setLoading(true);
 
-    const slug = slugify(name);
-
-    // Create organization
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .insert({
         name: name.trim(),
-        slug,
+        slug: slugify(name),
         type: 'chapter',
         institution: institution.trim(),
         greek_letter_org: greekLetterOrg.trim() || null,
-        timezone,
+        primary_color: primaryColor,
+        timezone: 'America/New_York',
       })
       .select()
       .single();
@@ -93,7 +87,6 @@ export default function CreateChapterScreen() {
       return;
     }
 
-    // Create membership for the creator (admin role will be set in Phase 2)
     const { data: membership, error: membershipError } = await supabase
       .from('memberships')
       .insert({
@@ -111,7 +104,6 @@ export default function CreateChapterScreen() {
       return;
     }
 
-    // Create initial academic term
     const semester = getCurrentSemester();
     await supabase.from('academic_terms').insert({
       org_id: org.id,
@@ -123,93 +115,122 @@ export default function CreateChapterScreen() {
 
     setMembership(membership, org);
     setLoading(false);
-
-    // Redirect to member home — auth store update triggers _layout redirect
     router.replace('/(member)');
   }
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-      </View>
+  const formContent = (
+    <View style={[styles.formCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      {/* IDENTITY */}
+      <Text size="xs" weight="medium" color={theme.colors.textMuted} style={styles.sectionLabel}>
+        Identity
+      </Text>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text size="h1" weight="semibold" style={styles.heading}>
-          Create your chapter
-        </Text>
-        <Text size="md" color={theme.colors.textMuted} style={styles.subheading}>
-          This takes under 2 minutes. You can update everything later.
-        </Text>
-
-        <View style={styles.form}>
+      <View style={[styles.row, !isWide && styles.col]}>
+        <View style={{ flex: 1 }}>
           <Input
             label="Chapter name"
             value={name}
             onChangeText={setName}
-            placeholder="Sigma Chi — Alpha Mu"
+            placeholder="e.g. Kappa Sigma"
             autoCapitalize="words"
           />
-
+        </View>
+        <View style={{ flex: 1 }}>
           <Input
-            label="Institution"
+            label="School"
             value={institution}
             onChangeText={setInstitution}
-            placeholder="University of Michigan"
+            placeholder="UCLA"
             autoCapitalize="words"
           />
+        </View>
+      </View>
 
-          <Input
-            label="Greek letter organization (optional)"
-            value={greekLetterOrg}
-            onChangeText={setGreekLetterOrg}
-            placeholder="Sigma Chi"
-            autoCapitalize="words"
-          />
+      <Input
+        label="Greek letters (optional)"
+        value={greekLetterOrg}
+        onChangeText={setGreekLetterOrg}
+        placeholder="Kappa Sigma"
+        autoCapitalize="words"
+      />
 
-          <View style={styles.fieldGroup}>
-            <Text size="sm" weight="medium" color={theme.colors.textMuted} style={styles.fieldLabel}>
-              Timezone
-            </Text>
-            <View style={styles.timezoneList}>
-              {TIMEZONES.map((tz) => (
-                <TouchableOpacity
-                  key={tz}
-                  onPress={() => setTimezone(tz)}
-                  style={[
-                    styles.timezoneOption,
-                    {
-                      backgroundColor: timezone === tz ? theme.colors.primary + '22' : theme.colors.surface,
-                      borderColor: timezone === tz ? theme.colors.primary : theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    size="sm"
-                    color={timezone === tz ? theme.colors.primary : theme.colors.textMuted}
-                    weight={timezone === tz ? 'medium' : 'regular'}
-                  >
-                    {tz.replace('America/', '').replace('Pacific/', '').replace(/_/g, ' ')}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+      {/* BRANDING */}
+      <View style={styles.sectionDivider} />
+      <Text size="xs" weight="medium" color={theme.colors.textMuted} style={styles.sectionLabel}>
+        Branding
+      </Text>
 
-          {error ? (
-            <Text size="sm" color={theme.colors.error}>
-              {error}
-            </Text>
-          ) : null}
+      {/* Logo placeholder */}
+      <View style={styles.logoRow}>
+        <View style={[styles.logoBox, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}>
+          <Ionicons name="image-outline" size={28} color={theme.colors.textSubtle} />
+        </View>
+        <View style={{ flex: 1, gap: 8 }}>
+          <Text size="sm" weight="medium" color={theme.colors.text}>Chapter logo</Text>
+          <Text size="xs" color={theme.colors.textMuted}>PNG or SVG, square recommended</Text>
+          <Button label="Upload logo" variant="outline" size="sm" onPress={() => {}} />
+        </View>
+      </View>
 
-          <Button
-            label="Create chapter"
-            onPress={handleCreate}
-            loading={loading}
-            style={styles.button}
-          />
+      {/* Color swatches */}
+      <View style={styles.colorRow}>
+        <Text size="xs" weight="medium" color={theme.colors.textMuted} style={[styles.sectionLabel, { marginBottom: 0, marginRight: 12 }]}>
+          Color
+        </Text>
+        <View style={styles.swatches}>
+          {BRAND_COLORS.map((color) => (
+            <TouchableOpacity
+              key={color}
+              onPress={() => setPrimaryColor(color)}
+              style={[
+                styles.swatch,
+                { backgroundColor: color },
+                primaryColor === color && styles.swatchSelected,
+              ]}
+            >
+              {primaryColor === color && (
+                <Ionicons name="checkmark" size={14} color="#fff" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {error ? <Text size="sm" color={theme.colors.error}>{error}</Text> : null}
+    </View>
+  );
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
+      {/* Top bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={22} color={theme.colors.text} />
+        </TouchableOpacity>
+        {/* Step dots */}
+        <View style={styles.dots}>
+          <View style={[styles.dot, { backgroundColor: theme.colors.primary }]} />
+          <View style={[styles.dot, { backgroundColor: theme.colors.border }]} />
+          <View style={[styles.dot, { backgroundColor: theme.colors.border }]} />
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text size="h1" weight="bold" style={styles.heading}>Create your chapter</Text>
+        <Text size="md" color={theme.colors.textMuted} style={styles.subheading}>
+          This takes under 2 minutes. You can update everything later.
+        </Text>
+
+        {formContent}
+
+        {/* Actions */}
+        <View style={[styles.actions, isWide && styles.actionsWide]}>
+          <Button label="Cancel" variant="outline" onPress={() => router.back()} style={styles.cancelBtn} />
+          <Button label="Create chapter" onPress={handleCreate} loading={loading} style={styles.submitBtn} />
         </View>
       </ScrollView>
     </View>
@@ -217,49 +238,36 @@ export default function CreateChapterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  topBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    padding: 4,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
-  heading: {
-    marginBottom: 8,
-  },
-  subheading: {
-    marginBottom: 32,
-    lineHeight: 24,
-  },
-  form: {
-    gap: 16,
-  },
-  fieldGroup: {
-    gap: 8,
-  },
-  fieldLabel: {
-    marginBottom: 2,
-  },
-  timezoneList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  timezoneOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  button: {
-    marginTop: 8,
-  },
+  container:    { flex: 1 },
+  topBar:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
+  backBtn:      { padding: 4 },
+  dots:         { flexDirection: 'row', gap: 6 },
+  dot:          { width: 20, height: 6, borderRadius: 3 },
+
+  scroll:       { paddingHorizontal: 20, paddingBottom: 48, gap: 20 },
+  scrollWide:   { paddingHorizontal: 48, maxWidth: 860, alignSelf: 'center', width: '100%' },
+
+  heading:      { marginBottom: 4 },
+  subheading:   { marginBottom: 4 },
+
+  formCard:     { borderRadius: 16, borderWidth: 1, padding: 24, gap: 16 },
+
+  sectionLabel: { textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: -4 },
+  sectionDivider: { height: 1, backgroundColor: 'transparent' },
+
+  row:          { flexDirection: 'row', gap: 12 },
+  col:          { flexDirection: 'column' },
+
+  logoRow:      { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
+  logoBox:      { width: 72, height: 72, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+
+  colorRow:     { flexDirection: 'row', alignItems: 'center' },
+  swatches:     { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  swatch:       { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  swatchSelected: { borderWidth: 3, borderColor: '#ffffff', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+
+  actions:      { flexDirection: 'row', gap: 12, justifyContent: 'flex-end' },
+  actionsWide:  {},
+  cancelBtn:    { flex: 1, maxWidth: 120 },
+  submitBtn:    { flex: 1, maxWidth: 200 },
 });

@@ -1,9 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Input, ScreenContainer, Text } from '@/components/ui';
+import { Button, Text } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -14,261 +23,192 @@ type Organization = Tables<'organizations'>;
 export default function JoinChapterScreen() {
   const theme = useThemeStore((s) => s.theme);
   const { user, setMembership } = useAuthStore();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 800;
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Organization[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState<Organization | null>(null);
-  const [joining, setJoining] = useState(false);
-  const [joined, setJoined] = useState(false);
+  const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set());
+  const [joiningId, setJoiningId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  async function handleSearch() {
-    if (!query.trim()) return;
+  async function handleSearch(text: string) {
+    setQuery(text);
+    if (!text.trim()) { setResults([]); return; }
     setError('');
     setSearching(true);
-    setSelected(null);
 
     const { data, error: searchError } = await supabase
       .from('organizations')
       .select('*')
-      .ilike('name', `%${query.trim()}%`)
+      .ilike('name', `%${text.trim()}%`)
       .eq('is_deleted', false)
       .eq('is_active', true)
       .limit(10);
 
     setSearching(false);
-    if (searchError) {
-      setError(searchError.message);
-      return;
-    }
+    if (searchError) { setError(searchError.message); return; }
     setResults(data ?? []);
   }
 
-  async function handleJoin() {
-    if (!selected) return;
-
-    // Use store user if available, otherwise fetch the live session
+  async function handleRequest(org: Organization) {
     let userId = user?.id;
     if (!userId) {
       const { data: { session } } = await supabase.auth.getSession();
       userId = session?.user?.id;
     }
-    if (!userId) {
-      setError('Not logged in. Please restart the app.');
-      return;
-    }
+    if (!userId) { setError('Not logged in. Please restart the app.'); return; }
 
-    setError('');
-    setJoining(true);
+    setJoiningId(org.id);
 
     const { data: membership, error: joinError } = await supabase
       .from('memberships')
       .insert({
         user_id: userId,
-        org_id: selected.id,
+        org_id: org.id,
         status: 'pending',
         joined_at: new Date().toISOString().split('T')[0],
       })
       .select()
       .single();
 
-    setJoining(false);
+    setJoiningId(null);
 
-    if (joinError) {
-      setError(joinError.message);
-      return;
-    }
+    if (joinError) { setError(joinError.message); return; }
 
-    setJoined(true);
-    setMembership(membership, selected);
-    // Pending membership — redirect to member home (will show limited view until approved)
-    setTimeout(() => router.replace('/(member)'), 1500);
-  }
+    setRequestedIds((prev) => new Set(prev).add(org.id));
+    setMembership(membership, org);
 
-  if (joined) {
-    return (
-      <ScreenContainer contentStyle={styles.centeredContent}>
-        <View style={styles.successIcon}>
-          <Ionicons name="checkmark-circle" size={64} color={theme.colors.success} />
-        </View>
-        <Text size="xl" weight="semibold" style={styles.successTitle}>
-          Request sent!
-        </Text>
-        <Text size="md" color={theme.colors.textMuted} style={styles.successSubtext}>
-          An officer will approve your membership shortly.
-        </Text>
-      </ScreenContainer>
-    );
+    // After first successful request, navigate after brief delay
+    setTimeout(() => router.replace('/(member)'), 1200);
   }
 
   return (
-    <ScreenContainer scroll contentStyle={styles.content}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Ionicons name="chevron-back" size={24} color={theme.colors.text} />
-      </TouchableOpacity>
-
-      <Text size="h1" weight="semibold" style={styles.heading}>
-        Find your chapter
-      </Text>
-      <Text size="md" color={theme.colors.textMuted} style={styles.subheading}>
-        Search by chapter name or organization
-      </Text>
-
-      <View style={styles.searchRow}>
-        <View style={{ flex: 1 }}>
-          <Input
-            value={query}
-            onChangeText={setQuery}
-            placeholder="e.g. Sigma Chi, Alpha Mu"
-            returnKeyType="search"
-            onSubmitEditing={handleSearch}
-          />
-        </View>
-        <TouchableOpacity
-          onPress={handleSearch}
-          style={[styles.searchButton, { backgroundColor: theme.colors.primary }]}
-        >
-          {searching ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="search" size={20} color="#fff" />
-          )}
+    <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
+      {/* Top bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={22} color={theme.colors.text} />
         </TouchableOpacity>
       </View>
 
-      {error ? (
-        <Text size="sm" color={theme.colors.error} style={styles.error}>
-          {error}
+      <ScrollView
+        contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text size="h1" weight="bold" style={styles.heading}>Find your chapter</Text>
+        <Text size="md" color={theme.colors.textMuted} style={styles.subheading}>
+          Search by chapter name or school
         </Text>
-      ) : null}
 
-      {results.length === 0 && !searching && query.trim() ? (
-        <Text size="sm" color={theme.colors.textMuted} style={styles.noResults}>
-          No chapters found for "{query}". Try a different search.
-        </Text>
-      ) : null}
-
-      <View style={styles.resultsList}>
-        {results.map((org) => (
-          <TouchableOpacity key={org.id} onPress={() => setSelected(org)} activeOpacity={0.8}>
-            <Card
-              style={[
-                styles.resultCard,
-                selected?.id === org.id && {
-                  borderColor: theme.colors.primary,
-                  borderWidth: 2,
-                },
-              ]}
-            >
-              <View style={styles.resultRow}>
-                <View style={styles.resultInfo}>
-                  <Text size="md" weight="semibold">
-                    {org.name}
-                  </Text>
-                  {org.institution ? (
-                    <Text size="sm" color={theme.colors.textMuted}>
-                      {org.institution}
-                    </Text>
-                  ) : null}
-                </View>
-                {selected?.id === org.id && (
-                  <Ionicons name="checkmark-circle" size={24} color={theme.colors.primary} />
-                )}
-              </View>
-            </Card>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {selected ? (
-        <View style={styles.joinSection}>
-          <Text size="sm" color={theme.colors.textMuted} style={styles.joinNote}>
-            Your request will be sent to an officer for approval.
-          </Text>
-          <Button
-            label={`Request to join ${selected.name}`}
-            onPress={handleJoin}
-            loading={joining}
+        {/* Search bar */}
+        <View style={[styles.searchBar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} style={{ marginRight: 8 }} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.colors.text, fontFamily: 'SpaceGrotesk_400Regular', // @ts-ignore
+              outline: 'none' }]}
+            placeholder="Search chapters or schools…"
+            placeholderTextColor={theme.colors.textSubtle}
+            value={query}
+            onChangeText={handleSearch}
+            returnKeyType="search"
+            autoCapitalize="none"
           />
+          {searching && <ActivityIndicator size="small" color={theme.colors.textMuted} />}
         </View>
-      ) : null}
-    </ScreenContainer>
+
+        {error ? <Text size="sm" color={theme.colors.error}>{error}</Text> : null}
+
+        {/* Results */}
+        {results.length > 0 && (
+          <View style={styles.resultsSection}>
+            <Text size="xs" weight="medium" color={theme.colors.textMuted} style={styles.resultsLabel}>
+              Results
+            </Text>
+
+            <View style={styles.resultsList}>
+              {results.map((org) => {
+                const requested = requestedIds.has(org.id);
+                const isJoining = joiningId === org.id;
+                const initial = org.name.charAt(0).toUpperCase();
+                const dotColor = (org as any).primary_color ?? theme.colors.primary;
+
+                return (
+                  <View
+                    key={org.id}
+                    style={[styles.resultCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+                  >
+                    {/* Logo */}
+                    <View style={[styles.orgLogo, { backgroundColor: dotColor + '22' }]}>
+                      <Text size="md" weight="bold" color={dotColor}>{initial}</Text>
+                    </View>
+
+                    {/* Info */}
+                    <View style={styles.orgInfo}>
+                      <Text size="md" weight="medium" color={theme.colors.text}>{org.name}</Text>
+                      {org.institution ? (
+                        <Text size="sm" color={theme.colors.textMuted}>{org.institution}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* Action */}
+                    {requested ? (
+                      <View style={[styles.requestedBadge, { borderColor: theme.colors.border }]}>
+                        <Text size="sm" color={theme.colors.textMuted} weight="medium">Requested</Text>
+                      </View>
+                    ) : (
+                      <Button
+                        label={isJoining ? 'Sending…' : 'Request'}
+                        size="sm"
+                        onPress={() => handleRequest(org)}
+                        loading={isJoining}
+                        style={styles.requestBtn}
+                      />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {results.length === 0 && !searching && query.trim() ? (
+          <Text size="sm" color={theme.colors.textMuted} style={styles.noResults}>
+            No chapters found for "{query}". Try a different search.
+          </Text>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 40,
-  },
-  centeredContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 24,
-  },
-  heading: {
-    marginBottom: 8,
-  },
-  subheading: {
-    marginBottom: 24,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  searchButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  error: {
-    marginBottom: 12,
-  },
-  noResults: {
-    textAlign: 'center',
-    marginVertical: 24,
-  },
-  resultsList: {
-    gap: 10,
-  },
-  resultCard: {
-    padding: 16,
-  },
-  resultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  resultInfo: {
-    gap: 2,
-    flex: 1,
-  },
-  joinSection: {
-    marginTop: 24,
-    gap: 12,
-  },
-  joinNote: {
-    textAlign: 'center',
-  },
-  successIcon: {
-    marginBottom: 16,
-  },
-  successTitle: {
-    marginBottom: 8,
-  },
-  successSubtext: {
-    textAlign: 'center',
-    lineHeight: 24,
-  },
+  container:      { flex: 1 },
+  topBar:         { paddingHorizontal: 20, paddingVertical: 12 },
+  backBtn:        { padding: 4, alignSelf: 'flex-start' },
+
+  scroll:         { paddingHorizontal: 20, paddingBottom: 48, gap: 16 },
+  scrollWide:     { paddingHorizontal: 48, maxWidth: 860, alignSelf: 'center', width: '100%' },
+
+  heading:        { marginBottom: 4 },
+  subheading:     { marginBottom: 4 },
+
+  searchBar:      { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  searchInput:    { flex: 1, fontSize: 15 },
+
+  resultsSection: { gap: 10 },
+  resultsLabel:   { textTransform: 'uppercase', letterSpacing: 0.8 },
+  resultsList:    { gap: 8 },
+
+  resultCard:     { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, borderWidth: 1, padding: 14 },
+  orgLogo:        { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  orgInfo:        { flex: 1, gap: 2 },
+
+  requestedBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  requestBtn:     { flexShrink: 0 },
+
+  noResults:      { textAlign: 'center', marginTop: 16 },
 });

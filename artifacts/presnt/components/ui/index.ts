@@ -9,3 +9,4 @@ export { ScreenContainer } from './ScreenContainer';
 export { Header } from './Header';
 export { EmptyState } from './EmptyState';
 export { LoadingSpinner } from './LoadingSpinner';
+export { AuthLeftPanel } from './AuthLeftPanel';
