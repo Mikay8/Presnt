@@ -169,11 +169,12 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(auth)"   />
-                <Stack.Screen name="(member)" />
-                <Stack.Screen name="(officer)" />
-                <Stack.Screen name="(admin)"  />
-                <Stack.Screen name="+not-found" />
+                <Stack.Screen name="(auth)"       />
+                <Stack.Screen name="(member)"     />
+                <Stack.Screen name="(officer)"    />
+                <Stack.Screen name="(admin)"      />
+                <Stack.Screen name="(superuser)"  />
+                <Stack.Screen name="+not-found"   />
               </Stack>
               <RootLayoutNav />
             </KeyboardProvider>

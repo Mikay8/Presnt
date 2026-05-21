@@ -600,7 +600,7 @@ app/
     │   └── [profile_id]/
     │       ├── index.tsx             # User detail + membership history
     │       └── editor.tsx            # Edit name, email, force logout
-    ├── billing/
+    ├── billing/                      # (pending) — Stripe integration not yet built
     │   ├── index.tsx                 # Subscriptions table
     │   ├── overrides.tsx             # Manual plan overrides
     │   ├── failed.tsx                # Past-due orgs
@@ -964,7 +964,7 @@ def impersonate_org_admin(org_id: str, su = Depends(require_superuser)):
 
 ---
 
-### Billing — Subscriptions List
+### Billing — Subscriptions List *(pending)*
 
 **Header:** `Billing` + `$24,820 MRR` stat chip + `3 past due` warning chip
 
@@ -1328,9 +1328,9 @@ Impersonation mode overlays a persistent `4px top border` in `danger` red + a fl
 - [ ] `(superuser)/users/index.tsx` — cross-org user search
 - [ ] `(superuser)/users/[profile_id]/index.tsx` — user detail + membership history
 - [ ] `(superuser)/users/[profile_id]/editor.tsx` — user editor
-- [ ] `(superuser)/billing/index.tsx` — subscriptions table
-- [ ] `(superuser)/billing/failed.tsx` — past-due orgs
-- [ ] `(superuser)/billing/webhooks.tsx` — Stripe webhook log
+- [ ] `(superuser)/billing/index.tsx` — subscriptions table *(pending)*
+- [ ] `(superuser)/billing/failed.tsx` — past-due orgs *(pending)*
+- [ ] `(superuser)/billing/webhooks.tsx` — Stripe webhook log *(pending)*
 - [ ] `(superuser)/flags/index.tsx` — feature flags list
 - [ ] `(superuser)/flags/[key].tsx` — flag editor + per-org overrides
 - [ ] `(superuser)/logs/index.tsx` — platform audit log
