@@ -38,8 +38,7 @@ type OrgRow = {
 
 export default function OrganizationAdminScreen() {
   const { theme }    = useThemeStore();
-  const { org }      = useAuthStore();          // current chapter's org
-  const { membership } = useAuthStore();
+  const { organization, membership } = useAuthStore();
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
@@ -51,16 +50,16 @@ export default function OrganizationAdminScreen() {
   const [isOrgAdmin, setIsOrgAdmin] = useState(false);
 
   const load = useCallback(async () => {
-    if (!org?.id) { setLoading(false); return; }
+    if (!organization?.id) { setLoading(false); return; }
 
     // Check if user is org_admin
     if (membership?.role === 'org_admin') setIsOrgAdmin(true);
 
-    // Fetch the current org row to get parent_org_id
+    // Fetch the current organization row to get parent_org_id
     const { data: currentOrg } = await supabase
       .from('organizations')
       .select('id, name, type, slug, institution, join_code, is_active, created_at, parent_org_id')
-      .eq('id', org.id)
+      .eq('id', organization.id)
       .single();
 
     const parentId = currentOrg?.parent_org_id ?? null;
@@ -88,7 +87,7 @@ export default function OrganizationAdminScreen() {
       const { data: children } = await supabase
         .from('organizations')
         .select('id, name, type, slug, institution, join_code, is_active, created_at')
-        .eq('parent_org_id', org.id)
+        .eq('parent_org_id', organization.id)
         .eq('is_deleted', false)
         .order('name');
       setChapters(children ?? []);
@@ -96,7 +95,7 @@ export default function OrganizationAdminScreen() {
 
     setLoading(false);
     setRefreshing(false);
-  }, [org?.id, membership?.role]);
+  }, [organization?.id, membership?.role]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -119,14 +118,14 @@ export default function OrganizationAdminScreen() {
     <View style={{ flex: 1, backgroundColor: c.background }}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: c.surface, borderBottomColor: c.border }]}>
-        <Text size="h2" weight="bold" color={c.text}>Organization</Text>
+        <Text size="xxl" weight="bold" color={c.text}>Organization</Text>
         {isOrgAdmin && (
           <Pressable
             onPress={() => router.push('/(auth)/create-chapter')}
             style={[styles.addBtn, { backgroundColor: c.primary }]}
           >
             <Ionicons name="add" size={16} color="#fff" />
-            <Text size="sm" weight="semibold" style={{ color: '#fff' }}>New chapter</Text>
+            <Text size="sm" weight="bold" style={{ color: '#fff' }}>New chapter</Text>
           </Pressable>
         )}
       </View>
@@ -141,7 +140,7 @@ export default function OrganizationAdminScreen() {
           <View style={[styles.section, { backgroundColor: c.surface, borderColor: c.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="globe-outline" size={18} color={c.primary} />
-              <Text size="xs" weight="semibold" color={c.textMuted} style={styles.sectionLabel}>
+              <Text size="xs" weight="bold" color={c.textMuted} style={styles.sectionLabel}>
                 PARENT ORGANIZATION
               </Text>
             </View>
@@ -155,11 +154,11 @@ export default function OrganizationAdminScreen() {
           <View style={[styles.section, { backgroundColor: c.surface, borderColor: c.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="globe-outline" size={18} color={c.primary} />
-              <Text size="xs" weight="semibold" color={c.textMuted} style={styles.sectionLabel}>
+              <Text size="xs" weight="bold" color={c.textMuted} style={styles.sectionLabel}>
                 YOUR ORGANIZATION
               </Text>
             </View>
-            <Text size="lg" weight="bold" color={c.text}>{org?.name ?? '—'}</Text>
+            <Text size="lg" weight="bold" color={c.text}>{organization?.name ?? '—'}</Text>
             <Text size="sm" color={c.textMuted}>
               This chapter has no parent organization.
             </Text>
@@ -170,14 +169,14 @@ export default function OrganizationAdminScreen() {
         <View style={[styles.section, { backgroundColor: c.surface, borderColor: c.border }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="key-outline" size={18} color={c.primary} />
-            <Text size="xs" weight="semibold" color={c.textMuted} style={styles.sectionLabel}>
+            <Text size="xs" weight="bold" color={c.textMuted} style={styles.sectionLabel}>
               YOUR CHAPTER JOIN CODE
             </Text>
           </View>
           <View style={styles.codeRow}>
             <Text size="xl" weight="bold" color={c.primary} style={{ letterSpacing: 2 }}>
               {/* We need to fetch this chapter's join_code */}
-              <JoinCodeInline orgId={org?.id ?? ''} color={c.primary} />
+              <JoinCodeInline orgId={organization?.id ?? ''} color={c.primary} />
             </Text>
           </View>
           <Text size="xs" color={c.textMuted}>
@@ -190,7 +189,7 @@ export default function OrganizationAdminScreen() {
           <View style={[styles.section, { backgroundColor: c.surface, borderColor: c.border }]}>
             <View style={[styles.sectionHeader, { marginBottom: 4 }]}>
               <Ionicons name="business-outline" size={18} color={c.primary} />
-              <Text size="xs" weight="semibold" color={c.textMuted} style={styles.sectionLabel}>
+              <Text size="xs" weight="bold" color={c.textMuted} style={styles.sectionLabel}>
                 CHAPTERS ({chapters.length})
               </Text>
             </View>
@@ -202,12 +201,12 @@ export default function OrganizationAdminScreen() {
                   <View style={styles.chapterLeft}>
                     <View style={[
                       styles.chapterDot,
-                      { backgroundColor: ch.id === org?.id ? c.primary : c.surfaceAlt },
+                      { backgroundColor: ch.id === organization?.id ? c.primary : c.surfaceAlt },
                     ]} />
                     <View style={{ flex: 1 }}>
                       <View style={styles.chapterNameRow}>
-                        <Text size="md" weight="semibold" color={c.text}>{ch.name}</Text>
-                        {ch.id === org?.id && (
+                        <Text size="md" weight="bold" color={c.text}>{ch.name}</Text>
+                        {ch.id === organization?.id && (
                           <View style={[styles.youBadge, { backgroundColor: c.primary + '22', borderColor: c.primary }]}>
                             <Text size="xs" color={c.primary} weight="medium">You</Text>
                           </View>
@@ -238,7 +237,7 @@ export default function OrganizationAdminScreen() {
         {!parentOrg && chapters.length === 0 && (
           <View style={[styles.emptyCard, { backgroundColor: c.surface, borderColor: c.border }]}>
             <Ionicons name="business-outline" size={36} color={c.textSubtle} />
-            <Text size="md" weight="semibold" color={c.text} style={{ marginTop: 12 }}>
+            <Text size="md" weight="bold" color={c.text} style={{ marginTop: 12 }}>
               No chapters yet
             </Text>
             <Text size="sm" color={c.textMuted} style={{ textAlign: 'center', marginTop: 4, lineHeight: 20 }}>
@@ -250,7 +249,7 @@ export default function OrganizationAdminScreen() {
                 onPress={() => router.push('/(auth)/create-chapter')}
                 style={[styles.emptyBtn, { backgroundColor: c.primary }]}
               >
-                <Text size="sm" weight="semibold" style={{ color: '#fff' }}>Create a chapter</Text>
+                <Text size="sm" weight="bold" style={{ color: '#fff' }}>Create a chapter</Text>
               </TouchableOpacity>
             )}
           </View>

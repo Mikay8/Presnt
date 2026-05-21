@@ -1,74 +1,112 @@
-import { Tabs } from 'expo-router';
-import { useThemeStore } from '@/stores/themeStore';
 import { Ionicons } from '@expo/vector-icons';
+import { Redirect, Tabs } from 'expo-router';
+import { useWindowDimensions, View } from 'react-native';
+
+import { AdminSidebar, TopBar } from '@/components/ui';
+import { useAuthStore } from '@/stores/authStore';
+import { useThemeStore } from '@/stores/themeStore';
+
+const DESKTOP_BREAKPOINT = 768;
 
 export default function AdminLayout() {
-  const { theme } = useThemeStore();
+  const { theme }      = useThemeStore();
+  const { membership } = useAuthStore();
+  const { width }      = useWindowDimensions();
+  const isWide         = width >= DESKTOP_BREAKPOINT;
+
+  const role = membership?.role;
+  if (role !== 'admin' && role !== 'org_admin') {
+    return <Redirect href="/(member)" />;
+  }
+
+  const c = theme.colors;
+
+  // On desktop the tab bar is hidden — navigation is via the sidebar.
+  // On mobile the tab bar is visible at the bottom.
+  const mobileTabBarStyle = {
+    backgroundColor: c.surface,
+    borderTopColor:  c.border,
+    borderTopWidth:  1,
+  };
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.border,
-          borderTopWidth: 1,
-        },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textSubtle,
-        tabBarLabelStyle: {
-          fontFamily: theme.typography.fontFamily.medium,
-          fontSize: 11,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="dashboard"
-        options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="members"
-        options={{
-          title: 'Members',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="roles"
-        options={{
-          title: 'Roles',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="shield-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="organization"
-        options={{
-          title: 'Organization',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="globe-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen name="committees" options={{ href: null }} />
-      <Tabs.Screen name="dues" options={{ href: null }} />
-    </Tabs>
+    <View style={{ flex: 1, flexDirection: 'row' }}>
+      {/* Sidebar — desktop only */}
+      {isWide && <AdminSidebar />}
+
+      {/* Content area */}
+      <View style={{ flex: 1 }}>
+        {/* TopBar — desktop only */}
+        {isWide && <TopBar />}
+
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarStyle: isWide
+              ? { display: 'none' }
+              : mobileTabBarStyle,
+            tabBarActiveTintColor:   c.primary,
+            tabBarInactiveTintColor: c.textSubtle,
+            tabBarLabelStyle: {
+              fontFamily: theme.typography.fontFamily.medium,
+              fontSize:   11,
+            },
+          }}
+        >
+          {/* ── Visible tabs (mobile) ───────────────────────────────── */}
+          <Tabs.Screen
+            name="dashboard"
+            options={{
+              title: 'Dashboard',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="grid-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="members/index"
+            options={{
+              title: 'Members',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="people-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="more"
+            options={{
+              title: 'More',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="apps-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="settings"
+            options={{
+              title: 'Settings',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="settings-outline" size={size} color={color} />
+              ),
+            }}
+          />
+
+          {/* ── Hidden routes ───────────────────────────────────────── */}
+          {/* Cover both Expo Router 6 naming conventions            */}
+          <Tabs.Screen name="roles/index"        options={{ href: null }} />
+          <Tabs.Screen name="dues/index"         options={{ href: null }} />
+          <Tabs.Screen name="committees/index"   options={{ href: null }} />
+          <Tabs.Screen name="status/index"       options={{ href: null }} />
+          <Tabs.Screen name="organization/index" options={{ href: null }} />
+          <Tabs.Screen name="profile"            options={{ href: null }} />
+
+          <Tabs.Screen name="roles"        options={{ href: null }} />
+          <Tabs.Screen name="dues"         options={{ href: null }} />
+          <Tabs.Screen name="committees"   options={{ href: null }} />
+          <Tabs.Screen name="status"       options={{ href: null }} />
+          <Tabs.Screen name="organization" options={{ href: null }} />
+        </Tabs>
+      </View>
+    </View>
   );
 }
