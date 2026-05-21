@@ -10,3 +10,6 @@ export { Header } from './Header';
 export { EmptyState } from './EmptyState';
 export { LoadingSpinner } from './LoadingSpinner';
 export { AuthLeftPanel } from './AuthLeftPanel';
+export { DonutChart }    from './DonutChart';
+export { Sidebar }       from './Sidebar';
+export { TopBar }        from './TopBar';

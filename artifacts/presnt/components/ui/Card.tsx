@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ViewProps, ViewStyle } from 'react-native';
+import { StyleProp, View, ViewProps, ViewStyle } from 'react-native';
 import { useThemeStore } from '@/stores/themeStore';
 
 type ShadowSize = 'sm' | 'md' | 'lg';
@@ -7,7 +7,7 @@ type ShadowSize = 'sm' | 'md' | 'lg';
 interface Props extends ViewProps {
   shadow?: ShadowSize;
   alt?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Card({ shadow, alt = false, style, children, ...props }: Props) {
