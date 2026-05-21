@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      org_locations: {
+        Row: {
+          id:            string
+          org_id:        string
+          name:          string
+          address:       string | null
+          latitude:      number | null
+          longitude:     number | null
+          radius_meters: number | null
+          is_deleted:    boolean | null
+          created_by:    string | null
+          created_at:    string | null
+          updated_at:    string | null
+        }
+        Insert: {
+          id?:           string
+          org_id:        string
+          name:          string
+          address?:      string | null
+          latitude?:     number | null
+          longitude?:    number | null
+          radius_meters?: number | null
+          is_deleted?:   boolean | null
+          created_by?:   string | null
+          created_at?:   string | null
+          updated_at?:   string | null
+        }
+        Update: {
+          id?:           string
+          org_id?:       string
+          name?:         string
+          address?:      string | null
+          latitude?:     number | null
+          longitude?:    number | null
+          radius_meters?: number | null
+          is_deleted?:   boolean | null
+          created_by?:   string | null
+          created_at?:   string | null
+          updated_at?:   string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_locations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_locations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       academic_terms: {
         Row: {
           created_at: string | null
@@ -174,16 +231,22 @@ export type Database = {
           description: string | null
           end_time: string | null
           id: string
-          is_cancelled: boolean | null
-          is_deleted: boolean | null
-          location: string | null
-          max_capacity: number | null
-          org_id: string
-          rsvp_required: boolean | null
-          start_time: string
-          title: string
-          type: string
-          updated_at: string | null
+          is_cancelled:      boolean | null
+          is_deleted:        boolean | null
+          is_mandatory:      boolean | null
+          location:          string | null
+          location_id:       string | null
+          max_capacity:      number | null
+          org_id:            string
+          points:            number | null
+          qr_checkin:        boolean | null
+          geofence_required: boolean | null
+          allow_excuses:     boolean | null
+          rsvp_required:     boolean | null
+          start_time:        string
+          title:             string
+          type:              string
+          updated_at:        string | null
         }
         Insert: {
           created_at?: string | null

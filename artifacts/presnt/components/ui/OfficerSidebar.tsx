@@ -1,8 +1,9 @@
 /**
- * AdminSidebar
+ * OfficerSidebar
  *
- * Desktop-only left navigation panel for the admin portal.
- * Matches the dark sidebar from the wireframe.
+ * Desktop-only left navigation panel for the officer portal.
+ * Matches the dark sidebar from the wireframes — same visual language as AdminSidebar.
+ * Only shows tabs the officer actually has permission for.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -12,8 +13,10 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
+import { PERMISSIONS } from '@/lib/permissions';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useUserViewStore } from '@/stores/userViewStore';
 import { Text } from './Text';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -27,52 +30,74 @@ const DIVIDER     = '#3D2B22';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const NAV_ITEMS: { label: string; path: string; icon: IconName }[] = [
-  { label: 'Dashboard',  path: '/(admin)/dashboard',   icon: 'grid-outline'              },
-  { label: 'Events',     path: '/(admin)/events',       icon: 'calendar-outline'          },
-  { label: 'Members',    path: '/(admin)/members',      icon: 'people-outline'            },
-  { label: 'Roles',      path: '/(admin)/roles',        icon: 'shield-outline'            },
-  { label: 'Committees', path: '/(admin)/committees',   icon: 'people-circle-outline'     },
-  { label: 'Dues',       path: '/(admin)/dues',         icon: 'cash-outline'              },
-  { label: 'Status',     path: '/(admin)/status',       icon: 'checkmark-circle-outline'  },
-  { label: 'Settings',   path: '/(admin)/settings',     icon: 'settings-outline'          },
+const ALL_NAV_ITEMS: {
+  label:      string;
+  path:       string;
+  icon:       IconName;
+  permission: string | null; // null = always visible
+}[] = [
+  { label: 'Events',     path: '/(officer)/events',     icon: 'calendar-outline',        permission: PERMISSIONS.MANAGE_EVENTS },
+  { label: 'Attendance', path: '/(officer)/attendance', icon: 'checkmark-done-outline',  permission: PERMISSIONS.MANAGE_ATTENDANCE },
+  { label: 'Excuses',    path: '/(officer)/excuses',    icon: 'document-text-outline',   permission: null }, // shown if manage_attendance OR manage_members
+  { label: 'Members',    path: '/(officer)/members',    icon: 'people-outline',           permission: PERMISSIONS.MANAGE_MEMBERS },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AdminSidebar() {
+export function OfficerSidebar() {
   const insets    = useSafeAreaInsets();
   const pathname  = usePathname();
   const { theme } = useThemeStore();
-  const { organization, membership, profile } = useAuthStore();
+  const { organization, membership, profile, customRole } = useAuthStore();
+  const userView  = useUserViewStore((s) => s.session);
   const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
     setSigningOut(true);
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      setSigningOut(false);
-    }
+    try { await supabase.auth.signOut(); }
+    finally { setSigningOut(false); }
   }
 
-  const orgName    = organization?.name        ?? 'My Chapter';
+  // Resolve permission set — real session vs user-view
+  const viewPerms  = userView?.role === 'officer' ? userView.permissions : null;
+  const realPerms  = customRole?.permissions ?? [];
+  const isAdmin    = userView
+    ? userView.role === 'admin'
+    : membership?.role === 'admin' || membership?.role === 'org_admin';
+
+  function hasPerm(permission: string): boolean {
+    if (isAdmin) return true;
+    if (viewPerms) return viewPerms.includes(permission);
+    return realPerms.includes(permission);
+  }
+
+  // Filter nav items the same way _layout.tsx does
+  const navItems = ALL_NAV_ITEMS.filter((item) => {
+    if (item.label === 'Excuses') {
+      return hasPerm(PERMISSIONS.MANAGE_ATTENDANCE) || hasPerm(PERMISSIONS.MANAGE_MEMBERS);
+    }
+    if (item.permission) return hasPerm(item.permission);
+    return true;
+  });
+
+  const orgName    = userView?.org.name ?? organization?.name ?? 'My Chapter';
   const institution = organization?.institution ?? '';
   const firstName  = profile?.first_name ?? '';
   const lastName   = profile?.last_name  ?? '';
   const initials   = firstName && lastName ? `${firstName[0]}${lastName[0]}` : '?';
 
-  const roleLabel = membership?.role
-    ? membership.role.toUpperCase().replace('_', ' ')
-    : 'ADMIN';
+  // Role label — show custom role name if available
+  const roleLabel = userView
+    ? 'OFFICER (VIEW)'
+    : customRole?.name?.toUpperCase()
+      ?? membership?.role?.toUpperCase().replace('_', ' ')
+      ?? 'OFFICER';
 
-  // Active if the pathname starts with the item's segment
   const isActive = (path: string) => {
-    const segment = path.replace('/(admin)/', '');
+    const segment = path.replace('/(officer)/', '');
     return pathname === `/${segment}` || pathname.startsWith(`/${segment}/`);
   };
 
-  // Use org primary color for active indicator (falls through to orange default)
   const primaryColor = theme.colors.primary;
 
   return (
@@ -94,7 +119,7 @@ export function AdminSidebar() {
 
       {/* ── Nav items ─────────────────────────────────────────────────── */}
       <View style={styles.nav}>
-        {NAV_ITEMS.map(({ label, path, icon }) => {
+        {navItems.map(({ label, path, icon }) => {
           const active = isActive(path);
           return (
             <Pressable
@@ -106,11 +131,7 @@ export function AdminSidebar() {
                 !active && pressed && { backgroundColor: '#2E2218' },
               ]}
             >
-              <Ionicons
-                name={icon}
-                size={18}
-                color={active ? primaryColor : MUTED_TEXT}
-              />
+              <Ionicons name={icon} size={18} color={active ? primaryColor : MUTED_TEXT} />
               <Text
                 size="sm"
                 weight={active ? 'medium' : 'regular'}
@@ -134,19 +155,12 @@ export function AdminSidebar() {
       >
         {signingOut
           ? <ActivityIndicator size="small" color={MUTED_TEXT} />
-          : <Ionicons name="log-out-outline" size={16} color={MUTED_TEXT} />
-        }
+          : <Ionicons name="log-out-outline" size={16} color={MUTED_TEXT} />}
         <Text size="sm" color={MUTED_TEXT}>Sign out</Text>
       </Pressable>
 
       {/* ── Org footer ───────────────────────────────────────────────── */}
-      <Pressable
-        onPress={() => router.push('/(admin)/profile')}
-        style={({ pressed }) => [
-          styles.orgRow,
-          { borderTopColor: DIVIDER, opacity: pressed ? 0.7 : 1 },
-        ]}
-      >
+      <View style={[styles.orgRow, { borderTopColor: DIVIDER }]}>
         <View style={styles.orgAvatar}>
           <Text size="xs" weight="medium" color={MUTED_TEXT}>{initials}</Text>
         </View>
@@ -156,8 +170,7 @@ export function AdminSidebar() {
             <Text size="xs" color={SUBTLE_TEXT} numberOfLines={1}>{institution}</Text>
           )}
         </View>
-        <Ionicons name="chevron-forward-outline" size={14} color={SUBTLE_TEXT} />
-      </Pressable>
+      </View>
     </View>
   );
 }
@@ -166,16 +179,15 @@ export function AdminSidebar() {
 
 const styles = StyleSheet.create({
   sidebar: {
-    width:            240,
-    backgroundColor:  SIDEBAR_BG,
+    width:             240,
+    backgroundColor:   SIDEBAR_BG,
     paddingHorizontal: 12,
-    justifyContent:   'space-between',
+    justifyContent:    'space-between',
   },
-
   logoRow: {
-    flexDirection:    'column',
-    alignItems:       'flex-start',
-    marginBottom:     28,
+    flexDirection:     'column',
+    alignItems:        'flex-start',
+    marginBottom:      28,
     paddingHorizontal: 4,
   },
   roleTag: {
@@ -183,42 +195,39 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginTop:     5,
   },
-
   nav: {
     flex: 1,
     gap:  2,
   },
   navItem: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            10,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               10,
     paddingHorizontal: 12,
     paddingVertical:   9,
-    borderRadius:   8,
-    borderLeftWidth: 0,
+    borderRadius:      8,
+    borderLeftWidth:   0,
   },
   navItemActive: {
     backgroundColor: ACTIVE_BG,
     borderLeftWidth: 3,
   },
-
   signOutBtn: {
-    flexDirection:    'row',
-    alignItems:       'center',
-    gap:              8,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               8,
     paddingHorizontal: 12,
-    paddingVertical:  9,
-    borderRadius:     8,
-    borderWidth:      1,
-    marginBottom:     8,
+    paddingVertical:   9,
+    borderRadius:      8,
+    borderWidth:       1,
+    marginBottom:      8,
   },
-
   orgRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           10,
-    paddingTop:    14,
-    borderTopWidth: 1,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               10,
+    paddingTop:        14,
+    borderTopWidth:    1,
     paddingHorizontal: 4,
   },
   orgAvatar: {
