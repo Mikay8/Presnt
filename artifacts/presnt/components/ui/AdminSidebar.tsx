@@ -7,10 +7,11 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { Text } from './Text';
@@ -43,6 +44,16 @@ export function AdminSidebar() {
   const pathname  = usePathname();
   const { theme } = useThemeStore();
   const { organization, membership, profile } = useAuthStore();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   const orgName    = organization?.name        ?? 'My Chapter';
   const institution = organization?.institution ?? '';
@@ -112,6 +123,22 @@ export function AdminSidebar() {
         })}
       </View>
 
+      {/* ── Sign out ──────────────────────────────────────────────────── */}
+      <Pressable
+        onPress={handleSignOut}
+        disabled={signingOut}
+        style={({ pressed }) => [
+          styles.signOutBtn,
+          { borderColor: DIVIDER, opacity: pressed || signingOut ? 0.6 : 1 },
+        ]}
+      >
+        {signingOut
+          ? <ActivityIndicator size="small" color={MUTED_TEXT} />
+          : <Ionicons name="log-out-outline" size={16} color={MUTED_TEXT} />
+        }
+        <Text size="sm" color={MUTED_TEXT}>Sign out</Text>
+      </Pressable>
+
       {/* ── Org footer ───────────────────────────────────────────────── */}
       <Pressable
         onPress={() => router.push('/(admin)/profile')}
@@ -129,6 +156,7 @@ export function AdminSidebar() {
             <Text size="xs" color={SUBTLE_TEXT} numberOfLines={1}>{institution}</Text>
           )}
         </View>
+        <Ionicons name="chevron-forward-outline" size={14} color={SUBTLE_TEXT} />
       </Pressable>
     </View>
   );
@@ -180,6 +208,17 @@ const styles = StyleSheet.create({
   navItemActive: {
     backgroundColor: ACTIVE_BG,
     borderLeftWidth: 3,
+  },
+
+  signOutBtn: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              8,
+    paddingHorizontal: 12,
+    paddingVertical:  9,
+    borderRadius:     8,
+    borderWidth:      1,
+    marginBottom:     8,
   },
 
   orgRow: {
