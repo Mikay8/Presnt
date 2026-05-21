@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { defaultTheme, lightTheme, AppTheme } from '@/lib/theme';
+import { defaultTheme, darkTheme, AppTheme } from '@/lib/theme';
 
 type ColorScheme = 'dark' | 'light';
 
@@ -12,13 +12,13 @@ interface ThemeStore {
 }
 
 export const useThemeStore = create<ThemeStore>((set) => ({
-  theme: lightTheme,
+  theme: defaultTheme,
   colorScheme: 'light',
 
   setColorScheme: (scheme) =>
     set({
       colorScheme: scheme,
-      theme: scheme === 'light' ? lightTheme : defaultTheme,
+      theme: scheme === 'light' ? defaultTheme : darkTheme,
     }),
 
   // Org branding from Supabase overrides color tokens at login.
@@ -33,6 +33,6 @@ export const useThemeStore = create<ThemeStore>((set) => ({
 
   reset: () =>
     set((state) => ({
-      theme: state.colorScheme === 'light' ? lightTheme : defaultTheme,
+      theme: state.colorScheme === 'light' ? defaultTheme : darkTheme,
     })),
 }));
