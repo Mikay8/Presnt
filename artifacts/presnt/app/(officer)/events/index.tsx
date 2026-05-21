@@ -36,9 +36,12 @@ import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { MapPickerModal } from '@/lib/MapPicker';
 import {
   DatePickerModal,
+  DateRange,
+  DateRangePickerModal,
   TimePickerModal,
   combineDateTime,
   formatDateDisplay,
+  formatDateRange,
   formatTimeDisplay,
 } from '@/lib/pickers';
 import {
@@ -88,8 +91,10 @@ type EventFormState = {
   title:               string;
   type:                string;
   is_mandatory:        boolean;
-  // Date & time — stored as Date objects internally
+  // Date & time
+  isMultiDay:          boolean;
   dateObj:             Date;
+  dateRange:           DateRange;
   startTimeObj:        Date;
   endTimeObj:          Date;
   hasEndTime:          boolean;
@@ -114,7 +119,9 @@ type EventFormState = {
 const now = new Date();
 const BLANK_FORM: EventFormState = {
   title: '', type: 'meeting', is_mandatory: false,
+  isMultiDay:   false,
   dateObj:      now,
+  dateRange:    { start: now, end: now },
   startTimeObj: (() => { const d = new Date(now); d.setHours(18, 0, 0, 0); return d; })(),
   endTimeObj:   (() => { const d = new Date(now); d.setHours(20, 0, 0, 0); return d; })(),
   hasEndTime:   true,
@@ -391,6 +398,7 @@ function EventForm({
 
   // Picker visibility states
   const [showDate,       setShowDate]       = useState(false);
+  const [showRange,      setShowRange]      = useState(false);
   const [showStartTime,  setShowStartTime]  = useState(false);
   const [showEndTime,    setShowEndTime]    = useState(false);
   const [showRecurrence, setShowRecurrence] = useState(false);
@@ -472,18 +480,18 @@ function EventForm({
         />
 
         {/* Type + Mandatory row */}
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', gap: 10, zIndex: showTypeMenu ? 100 : 1 }}>
+          <View style={{ flex: 1, zIndex: 100 }}>
             <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>TYPE</Text>
             <Pressable
               onPress={() => setShowTypeMenu(!showTypeMenu)}
               style={[inputStyle, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, marginBottom: 0 }]}
             >
               <Text size="sm" color={c.text}>{typeLabel}</Text>
-              <Ionicons name="chevron-down" size={14} color={c.textSubtle} />
+              <Ionicons name={showTypeMenu ? 'chevron-up' : 'chevron-down'} size={14} color={c.textSubtle} />
             </Pressable>
             {showTypeMenu && (
-              <View style={[ef.dropdown, { backgroundColor: c.surface, borderColor: c.border, zIndex: 200 }]}>
+              <View style={[ef.dropdown, { backgroundColor: c.surface, borderColor: c.border }]}>
                 {EVENT_TYPES.map((t) => (
                   <Pressable
                     key={t.value}
@@ -517,14 +525,69 @@ function EventForm({
         {/* ── WHEN ── */}
         <Text size="xs" weight="medium" color={c.textMuted} style={ef.sectionLabel}>WHEN</Text>
 
-        {/* Date */}
-        <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>DATE</Text>
-        <PickerBtn
-          label="Date"
-          value={formatDateDisplay(form.dateObj)}
-          icon="calendar-outline"
-          color={c.primary}
-          onPress={() => setShowDate(true)}
+        {/* Single / multi-day toggle */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+          {[false, true].map(multi => (
+            <Pressable key={String(multi)}
+              onPress={() => set('isMultiDay')(multi)}
+              style={[ef.modeChip, {
+                backgroundColor: form.isMultiDay === multi ? c.primary : c.surfaceAlt,
+                borderColor: form.isMultiDay === multi ? c.primary : c.border,
+              }]}>
+              <Text size="sm"
+                weight={form.isMultiDay === multi ? 'bold' : 'regular'}
+                color={form.isMultiDay === multi ? '#fff' : c.text}>
+                {multi ? 'Multi-day' : 'Single day'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Date / range picker */}
+        <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>
+          {form.isMultiDay ? 'DATE RANGE' : 'DATE'}
+        </Text>
+        <View style={{ position: 'relative', zIndex: (showDate || showRange) ? 500 : 1 }}>
+          {form.isMultiDay ? (
+            <PickerBtn
+              label="Date range"
+              value={formatDateRange(form.dateRange.start, form.dateRange.end)}
+              icon="calendar-outline"
+              color={c.primary}
+              onPress={() => setShowRange(true)}
+            />
+          ) : (
+            <>
+              <PickerBtn
+                label="Date"
+                value={formatDateDisplay(form.dateObj)}
+                icon="calendar-outline"
+                color={c.primary}
+                onPress={() => setShowDate(!showDate)}
+              />
+              <DatePickerModal
+                visible={showDate}
+                value={form.dateObj}
+                onConfirm={(d) => {
+                  const newDate  = new Date(d);
+                  const newStart = new Date(newDate);
+                  newStart.setHours(form.startTimeObj.getHours(), form.startTimeObj.getMinutes(), 0, 0);
+                  const newEnd = new Date(newDate);
+                  newEnd.setHours(form.endTimeObj.getHours(), form.endTimeObj.getMinutes(), 0, 0);
+                  setForm(f => ({ ...f, dateObj: newDate, startTimeObj: newStart, endTimeObj: newEnd }));
+                  setShowDate(false);
+                }}
+                onClose={() => setShowDate(false)}
+              />
+            </>
+          )}
+        </View>
+
+        <DateRangePickerModal
+          visible={showRange}
+          value={form.dateRange}
+          onConfirm={r => { setForm(f => ({ ...f, dateRange: r, dateObj: r.start })); setShowRange(false); }}
+          onClose={() => setShowRange(false)}
         />
 
         {/* Time row */}
@@ -742,23 +805,6 @@ function EventForm({
         </View>
       </Modal>
 
-      {/* Date picker */}
-      <DatePickerModal
-        visible={showDate}
-        value={form.dateObj}
-        onConfirm={(d) => {
-          // Preserve times but update calendar date
-          const newDate = new Date(d);
-          const newStart = new Date(newDate);
-          newStart.setHours(form.startTimeObj.getHours(), form.startTimeObj.getMinutes(), 0, 0);
-          const newEnd = new Date(newDate);
-          newEnd.setHours(form.endTimeObj.getHours(), form.endTimeObj.getMinutes(), 0, 0);
-          setForm(f => ({ ...f, dateObj: newDate, startTimeObj: newStart, endTimeObj: newEnd }));
-          setShowDate(false);
-        }}
-        onClose={() => setShowDate(false)}
-      />
-
       {/* Start time picker */}
       <TimePickerModal
         visible={showStartTime}
@@ -838,8 +884,9 @@ const ef = StyleSheet.create({
   mapBtn:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 4 },
   orLine:      { flex: 1, height: 1 },
   deleteBtn:   { borderWidth: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  modeChip:    { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   // dropdown
-  dropdown:    { position: 'absolute', top: 48, left: 0, right: 0, borderWidth: 1, borderRadius: 12, overflow: 'hidden', zIndex: 100 },
+  dropdown:    { position: 'absolute', top: '100%', left: 0, right: 0, borderWidth: 1, borderRadius: 12, overflow: 'hidden', zIndex: 200, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8 },
   dropdownItem:{ padding: 12, borderBottomWidth: 1 },
   // Settings panel
   panel:       { borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
@@ -1029,8 +1076,12 @@ export default function OfficerEventsScreen() {
     if (!orgId) return;
     setSaving(true);
     try {
-      const startIso = combineDateTime(form.dateObj, form.startTimeObj);
-      const endIso   = form.hasEndTime ? combineDateTime(form.dateObj, form.endTimeObj) : null;
+      const startDate = form.isMultiDay ? form.dateRange.start : form.dateObj;
+      const endDate   = form.isMultiDay ? form.dateRange.end   : form.dateObj;
+      const startIso  = combineDateTime(startDate, form.startTimeObj);
+      const endIso    = form.isMultiDay
+        ? combineDateTime(endDate, form.endTimeObj)
+        : form.hasEndTime ? combineDateTime(form.dateObj, form.endTimeObj) : null;
       const rrule    = buildRRule(form.recurrence);
 
       const payload: any = {
