@@ -5,6 +5,7 @@ import { useWindowDimensions, View } from 'react-native';
 import { AdminSidebar, TopBar } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useUserViewStore } from '@/stores/userViewStore';
 
 const DESKTOP_BREAKPOINT = 768;
 
@@ -13,9 +14,11 @@ export default function AdminLayout() {
   const { membership } = useAuthStore();
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP_BREAKPOINT;
+  const userView       = useUserViewStore((s) => s.session);
 
   const role = membership?.role;
-  if (role !== 'admin' && role !== 'org_admin') {
+  // Allow entry if user-view is simulating admin, otherwise enforce real role
+  if (!userView && role !== 'admin' && role !== 'org_admin') {
     return <Redirect href="/(member)" />;
   }
 

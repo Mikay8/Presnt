@@ -9,18 +9,88 @@ import type { Session } from '@supabase/supabase-js';
 import { Redirect, Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useUserViewStore } from '@/stores/userViewStore';
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+
+// ─── User View banner ──────────────────────────────────────────────────────────
+// Floats at the bottom of the screen whenever a user-view session is active.
+// Pressing "Exit" calls stop() which clears the session and RootLayoutNav
+// immediately redirects back to the superuser dashboard.
+
+function UserViewBanner() {
+  const { session, stop } = useUserViewStore();
+  const insets = useSafeAreaInsets();
+  if (!session) return null;
+
+  const roleLabel = session.role === 'org_admin' ? 'Admin'
+    : session.role === 'officer' ? 'Officer'
+    : 'Member';
+
+  return (
+    <View style={{
+      position: 'absolute',
+      bottom: insets.bottom + 12,
+      left: 16,
+      right: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#1C1411',
+      borderWidth: 1,
+      borderColor: '#E26B4A',
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      gap: 10,
+      // shadow
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+      elevation: 10,
+    }}>
+      {/* Pulse dot */}
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#E26B4A' }} />
+
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: '#FBF6EE', fontSize: 13, fontWeight: '600' }}>
+          User View — {roleLabel}
+        </Text>
+        <Text style={{ color: '#A89687', fontSize: 11, marginTop: 1 }} numberOfLines={1}>
+          {session.org.name}
+          {session.role === 'officer' && session.permissions.length > 0
+            ? ` · ${session.permissions.length} permission${session.permissions.length !== 1 ? 's' : ''}`
+            : ''}
+        </Text>
+      </View>
+
+      <Pressable
+        onPress={stop}
+        style={({ pressed }) => ({
+          backgroundColor: pressed ? '#E26B4A' : '#E26B4A22',
+          borderWidth: 1,
+          borderColor: '#E26B4A',
+          borderRadius: 8,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+        })}
+      >
+        <Text style={{ color: '#E26B4A', fontSize: 13, fontWeight: '600' }}>Exit</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 // ─── Auth guard ────────────────────────────────────────────────────────────────
 // Runs after isLoading:false. Uses pathname (always resolves to the real URL)
@@ -28,11 +98,34 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { session, profile, membership } = useAuthStore();
+  const userView = useUserViewStore((s) => s.session);
   const segments = useSegments();
   const pathname = usePathname();
 
   const inAuth      = segments[0] === '(auth)';
   const inSuperuser = pathname === '/super-user' || pathname.startsWith('/(superuser)');
+  const inAdmin     = pathname.startsWith('/(admin)');
+  const inOfficer   = pathname.startsWith('/(officer)');
+  const inMember    = pathname.startsWith('/(member)');
+  const inSimulated = inAdmin || inOfficer || inMember;
+
+  // ── User View mode ──────────────────────────────────────────────────────────
+  // When active, the superuser is simulating a role. Route them to the right
+  // portal if they're not already there, and let them navigate freely within it.
+  // Pressing Exit in the banner clears the session → they land back here →
+  // redirect to superuser dashboard.
+  if (userView) {
+    if (inSuperuser || inAuth) {
+      // Just entered user view OR was on superuser — redirect to correct portal
+      if (userView.role === 'admin') return <Redirect href="/(admin)/dashboard" />;
+      if (userView.role === 'officer') return <Redirect href="/(officer)/events" />;
+      return <Redirect href="/(member)" />;
+    }
+    // Already in a simulated portal — let them browse freely
+    return null;
+  }
+
+  // ── Normal auth flow ────────────────────────────────────────────────────────
 
   // Superuser routes manage their own auth — never redirect away from them
   if (inSuperuser) return null;
@@ -43,7 +136,6 @@ function RootLayoutNav() {
   }
 
   // Superuser accounts have no chapter membership — route them to their dashboard
-  // as soon as the profile loads (profile is set before membership resolves).
   if (session && profile?.is_superuser) {
     return <Redirect href="/(superuser)/" />;
   }
@@ -207,6 +299,7 @@ export default function RootLayout() {
                 <Stack.Screen name="+not-found"  />
               </Stack>
               <RootLayoutNav />
+              <UserViewBanner />
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

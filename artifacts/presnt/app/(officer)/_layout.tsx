@@ -5,21 +5,27 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/lib/permissions';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useUserViewStore } from '@/stores/userViewStore';
 
 export default function OfficerLayout() {
   const { theme }      = useThemeStore();
   const { membership } = useAuthStore();
   const { can }        = usePermissions();
+  const userView       = useUserViewStore((s) => s.session);
 
-  // Guard: only officers may access this portal
-  if (membership?.role !== 'officer') {
+  // Guard: only officers may access this portal (or superuser in user-view)
+  if (!userView && membership?.role !== 'officer') {
     return <Redirect href="/(member)" />;
   }
 
-  const showEvents     = can(PERMISSIONS.MANAGE_EVENTS);
-  const showAttendance = can(PERMISSIONS.MANAGE_ATTENDANCE);
-  const showExcuses    = can(PERMISSIONS.MANAGE_ATTENDANCE) || can(PERMISSIONS.MANAGE_MEMBERS);
-  const showMembers    = can(PERMISSIONS.MANAGE_MEMBERS);
+  // In user-view officer mode, use the simulated permission set
+  const viewPerms = userView?.role === 'officer' ? userView.permissions : null;
+  const hasViewPerm = (p: string) => viewPerms?.includes(p) ?? false;
+
+  const showEvents     = viewPerms ? hasViewPerm(PERMISSIONS.MANAGE_EVENTS)      : can(PERMISSIONS.MANAGE_EVENTS);
+  const showAttendance = viewPerms ? hasViewPerm(PERMISSIONS.MANAGE_ATTENDANCE)  : can(PERMISSIONS.MANAGE_ATTENDANCE);
+  const showExcuses    = viewPerms ? (hasViewPerm(PERMISSIONS.MANAGE_ATTENDANCE) || hasViewPerm(PERMISSIONS.MANAGE_MEMBERS)) : (can(PERMISSIONS.MANAGE_ATTENDANCE) || can(PERMISSIONS.MANAGE_MEMBERS));
+  const showMembers    = viewPerms ? hasViewPerm(PERMISSIONS.MANAGE_MEMBERS)     : can(PERMISSIONS.MANAGE_MEMBERS);
 
   // Officer with zero relevant permissions → fall back to member portal
   if (!showEvents && !showAttendance && !showExcuses && !showMembers) {
