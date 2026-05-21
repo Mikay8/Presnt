@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card, Text } from '@/components/ui';
 import { PERMISSIONS } from '@/lib/permissions';
 import { usePermissions } from '@/hooks/usePermissions';
+import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -336,18 +337,24 @@ export default function OfficerMembersScreen() {
   const [search,   setSearch]   = useState('');
   const [selected, setSelected] = useState<MemberRow | null>(null);
 
+  const { profile } = useAuthStore();
+
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const { data } = await supabase
-      .from('memberships')
-      .select(`
-        id, role, status, dues_status, dues_balance, dues_hold, is_blocked, block_reason, user_id,
-        profiles!user_id(id, first_name, last_name, email, phone, major, graduation_year),
-        org_roles!custom_role_id(id, name, color)
-      `)
-      .eq('org_id', orgId)
-      .eq('is_deleted', false)
-      .order('role');
+    const { data } = await loggedQuery({
+      domain: DOMAIN.MEMBERS, method: 'GET', endpoint: 'memberships',
+      orgId, userId: profile?.id,
+      query: supabase
+        .from('memberships')
+        .select(`
+          id, role, status, dues_status, dues_balance, dues_hold, is_blocked, block_reason, user_id,
+          profiles!user_id(id, first_name, last_name, email, phone, major, graduation_year),
+          org_roles!custom_role_id(id, name, color)
+        `)
+        .eq('org_id', orgId)
+        .eq('is_deleted', false)
+        .order('role'),
+    });
     setMembers((data ?? []) as MemberRow[]);
     setLoading(false);
     setRefresh(false);

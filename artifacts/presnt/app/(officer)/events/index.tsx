@@ -34,6 +34,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui';
+import { DOMAIN, logEvent, loggedQuery } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -806,12 +807,16 @@ export default function OfficerEventsScreen() {
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const { data } = await supabase
-      .from('events')
-      .select('*')
-      .eq('org_id', orgId)
-      .eq('is_deleted', false)
-      .order('start_time', { ascending: false });
+    const { data } = await loggedQuery({
+      domain: DOMAIN.EVENTS, method: 'GET', endpoint: 'events',
+      orgId, userId: profile?.id,
+      query: supabase
+        .from('events')
+        .select('*')
+        .eq('org_id', orgId)
+        .eq('is_deleted', false)
+        .order('start_time', { ascending: false }),
+    });
     setEvents((data ?? []) as Event[]);
     setLoading(false);
     setRefresh(false);
@@ -850,9 +855,19 @@ export default function OfficerEventsScreen() {
       };
 
       if (editTarget && editTarget !== false && 'id' in editTarget) {
-        await supabase.from('events').update(payload).eq('id', editTarget.id);
+        await loggedQuery({
+          domain: DOMAIN.EVENTS, method: 'PATCH', endpoint: 'events',
+          orgId, userId: profile?.id,
+          requestBody: { id: editTarget.id, ...payload },
+          query: supabase.from('events').update(payload).eq('id', editTarget.id),
+        });
       } else {
-        await supabase.from('events').insert({ ...payload, org_id: orgId, created_by: profile?.id ?? null });
+        await loggedQuery({
+          domain: DOMAIN.EVENTS, method: 'POST', endpoint: 'events',
+          orgId, userId: profile?.id,
+          requestBody: payload,
+          query: supabase.from('events').insert({ ...payload, org_id: orgId, created_by: profile?.id ?? null }),
+        });
       }
 
       await load();
@@ -870,7 +885,12 @@ export default function OfficerEventsScreen() {
       {
         text: 'Cancel Event', style: 'destructive',
         onPress: async () => {
-          await supabase.from('events').update({ is_cancelled: true }).eq('id', event.id);
+          await loggedQuery({
+            domain: DOMAIN.EVENTS, method: 'PATCH', endpoint: 'events/cancel',
+            orgId, userId: profile?.id,
+            requestBody: { id: event.id, is_cancelled: true },
+            query: supabase.from('events').update({ is_cancelled: true }).eq('id', event.id),
+          });
           await load();
         },
       },

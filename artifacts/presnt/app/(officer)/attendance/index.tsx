@@ -22,6 +22,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, Text } from '@/components/ui';
+import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -394,31 +395,40 @@ export default function AttendanceScreen() {
   const [refresh, setRefresh] = useState(false);
   const [open,    setOpen]    = useState<EventRow | null>(null);
 
+  const { profile } = useAuthStore();
+
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
 
     const [evRes, memRes, attRes] = await Promise.all([
-      supabase
-        .from('events')
-        .select('id, title, start_time, type, is_cancelled')
-        .eq('org_id', orgId)
-        .eq('is_deleted', false)
-        .eq('is_cancelled', false)
-        .order('start_time', { ascending: false })
-        .limit(60),
-
+      loggedQuery({
+        domain: DOMAIN.EVENTS, method: 'GET', endpoint: 'events',
+        orgId, userId: profile?.id,
+        query: supabase
+          .from('events')
+          .select('id, title, start_time, type, is_cancelled')
+          .eq('org_id', orgId)
+          .eq('is_deleted', false)
+          .eq('is_cancelled', false)
+          .order('start_time', { ascending: false })
+          .limit(60),
+      }),
+      // count query — use raw supabase (count lives on result, not data)
       supabase
         .from('memberships')
         .select('id', { count: 'exact', head: true })
         .eq('org_id', orgId)
         .eq('is_deleted', false)
         .eq('status', 'active'),
-
-      supabase
-        .from('event_attendance')
-        .select('event_id, status')
-        .eq('org_id', orgId)
-        .eq('status', 'present'),
+      loggedQuery({
+        domain: DOMAIN.ATTENDANCE, method: 'GET', endpoint: 'event_attendance',
+        orgId, userId: profile?.id,
+        query: supabase
+          .from('event_attendance')
+          .select('event_id, status')
+          .eq('org_id', orgId)
+          .eq('status', 'present'),
+      }),
     ]);
 
     const map: Record<string, number> = {};

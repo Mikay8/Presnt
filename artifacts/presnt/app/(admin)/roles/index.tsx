@@ -22,6 +22,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, Text } from '@/components/ui';
+import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { ALL_PERMISSIONS, ROLE_COLORS, type Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -260,11 +261,15 @@ export default function AdminRolesScreen() {
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const { data } = await supabase
-      .from('org_roles')
-      .select('*')
-      .eq('org_id', orgId)
-      .order('name');
+    const { data } = await loggedQuery({
+      domain: DOMAIN.ROLES, method: 'GET', endpoint: 'org_roles',
+      orgId, userId,
+      query: supabase
+        .from('org_roles')
+        .select('*')
+        .eq('org_id', orgId)
+        .order('name'),
+    });
     setRoles(data ?? []);
     setLoading(false);
     setRefresh(false);
@@ -280,14 +285,24 @@ export default function AdminRolesScreen() {
     setSaving(true);
 
     if (editing) {
-      await supabase
-        .from('org_roles')
-        .update({ name, color, permissions, updated_at: new Date().toISOString() })
-        .eq('id', editing.id);
+      await loggedQuery({
+        domain: DOMAIN.ROLES, method: 'PATCH', endpoint: 'org_roles',
+        orgId, userId,
+        requestBody: { id: editing.id, name, color, permissions },
+        query: supabase
+          .from('org_roles')
+          .update({ name, color, permissions, updated_at: new Date().toISOString() })
+          .eq('id', editing.id),
+      });
     } else {
-      await supabase
-        .from('org_roles')
-        .insert({ org_id: orgId, name, color, permissions, created_by: userId });
+      await loggedQuery({
+        domain: DOMAIN.ROLES, method: 'POST', endpoint: 'org_roles',
+        orgId, userId,
+        requestBody: { name, color, permissions },
+        query: supabase
+          .from('org_roles')
+          .insert({ org_id: orgId, name, color, permissions, created_by: userId }),
+      });
     }
 
     await load();
@@ -305,7 +320,12 @@ export default function AdminRolesScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await supabase.from('org_roles').delete().eq('id', role.id);
+            await loggedQuery({
+              domain: DOMAIN.ROLES, method: 'DELETE', endpoint: 'org_roles',
+              orgId, userId,
+              requestBody: { id: role.id },
+              query: supabase.from('org_roles').delete().eq('id', role.id),
+            });
             await load();
           },
         },

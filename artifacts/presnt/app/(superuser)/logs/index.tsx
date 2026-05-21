@@ -1,22 +1,107 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+/**
+ * Superuser — Logs & Audit
+ *
+ * Tabs
+ *  • Platform audit  – superuser_audit_log entries (superuser actions)
+ *  • API logs        – api_request_log grouped by domain, each row expandable
+ *  • Errors          – api_request_log where status = 'error', same expandable rows
+ */
+
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import { Text } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { su } from '../_layout';
 
-const TABS = ['Platform audit', 'Restrictions', 'Errors'] as const;
-type Tab = typeof TABS[number];
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface AuditEntry {
-  id: string;
-  action: string;
+  id:          string;
+  action:      string;
   target_type: string | null;
-  target_id: string | null;
-  notes: string | null;
-  created_at: string;
-  profiles: { first_name: string; last_name: string } | null;
+  target_id:   string | null;
+  notes:       string | null;
+  created_at:  string;
+  profiles:    { first_name: string; last_name: string } | null;
 }
+
+interface ApiLogEntry {
+  id:            string;
+  created_at:    string;
+  user_id:       string | null;
+  org_id:        string | null;
+  method:        string;
+  endpoint:      string;
+  domain:        string;
+  status:        string;
+  status_code:   number | null;
+  duration_ms:   number | null;
+  request_body:  Record<string, unknown> | null;
+  response_meta: Record<string, unknown> | null;
+  error_message: string | null;
+}
+
+// ─── Domain display config ─────────────────────────────────────────────────────
+
+const DOMAIN_ORDER = [
+  'auth', 'events', 'members', 'attendance', 'excuses',
+  'locations', 'roles', 'config', 'billing', 'orgs', 'other',
+];
+
+const DOMAIN_LABELS: Record<string, string> = {
+  auth:       'Auth & Sessions',
+  events:     'Events',
+  members:    'Members',
+  attendance: 'Attendance',
+  excuses:    'Excuses',
+  locations:  'Saved Locations',
+  roles:      'Roles & Permissions',
+  config:     'App Config',
+  billing:    'Billing',
+  orgs:       'Organizations',
+  other:      'Other',
+};
+
+const DOMAIN_ICON: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
+  auth:       'key-outline',
+  events:     'calendar-outline',
+  members:    'people-outline',
+  attendance: 'checkmark-done-outline',
+  excuses:    'document-text-outline',
+  locations:  'location-outline',
+  roles:      'shield-outline',
+  config:     'settings-outline',
+  billing:    'card-outline',
+  orgs:       'business-outline',
+  other:      'ellipsis-horizontal-circle-outline',
+};
+
+// ─── Helper: status code → colour ─────────────────────────────────────────────
+
+function statusColor(code: number | null, status: string) {
+  if (status === 'error' || (code && code >= 500)) return su.danger;
+  if (code && code >= 400) return su.warning;
+  return su.success;
+}
+
+function methodColor(m: string) {
+  if (m === 'GET')    return '#3B82F6';
+  if (m === 'POST')   return su.success;
+  if (m === 'PATCH')  return su.warning;
+  if (m === 'DELETE') return su.danger;
+  return su.textMuted;
+}
+
+// ─── timeAgo ──────────────────────────────────────────────────────────────────
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -28,110 +113,485 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function fmtDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// ─── Expandable API log row ────────────────────────────────────────────────────
+
+function ApiLogRow({ entry }: { entry: ApiLogEntry }) {
+  const [open, setOpen] = useState(false);
+  const anim = useRef(new Animated.Value(0)).current;
+
+  function toggle() {
+    const toValue = open ? 0 : 1;
+    setOpen(!open);
+    Animated.spring(anim, { toValue, useNativeDriver: false, tension: 180, friction: 20 }).start();
+  }
+
+  const sc = entry.status_code;
+  const sColor = statusColor(sc, entry.status);
+
+  return (
+    <View style={{ borderWidth: 1, borderColor: su.border, borderRadius: 10, overflow: 'hidden', marginBottom: 6 }}>
+      {/* ── Collapsed header row ── */}
+      <Pressable
+        onPress={toggle}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          paddingHorizontal: 14,
+          paddingVertical: 11,
+          backgroundColor: pressed ? su.surfaceAlt : su.surface,
+        })}
+      >
+        {/* Method badge */}
+        <View style={{
+          width: 58,
+          alignItems: 'center',
+          paddingVertical: 3,
+          borderRadius: 5,
+          backgroundColor: methodColor(entry.method) + '22',
+        }}>
+          <Text style={{ color: methodColor(entry.method), fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>
+            {entry.method}
+          </Text>
+        </View>
+
+        {/* Endpoint */}
+        <Text style={{ color: su.text, fontSize: 13, fontWeight: '500', flex: 1 }} numberOfLines={1}>
+          {entry.endpoint}
+        </Text>
+
+        {/* Status code */}
+        <View style={{
+          paddingHorizontal: 8,
+          paddingVertical: 3,
+          borderRadius: 5,
+          backgroundColor: sColor + '22',
+          marginRight: 4,
+        }}>
+          <Text style={{ color: sColor, fontSize: 11, fontWeight: '600' }}>
+            {sc ?? entry.status}
+          </Text>
+        </View>
+
+        {/* Duration */}
+        {entry.duration_ms != null && (
+          <Text style={{ color: su.textSubtle, fontSize: 11, width: 52, textAlign: 'right' }}>
+            {entry.duration_ms}ms
+          </Text>
+        )}
+
+        {/* Time */}
+        <Text style={{ color: su.textSubtle, fontSize: 11, width: 68, textAlign: 'right' }}>
+          {timeAgo(entry.created_at)}
+        </Text>
+
+        {/* Chevron */}
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={14}
+          color={su.textSubtle}
+          style={{ marginLeft: 4 }}
+        />
+      </Pressable>
+
+      {/* ── Expanded detail panel ── */}
+      {open && (
+        <View style={{ backgroundColor: su.bg, borderTopWidth: 1, borderTopColor: su.border, padding: 14, gap: 10 }}>
+          {/* Meta row */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+            <DetailCell label="Timestamp" value={`${fmtDate(entry.created_at)}  ${fmtTime(entry.created_at)}`} />
+            <DetailCell label="Domain"    value={DOMAIN_LABELS[entry.domain] ?? entry.domain} />
+            {entry.org_id  && <DetailCell label="Org ID"  value={entry.org_id.slice(0, 8) + '…'} mono />}
+            {entry.user_id && <DetailCell label="User ID" value={entry.user_id.slice(0, 8) + '…'} mono />}
+            {entry.duration_ms != null && <DetailCell label="Duration" value={`${entry.duration_ms} ms`} />}
+          </View>
+
+          {/* Request body */}
+          {entry.request_body && Object.keys(entry.request_body).length > 0 && (
+            <JsonBlock label="Request" data={entry.request_body} />
+          )}
+
+          {/* Response meta */}
+          {entry.response_meta && Object.keys(entry.response_meta).length > 0 && (
+            <JsonBlock label="Response" data={entry.response_meta} accent={entry.status === 'error' ? su.danger : su.success} />
+          )}
+
+          {/* Error message */}
+          {entry.error_message && (
+            <View style={{ backgroundColor: su.danger + '18', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: su.danger }}>
+              <Text style={{ color: su.danger, fontSize: 11, fontWeight: '600', marginBottom: 3 }}>ERROR</Text>
+              <Text style={{ color: su.text, fontSize: 12, fontFamily: 'monospace' }}>{entry.error_message}</Text>
+            </View>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function DetailCell({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <View style={{ minWidth: 120 }}>
+      <Text style={{ color: su.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 2 }}>{label}</Text>
+      <Text style={{ color: su.text, fontSize: 12, fontFamily: mono ? 'monospace' : undefined }}>{value}</Text>
+    </View>
+  );
+}
+
+function JsonBlock({ label, data, accent }: { label: string; data: Record<string, unknown>; accent?: string }) {
+  return (
+    <View>
+      <Text style={{ color: su.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 }}>{label}</Text>
+      <View style={{ backgroundColor: su.surfaceAlt, borderRadius: 8, padding: 10, borderLeftWidth: 2, borderLeftColor: accent ?? su.primary }}>
+        <Text style={{ color: su.textMuted, fontSize: 11, fontFamily: 'monospace', lineHeight: 18 }}>
+          {JSON.stringify(data, null, 2)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Domain section (Platform audit / API logs) ───────────────────────────────
+
+function DomainSection({ domain, entries }: { domain: string; entries: ApiLogEntry[] }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  const errorCount = entries.filter(e => e.status === 'error').length;
+  const icon = DOMAIN_ICON[domain] ?? 'ellipsis-horizontal-circle-outline';
+
+  return (
+    <View style={{ marginBottom: 20 }}>
+      {/* Section header */}
+      <Pressable
+        onPress={() => setCollapsed(!collapsed)}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          paddingVertical: 10,
+          paddingHorizontal: 2,
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Ionicons name={icon} size={16} color={su.primary} />
+        <Text style={{ color: su.text, fontSize: 15, fontWeight: '700', flex: 1 }}>
+          {DOMAIN_LABELS[domain] ?? domain}
+        </Text>
+        {errorCount > 0 && (
+          <View style={{ backgroundColor: su.danger + '33', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
+            <Text style={{ color: su.danger, fontSize: 11, fontWeight: '600' }}>{errorCount} error{errorCount > 1 ? 's' : ''}</Text>
+          </View>
+        )}
+        <View style={{ backgroundColor: su.surfaceAlt, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, marginRight: 4 }}>
+          <Text style={{ color: su.textMuted, fontSize: 11 }}>{entries.length}</Text>
+        </View>
+        <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={14} color={su.textSubtle} />
+      </Pressable>
+
+      {!collapsed && (
+        <View>
+          {entries.map(e => <ApiLogRow key={e.id} entry={e} />)}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Audit entry card ──────────────────────────────────────────────────────────
+
 const ACTION_COLOR: Record<string, string> = {
-  'org.viewed': '#3B82F6',
-  'org.deactivated': '#C0392B',
-  'org.reactivated': '#5C8A57',
-  'org.field_edited': '#C99432',
-  'org.impersonated': '#E26B4A',
-  'profile.viewed': '#3B82F6',
-  'profile.edited': '#C99432',
+  'org.viewed':            '#3B82F6',
+  'org.deactivated':       '#C0392B',
+  'org.reactivated':       '#5C8A57',
+  'org.field_edited':      '#C99432',
+  'org.impersonated':      '#E26B4A',
+  'profile.viewed':        '#3B82F6',
+  'profile.edited':        '#C99432',
   'profile.force_logged_out': '#C0392B',
 };
+
+function AuditCard({ entry }: { entry: AuditEntry }) {
+  const [open, setOpen] = useState(false);
+  const color = ACTION_COLOR[entry.action] ?? su.textSubtle;
+  const name = entry.profiles
+    ? `${entry.profiles.first_name} ${entry.profiles.last_name}`
+    : 'System';
+
+  return (
+    <View style={{ borderWidth: 1, borderColor: su.border, borderRadius: 10, overflow: 'hidden', marginBottom: 6 }}>
+      <Pressable
+        onPress={() => setOpen(!open)}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          padding: 14,
+          backgroundColor: pressed ? su.surfaceAlt : su.surface,
+        })}
+      >
+        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: color + '22' }}>
+          <Text style={{ color, fontSize: 11, fontWeight: '600' }}>{entry.action}</Text>
+        </View>
+        <Text style={{ color: su.textMuted, fontSize: 13, flex: 1 }} numberOfLines={1}>
+          {name}
+        </Text>
+        <Text style={{ color: su.textSubtle, fontSize: 11 }}>{timeAgo(entry.created_at)}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={su.textSubtle} style={{ marginLeft: 4 }} />
+      </Pressable>
+
+      {open && (
+        <View style={{ backgroundColor: su.bg, borderTopWidth: 1, borderTopColor: su.border, padding: 14, gap: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+            <DetailCell label="Timestamp" value={`${fmtDate(entry.created_at)}  ${fmtTime(entry.created_at)}`} />
+            <DetailCell label="Performed by" value={name} />
+            {entry.target_type && <DetailCell label="Target type" value={entry.target_type} />}
+            {entry.target_id   && <DetailCell label="Target ID"   value={entry.target_id.slice(0, 8) + '…'} mono />}
+          </View>
+          {entry.notes && (
+            <View style={{ backgroundColor: su.surfaceAlt, borderRadius: 8, padding: 10 }}>
+              <Text style={{ color: su.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, marginBottom: 4 }}>NOTES</Text>
+              <Text style={{ color: su.textMuted, fontSize: 13 }}>{entry.notes}</Text>
+            </View>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Toolbar (search + filter chips) ──────────────────────────────────────────
+
+const METHOD_FILTERS = ['ALL', 'GET', 'POST', 'PATCH', 'DELETE'] as const;
+
+function FilterBar({
+  methodFilter,
+  onMethodChange,
+  count,
+}: {
+  methodFilter: string;
+  onMethodChange: (m: string) => void;
+  count: number;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+      {METHOD_FILTERS.map(m => (
+        <Pressable
+          key={m}
+          onPress={() => onMethodChange(m)}
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 5,
+            borderRadius: 20,
+            backgroundColor: methodFilter === m ? su.primary + '33' : su.surfaceAlt,
+            borderWidth: 1,
+            borderColor: methodFilter === m ? su.primary : 'transparent',
+          }}
+        >
+          <Text style={{ color: methodFilter === m ? su.primary : su.textMuted, fontSize: 12, fontWeight: '600' }}>{m}</Text>
+        </Pressable>
+      ))}
+      <Text style={{ color: su.textSubtle, fontSize: 12, marginLeft: 'auto' }}>{count} entries</Text>
+    </View>
+  );
+}
+
+// ─── Main screen ───────────────────────────────────────────────────────────────
+
+const TABS = ['Platform audit', 'API logs', 'Errors'] as const;
+type Tab = typeof TABS[number];
 
 export default function SuperuserLogsScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 800;
 
   const [activeTab, setActiveTab] = useState<Tab>('Platform audit');
-  const [logs, setLogs] = useState<AuditEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  // Audit log state
+  const [auditLogs,    setAuditLogs]    = useState<AuditEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  // API log state
+  const [apiLogs,    setApiLogs]    = useState<ApiLogEntry[]>([]);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [methodFilter, setMethodFilter] = useState<string>('ALL');
 
   useEffect(() => {
-    if (activeTab === 'Platform audit') loadLogs();
+    if (activeTab === 'Platform audit') loadAudit();
+    if (activeTab === 'API logs')       loadApiLogs();
+    if (activeTab === 'Errors')         loadApiLogs();
   }, [activeTab]);
 
-  async function loadLogs() {
-    setLoading(true);
+  async function loadAudit() {
+    setAuditLoading(true);
     const { data } = await supabase
       .from('superuser_audit_log')
       .select('*, profiles(first_name, last_name)')
       .order('created_at', { ascending: false })
-      .limit(50);
-    setLogs((data as AuditEntry[]) ?? []);
-    setLoading(false);
+      .limit(100);
+    setAuditLogs((data as AuditEntry[]) ?? []);
+    setAuditLoading(false);
   }
+
+  async function loadApiLogs() {
+    setApiLoading(true);
+    const { data } = await supabase
+      .from('api_request_log')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    setApiLogs((data as ApiLogEntry[]) ?? []);
+    setApiLoading(false);
+  }
+
+  // ── derived data ──
+  const filteredApiLogs = apiLogs.filter(e => {
+    if (activeTab === 'Errors' && e.status !== 'error') return false;
+    if (methodFilter !== 'ALL' && e.method !== methodFilter) return false;
+    return true;
+  });
+
+  // Group by domain (for API logs tab)
+  const byDomain = DOMAIN_ORDER.reduce<Record<string, ApiLogEntry[]>>((acc, d) => {
+    const rows = filteredApiLogs.filter(e => e.domain === d);
+    if (rows.length > 0) acc[d] = rows;
+    return acc;
+  }, {});
+
+  // Catch any domain not in DOMAIN_ORDER
+  filteredApiLogs.forEach(e => {
+    if (!byDomain[e.domain]) byDomain[e.domain] = [];
+    if (!byDomain[e.domain].includes(e)) byDomain[e.domain].push(e);
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: su.bg }}>
-      <View style={{ padding: isWide ? 32 : 16, paddingBottom: 0 }}>
-        <Text style={{ color: su.text, fontSize: 28, fontWeight: '700', marginBottom: 20 }}>Logs & audit</Text>
+      {/* ── Header ── */}
+      <View style={{ paddingHorizontal: isWide ? 32 : 16, paddingTop: isWide ? 32 : 20, paddingBottom: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+          <Text style={{ color: su.text, fontSize: 26, fontWeight: '700', flex: 1 }}>Logs & Audit</Text>
+          {/* Refresh */}
+          <Pressable
+            onPress={() => { if (activeTab === 'Platform audit') loadAudit(); else loadApiLogs(); }}
+            style={({ pressed }) => ({
+              padding: 8,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: su.border,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Ionicons name="refresh-outline" size={16} color={su.textMuted} />
+          </Pressable>
+        </View>
 
         {/* Tabs */}
-        <View style={{ flexDirection: 'row', gap: 4 }}>
-          {TABS.map((t) => (
+        <View style={{ flexDirection: 'row', gap: 0 }}>
+          {TABS.map(t => (
             <Pressable
               key={t}
               onPress={() => setActiveTab(t)}
-              style={{ paddingHorizontal: 16, paddingVertical: 9, borderBottomWidth: 2, borderBottomColor: activeTab === t ? su.primary : 'transparent' }}
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderBottomWidth: 2,
+                borderBottomColor: activeTab === t ? su.primary : 'transparent',
+              }}
             >
-              <Text style={{ color: activeTab === t ? su.primary : su.textMuted, fontSize: 14, fontWeight: activeTab === t ? '600' : '400' }}>{t}</Text>
+              <Text style={{
+                color: activeTab === t ? su.primary : su.textMuted,
+                fontSize: 14,
+                fontWeight: activeTab === t ? '600' : '400',
+              }}>
+                {t}
+              </Text>
             </Pressable>
           ))}
         </View>
-        <View style={{ height: 1, backgroundColor: su.border, marginHorizontal: isWide ? -32 : -16, marginBottom: 20 }} />
+        <View style={{ height: 1, backgroundColor: su.border, marginHorizontal: isWide ? -32 : -16 }} />
       </View>
 
+      {/* ── Platform audit tab ── */}
       {activeTab === 'Platform audit' && (
-        loading ? (
-          <ActivityIndicator color={su.primary} style={{ marginTop: 40 }} />
-        ) : (
-          <ScrollView contentContainerStyle={{ paddingHorizontal: isWide ? 32 : 16, paddingBottom: 48 }}>
-            {logs.length === 0 ? (
-              <Text style={{ color: su.textMuted, textAlign: 'center', marginTop: 40 }}>
-                No audit log entries yet. Actions performed by superusers will appear here.
-              </Text>
-            ) : (
-              <View style={{ gap: 8 }}>
-                {logs.map((entry) => (
-                  <View key={entry.id} style={{ backgroundColor: su.surface, borderRadius: 10, borderWidth: 1, borderColor: su.border, padding: 14 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: (ACTION_COLOR[entry.action] ?? su.textSubtle) + '22' }}>
-                        <Text style={{ color: ACTION_COLOR[entry.action] ?? su.textSubtle, fontSize: 11, fontWeight: '600' }}>
-                          {entry.action}
-                        </Text>
-                      </View>
-                      <Text style={{ color: su.textSubtle, fontSize: 11, marginLeft: 'auto' }}>{timeAgo(entry.created_at)}</Text>
-                    </View>
-                    {entry.notes && <Text style={{ color: su.textMuted, fontSize: 13 }}>{entry.notes}</Text>}
-                    {entry.target_type && (
-                      <Text style={{ color: su.textSubtle, fontSize: 11, marginTop: 4 }}>
-                        {entry.target_type} · {entry.target_id?.slice(0, 8)}…
-                      </Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
-          </ScrollView>
-        )
+        auditLoading
+          ? <ActivityIndicator color={su.primary} style={{ marginTop: 48 }} />
+          : (
+            <ScrollView contentContainerStyle={{ padding: isWide ? 32 : 16, paddingBottom: 60 }}>
+              {auditLogs.length === 0
+                ? <EmptyState message={'No superuser actions logged yet.\nActions performed in this dashboard will appear here.'} />
+                : auditLogs.map(e => <AuditCard key={e.id} entry={e} />)
+              }
+            </ScrollView>
+          )
       )}
 
-      {activeTab === 'Restrictions' && (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-          <Text style={{ color: su.textMuted, fontSize: 14, textAlign: 'center' }}>
-            Member restriction log across all orgs.{'\n'}Available once member_restrictions table is added in Phase 3+.
-          </Text>
-        </View>
+      {/* ── API logs tab ── */}
+      {activeTab === 'API logs' && (
+        apiLoading
+          ? <ActivityIndicator color={su.primary} style={{ marginTop: 48 }} />
+          : (
+            <ScrollView contentContainerStyle={{ padding: isWide ? 32 : 16, paddingBottom: 60 }}>
+              <FilterBar
+                methodFilter={methodFilter}
+                onMethodChange={setMethodFilter}
+                count={filteredApiLogs.length}
+              />
+              {filteredApiLogs.length === 0
+                ? <EmptyState message={'No API calls logged yet.\nEndpoint activity will appear here as users interact with the app.'} />
+                : Object.entries(byDomain).map(([domain, entries]) => (
+                    <DomainSection key={domain} domain={domain} entries={entries} />
+                  ))
+              }
+            </ScrollView>
+          )
       )}
 
+      {/* ── Errors tab ── */}
       {activeTab === 'Errors' && (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-          <Text style={{ color: su.textMuted, fontSize: 14, textAlign: 'center' }}>
-            Error log feed.{'\n'}Will display Sentry errors tagged with org context once Sentry is connected.
-          </Text>
-        </View>
+        apiLoading
+          ? <ActivityIndicator color={su.primary} style={{ marginTop: 48 }} />
+          : (
+            <ScrollView contentContainerStyle={{ padding: isWide ? 32 : 16, paddingBottom: 60 }}>
+              <FilterBar
+                methodFilter={methodFilter}
+                onMethodChange={setMethodFilter}
+                count={filteredApiLogs.length}
+              />
+              {filteredApiLogs.length === 0
+                ? <EmptyState message={'No errors logged.\nFailed API calls (4xx / 5xx) will appear here.'} />
+                : filteredApiLogs.map(e => (
+                    <View key={e.id} style={{ marginBottom: 6 }}>
+                      {/* Domain label above each error */}
+                      <Text style={{ color: su.textSubtle, fontSize: 10, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4, paddingLeft: 2 }}>
+                        {DOMAIN_LABELS[e.domain] ?? e.domain}
+                      </Text>
+                      <ApiLogRow entry={e} />
+                    </View>
+                  ))
+              }
+            </ScrollView>
+          )
       )}
+    </View>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
+      <Ionicons name="document-text-outline" size={40} color={su.textSubtle} />
+      <Text style={{ color: su.textMuted, fontSize: 14, textAlign: 'center', marginTop: 16, lineHeight: 22 }}>
+        {message}
+      </Text>
     </View>
   );
 }

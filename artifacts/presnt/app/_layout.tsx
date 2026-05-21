@@ -15,6 +15,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { DOMAIN, logEvent } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -194,8 +195,14 @@ export default function RootLayout() {
         // in prod. Silently update session but skip the full data reload +
         // loading spinner so the screen doesn't flash white.
         if (event === 'TOKEN_REFRESHED') return;
+
+        // Log sign-in / sign-out events
+        if (event === 'SIGNED_IN') {
+          logEvent({ domain: DOMAIN.AUTH, method: 'POST', endpoint: 'auth/session', userId: session.user.id, statusCode: 200, responseMeta: { event } });
+        }
         loadUserData(session, false); // silent refresh — no spinner
       } else {
+        logEvent({ domain: DOMAIN.AUTH, method: 'POST', endpoint: 'auth/signout', statusCode: 200, responseMeta: { event } });
         clear();
       }
     });
@@ -207,6 +214,7 @@ export default function RootLayout() {
   async function loadUserData(session: Session, showSpinner: boolean) {
     if (showSpinner) setLoading(true);
 
+    const t0 = Date.now();
     const [profileResult, membershipResult] = await Promise.all([
       supabase
         .from('profiles')
@@ -223,6 +231,17 @@ export default function RootLayout() {
         .limit(1)
         .maybeSingle(),                        // null (not error) when no membership yet → onboarding
     ]);
+
+    // Log profile fetch
+    logEvent({
+      domain: DOMAIN.MEMBERS, method: 'GET', endpoint: 'profiles',
+      userId: session.user.id,
+      status: profileResult.error ? 'error' : 'ok',
+      statusCode: profileResult.error ? 500 : 200,
+      durationMs: Date.now() - t0,
+      responseMeta: { has_profile: !!profileResult.data },
+      errorMessage: profileResult.error?.message,
+    });
 
     const { data: profile }    = profileResult;
     const { data: membership } = membershipResult;
@@ -247,11 +266,20 @@ export default function RootLayout() {
 
       // Load custom officer role if applicable
       if (membershipOnly.role === 'officer' && membershipOnly.custom_role_id) {
-        const { data: orgRole } = await supabase
+        const t1 = Date.now();
+        const { data: orgRole, error: roleErr } = await supabase
           .from('org_roles')
           .select('id, name, color, permissions')
           .eq('id', membershipOnly.custom_role_id)
           .single();
+        logEvent({
+          domain: DOMAIN.ROLES, method: 'GET', endpoint: 'org_roles',
+          userId: session.user.id, orgId: org?.id,
+          status: roleErr ? 'error' : 'ok',
+          statusCode: roleErr ? 500 : 200,
+          durationMs: Date.now() - t1,
+          errorMessage: roleErr?.message,
+        });
         setCustomRole(orgRole ? {
           id:          orgRole.id,
           name:        orgRole.name,

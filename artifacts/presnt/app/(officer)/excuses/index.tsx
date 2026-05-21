@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, Text } from '@/components/ui';
+import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -209,15 +210,19 @@ export default function ExcusesScreen() {
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const { data } = await supabase
-      .from('excuses')
-      .select(`
-        id, reason, status, admin_notes, created_at, reviewed_at, user_id, event_id,
-        profiles!user_id(first_name, last_name, email),
-        events!event_id(title, start_time)
-      `)
-      .eq('org_id', orgId)
-      .order('created_at', { ascending: false });
+    const { data } = await loggedQuery({
+      domain: DOMAIN.EXCUSES, method: 'GET', endpoint: 'excuses',
+      orgId, userId: reviewerId ?? undefined,
+      query: supabase
+        .from('excuses')
+        .select(`
+          id, reason, status, admin_notes, created_at, reviewed_at, user_id, event_id,
+          profiles!user_id(first_name, last_name, email),
+          events!event_id(title, start_time)
+        `)
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false }),
+    });
     setExcuses((data ?? []) as Excuse[]);
     setLoading(false);
     setRefresh(false);
@@ -227,14 +232,19 @@ export default function ExcusesScreen() {
 
   async function review(excuse: Excuse, decision: 'approved' | 'denied') {
     setSaving(prev => new Set(prev).add(excuse.id));
-    await supabase
-      .from('excuses')
-      .update({
-        status:      decision,
-        reviewed_by: reviewerId,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq('id', excuse.id);
+    await loggedQuery({
+      domain: DOMAIN.EXCUSES, method: 'PATCH', endpoint: 'excuses/review',
+      orgId, userId: reviewerId ?? undefined,
+      requestBody: { id: excuse.id, decision },
+      query: supabase
+        .from('excuses')
+        .update({
+          status:      decision,
+          reviewed_by: reviewerId,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', excuse.id),
+    });
     setSaving(prev => { const n = new Set(prev); n.delete(excuse.id); return n; });
     await load();
   }

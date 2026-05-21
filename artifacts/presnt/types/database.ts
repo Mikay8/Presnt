@@ -71,6 +71,54 @@ export type Database = {
           },
         ]
       }
+      api_request_log: {
+        Row: {
+          id:            string
+          created_at:    string
+          user_id:       string | null
+          org_id:        string | null
+          method:        string
+          endpoint:      string
+          domain:        string
+          status:        string
+          status_code:   number | null
+          duration_ms:   number | null
+          request_body:  Record<string, unknown> | null
+          response_meta: Record<string, unknown> | null
+          error_message: string | null
+        }
+        Insert: {
+          id?:           string
+          created_at?:   string
+          user_id?:      string | null
+          org_id?:       string | null
+          method:        string
+          endpoint:      string
+          domain?:       string
+          status?:       string
+          status_code?:  number | null
+          duration_ms?:  number | null
+          request_body?: Record<string, unknown> | null
+          response_meta?: Record<string, unknown> | null
+          error_message?: string | null
+        }
+        Update: {
+          id?:           string
+          created_at?:   string
+          user_id?:      string | null
+          org_id?:       string | null
+          method?:       string
+          endpoint?:     string
+          domain?:       string
+          status?:       string
+          status_code?:  number | null
+          duration_ms?:  number | null
+          request_body?: Record<string, unknown> | null
+          response_meta?: Record<string, unknown> | null
+          error_message?: string | null
+        }
+        Relationships: []
+      }
       academic_terms: {
         Row: {
           created_at: string | null

@@ -21,6 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui';
+import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -56,40 +57,56 @@ export default function OrganizationAdminScreen() {
     if (membership?.role === 'org_admin') setIsOrgAdmin(true);
 
     // Fetch the current organization row to get parent_org_id
-    const { data: currentOrg } = await supabase
-      .from('organizations')
-      .select('id, name, type, slug, institution, join_code, is_active, created_at, parent_org_id')
-      .eq('id', organization.id)
-      .single();
+    const { data: currentOrg } = await loggedQuery<{ id: string; name: string; type: string | null; slug: string | null; institution: string | null; join_code: string | null; is_active: boolean | null; created_at: string | null; parent_org_id: string | null }>({
+      domain: DOMAIN.ORGS, method: 'GET', endpoint: 'organizations',
+      orgId: organization.id, userId: membership?.user_id,
+      query: supabase
+        .from('organizations')
+        .select('id, name, type, slug, institution, join_code, is_active, created_at, parent_org_id')
+        .eq('id', organization.id)
+        .single() as any,
+    });
 
     const parentId = currentOrg?.parent_org_id ?? null;
 
     // Fetch parent org (if any)
     if (parentId) {
-      const { data: parent } = await supabase
-        .from('organizations')
-        .select('id, name, type, slug, institution, join_code, is_active, created_at')
-        .eq('id', parentId)
-        .single();
+      const { data: parent } = await loggedQuery({
+        domain: DOMAIN.ORGS, method: 'GET', endpoint: 'organizations/parent',
+        orgId: organization.id, userId: membership?.user_id,
+        query: supabase
+          .from('organizations')
+          .select('id, name, type, slug, institution, join_code, is_active, created_at')
+          .eq('id', parentId)
+          .single(),
+      });
       setParentOrg(parent ?? null);
 
       // Fetch all chapters under the same parent
-      const { data: siblings } = await supabase
-        .from('organizations')
-        .select('id, name, type, slug, institution, join_code, is_active, created_at')
-        .eq('parent_org_id', parentId)
-        .eq('is_deleted', false)
-        .order('name');
+      const { data: siblings } = await loggedQuery({
+        domain: DOMAIN.ORGS, method: 'GET', endpoint: 'organizations/siblings',
+        orgId: organization.id, userId: membership?.user_id,
+        query: supabase
+          .from('organizations')
+          .select('id, name, type, slug, institution, join_code, is_active, created_at')
+          .eq('parent_org_id', parentId)
+          .eq('is_deleted', false)
+          .order('name'),
+      });
       setChapters(siblings ?? []);
     } else {
       // This org IS the top-level — list its children
       setParentOrg(null);
-      const { data: children } = await supabase
-        .from('organizations')
-        .select('id, name, type, slug, institution, join_code, is_active, created_at')
-        .eq('parent_org_id', organization.id)
-        .eq('is_deleted', false)
-        .order('name');
+      const { data: children } = await loggedQuery({
+        domain: DOMAIN.ORGS, method: 'GET', endpoint: 'organizations/children',
+        orgId: organization.id, userId: membership?.user_id,
+        query: supabase
+          .from('organizations')
+          .select('id, name, type, slug, institution, join_code, is_active, created_at')
+          .eq('parent_org_id', organization.id)
+          .eq('is_deleted', false)
+          .order('name'),
+      });
       setChapters(children ?? []);
     }
 

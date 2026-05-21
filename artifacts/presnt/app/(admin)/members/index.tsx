@@ -21,6 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, Text } from '@/components/ui';
+import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -328,22 +329,29 @@ export default function AdminMembersScreen() {
     if (!orgId) { setLoading(false); return; }
 
     const [membersRes, rolesRes] = await Promise.all([
-      supabase
-        .from('memberships')
-        .select(`
-          id, role, status, custom_role_id,
-          profiles!user_id(id, first_name, last_name, email),
-          org_roles!custom_role_id(id, name, color)
-        `)
-        .eq('org_id', orgId)
-        .eq('is_deleted', false)
-        .order('role'),
-
-      supabase
-        .from('org_roles')
-        .select('id, name, color')
-        .eq('org_id', orgId)
-        .order('name'),
+      loggedQuery({
+        domain: DOMAIN.MEMBERS, method: 'GET', endpoint: 'memberships',
+        orgId, userId: profile?.id,
+        query: supabase
+          .from('memberships')
+          .select(`
+            id, role, status, custom_role_id,
+            profiles!user_id(id, first_name, last_name, email),
+            org_roles!custom_role_id(id, name, color)
+          `)
+          .eq('org_id', orgId)
+          .eq('is_deleted', false)
+          .order('role'),
+      }),
+      loggedQuery({
+        domain: DOMAIN.ROLES, method: 'GET', endpoint: 'org_roles',
+        orgId, userId: profile?.id,
+        query: supabase
+          .from('org_roles')
+          .select('id, name, color')
+          .eq('org_id', orgId)
+          .order('name'),
+      }),
     ]);
 
     setMembers((membersRes.data ?? []) as MemberRow[]);
