@@ -553,6 +553,658 @@ POST   /orgs/{org_id}/terms
 
 ---
 
+# PHASE 1.5 — Super User Platform Dashboard
+> Goal: A God-mode operator dashboard — web + mobile — where the platform founder can monitor every org, override billing, manage feature flags, debug incidents, and impersonate any user. Built early so the platform is fully observable while all other phases are being constructed.
+>
+> **Security posture:** The superuser app is completely isolated from the chapter-facing mobile app. It lives at `superadmin.presnt.app` (or `localhost:3001` in dev), runs in a separate Expo web or Next.js build, and is gated by `profiles.is_superuser = true`. This flag is set only via Supabase SQL — no API route can grant it. Every action writes to `superuser_audit_log` before returning.
+
+---
+
+## 1.5.0 App Architecture
+
+The superuser UI is built inside the **existing Expo app** as a new route group `(superuser)/`, protected by a guard in `_layout.tsx` that redirects non-superusers to a 403 screen. On web (≥ 800 px) it renders the dark sidebar layout shown in the mockups. On mobile it renders a bottom-tab shell with the same screens.
+
+```
+app/
+└── (superuser)/
+    ├── _layout.tsx                   # auth guard + responsive layout (sidebar on web, tabs on mobile)
+    ├── index.tsx                     # Overview / Platform Dashboard
+    ├── orgs/
+    │   ├── index.tsx                 # Orgs list — searchable table
+    │   └── [org_id]/
+    │       ├── index.tsx             # Org detail
+    │       ├── settings.tsx          # Field editor
+    │       └── impersonate.tsx       # Impersonate org admin view
+    ├── users/
+    │   ├── index.tsx                 # Users list — cross-org search
+    │   └── [profile_id]/
+    │       ├── index.tsx             # User detail + membership history
+    │       └── editor.tsx            # Edit name, email, force logout
+    ├── billing/
+    │   ├── index.tsx                 # Subscriptions table
+    │   ├── overrides.tsx             # Manual plan overrides
+    │   ├── failed.tsx                # Past-due orgs
+    │   └── webhooks.tsx              # Stripe webhook log
+    ├── flags/
+    │   ├── index.tsx                 # All feature flags + global state
+    │   └── [key].tsx                 # Flag editor — global toggle + per-org overrides
+    ├── logs/
+    │   ├── index.tsx                 # Platform audit log (superuser_audit_log)
+    │   ├── org/[org_id].tsx          # Single org audit trail
+    │   ├── restrictions.tsx          # All member blocks/holds across all orgs
+    │   ├── excuses.tsx               # Cross-org excuse log
+    │   ├── billing.tsx               # Raw Stripe webhook payloads
+    │   └── errors.tsx                # Error log (Sentry feed or direct query)
+    ├── support/
+    │   ├── excuse-override.tsx       # Manually approve/deny any excuse
+    │   ├── attendance-override.tsx   # Correct bad attendance records
+    │   ├── compliance-recalc.tsx     # Trigger recalculation for member or org
+    │   ├── qr-inspector.tsx          # Look up any QR code + scan history
+    │   └── push-tester.tsx           # Send test push to any device token
+    └── config/
+        ├── permission-sets.tsx       # View system defaults, see org clones
+        ├── flag-defaults.tsx         # Set which plans get which flags
+        ├── email-templates.tsx       # Preview + edit Resend notification templates
+        └── app-config.tsx            # Platform-level settings (geofence radius, QR interval, etc.)
+```
+
+---
+
+## 1.5.1 Database — Superuser Audit Log
+
+This migration is prerequisite to everything else in 1.5. See also Migration 014 in Phase 12 for the full schema. Apply this first.
+
+```sql
+-- Already defined in Phase 12 Migration 014 — apply it here in Phase 1.5 build order.
+-- Key points for UI:
+--   action values used by UI: 'org.viewed', 'org.deactivated', 'org.reactivated',
+--     'org.field_edited', 'org.impersonated', 'profile.viewed', 'profile.edited',
+--     'profile.force_logged_out', 'profile.impersonated',
+--     'subscription.plan_overridden', 'subscription.pro_granted', 'subscription.pro_revoked',
+--     'feature_flag.toggled_global', 'feature_flag.org_override_added',
+--     'feature_flag.org_override_removed', 'support.excuse_overridden',
+--     'support.attendance_overridden', 'support.compliance_recalculated',
+--     'support.qr_inspected', 'support.push_sent'
+```
+
+---
+
+## 1.5.2 Layout & Navigation Shell
+
+### Desktop (≥ 800 px)
+Dark sidebar (`#1C1411` bg) + top bar + content area. Matches the mockup exactly.
+
+**Sidebar structure:**
+```
+[p] presnt                         ← orange square icon + wordmark
+    SUPER USER                     ← role label, xs muted uppercase
+
+Overview       ← active = orange sq bg + orange icon + white text
+Orgs
+Users
+Billing
+Feature flags
+Logs & audit
+Support tools
+App config
+
+─────────────────────────────
+[S] S. Admin
+    platform@presnt.app
+```
+
+**Top bar (right-aligned):**
+- Search input: "Search orgs, users, events, errors…"
+- `● All systems healthy` — green pill badge (polling `/superadmin/health`)
+- 🔔 Bell icon (notifications)
+- ⚙ Settings icon
+
+### Mobile (< 800 px)
+```
+PLATFORM                    ← xs muted uppercase
+Super User                  ← xl bold
+                [🔔] [S]    ← bell + avatar circle (no top bar search)
+```
+Bottom tabs: Overview · Orgs · Billing · Logs · More (opens sheet with Users, Flags, Support, Config)
+
+### Auth Guard (in `_layout.tsx`)
+```typescript
+// On mount: fetch profile.is_superuser
+// If false or missing → render <SuperuserGate /> (dark 403 screen, no navigation leaked)
+// If true → render layout with sidebar/tabs
+// Superuser sessions expire in 1 hour — check token age on every focus event
+```
+
+---
+
+## 1.5.3 Screen Specs
+
+### Overview — Platform Dashboard
+
+**Header row:**
+- `PLATFORM OVERVIEW` (xs, uppercase, muted)
+- `Good morning, {firstName}.` (h1, bold, white)
+- `{Day}, {Date} · {N} orgs serving {N} members` (sm, muted)
+- **Right actions:** `Export report` (outline) · `+ Impersonate org` (primary orange)
+
+**Stat cards row (5 across on desktop, 3 then 2 on mobile):**
+
+| Card | Value | Sub-label | Notes |
+|------|-------|-----------|-------|
+| MRR | `$24,820` | `+12% mo` | Orange filled card bg |
+| ACTIVE ORGS | `240` | `+8 this wk` | Dark surface card |
+| TOTAL USERS | `18,420` | `+142 today` | Dark surface card |
+| FAILED PAYMENTS | `3` | `$420 at risk` (red) | Dark surface card |
+| ERROR RATE | `0.12%` | `last 24h` | Dark surface card |
+
+**Growth chart panel:**
+- Title: `Growth · MRR & orgs` + `Past 12 months`
+- Time toggles: `1M · 3M · 6M · 12M · All` (12M active/orange by default)
+- Area chart: two lines — MRR (orange fill) and org count (dashed gray)
+- Use `react-native-svg` paths or a simple sparkline — no external chart library required in skeleton
+
+**System health panel (right column on desktop, below chart on mobile):**
+```
+System health
+● API          142ms
+● Postgres       8ms
+● Celery queue  12 jobs
+```
+- Green dot = healthy, yellow = degraded, red = down
+- Polling `/superadmin/health` every 30 seconds
+
+**Quick-access cards (2-row grid, 4 per row on desktop):**
+```
+[icon] Org management        [icon] User management      [icon] Billing           [icon] Feature flags
+       240 chapters · 5 deactivated  18.4k profiles             $24.8k MRR · 3 past due  14 flags · 2 in beta  [badge: 3]
+
+[icon] Support tools         [icon] Logs & audit         [icon] App config        [icon] Analytics
+       Overrides · QR · push tester  Platform · per-org · billing  Templates · defaults · limits  Churn · adoption · cohorts
+```
+Each card is a `Pressable` → navigates to the corresponding section.
+
+---
+
+### Orgs — List
+
+**Header:** `Orgs` (h1) + search input (full width) + `+ New org` button (rare — mostly for seeding)
+
+**Filter bar:** `All` · `Active` · `Inactive` · `Past Due` · `Free` · `Pro` · `Council`
+
+**Table (desktop) / Card list (mobile):**
+
+| Column | Notes |
+|--------|-------|
+| Org name + slug | bold name, muted slug below |
+| Plan badge | `FREE` `PRO` `COUNCIL` `HQ` — colored pills |
+| Members | count |
+| Last active | relative time |
+| Status | `● Active` (green) / `● Inactive` (red) / `● Past Due` (yellow) |
+| Actions | `View` button → Org Detail |
+
+- Infinite scroll or pagination (50 per page)
+- Search: debounced 300ms, hits `GET /superadmin/orgs?search={q}`
+- Tap row → Org Detail
+
+---
+
+### Org Detail — `[org_id]/index.tsx`
+
+**Header:** back arrow + org name + `Edit` (outline) · `Deactivate` (danger outline) or `Reactivate` · `Impersonate` (primary)
+
+**Info sections (card-based):**
+
+```
+IDENTITY
+  Name            Kappa Sigma
+  Slug            kappa-sigma-ucla
+  Type            chapter
+  Institution     UCLA
+  Greek org       Kappa Sigma
+  Timezone        America/Los_Angeles
+  Founded         2001
+
+BRANDING
+  Primary color   [● #E26B4A] swatch + hex
+  Logo URL        preview thumbnail
+  App display     Kappa Sigma
+
+SUBSCRIPTION
+  Plan            PRO
+  Status          active
+  MRR             $25.00/mo
+  Next renewal    Jun 1, 2026
+  Stripe ID       sub_xxxxx
+
+USAGE
+  Members         142
+  Events (30d)    8
+  Compliance rate 87%
+  Last active     2h ago
+```
+
+**Member list tab:** paginated table of all members in org (name, status, joined_at)
+
+**Event list tab:** recent events in org (title, date, attendance count)
+
+**Audit log tab:** most recent 50 entries from `audit_log` filtered to this org
+
+---
+
+### Org Settings Editor — `[org_id]/settings.tsx`
+
+- Form with all editable org fields (same fields as Org Detail info panel but all are text inputs / pickers)
+- Color pickers for branding fields (show hex input + color swatch preview)
+- Logo upload (Supabase Storage)
+- `Save changes` → `PATCH /superadmin/orgs/{org_id}` → writes `superuser_audit_log`
+- `Subscription override` section: plan dropdown + reason field → `PATCH /superadmin/subscriptions/{org_id}`
+- `Deactivate org` — shows a modal with required `reason` field + confirmation input of org name before submitting
+
+---
+
+### Org Impersonate — `[org_id]/impersonate.tsx`
+
+- Shows the org's Chapter Admin view rendered inside a safe iframe / embedded navigator with a red "IMPERSONATING" banner at the top
+- On mobile: navigates into the chapter admin route group with an injected impersonation token; injects a visible overlay badge
+- `Exit impersonation` button always visible in top-right corner
+- Impersonation token: 15-min expiry, generated by `POST /superadmin/orgs/{org_id}/impersonate`
+- Every action inside impersonation is tagged with the superuser's ID in `superuser_audit_log`
+
+---
+
+### Users — List
+
+**Header:** `Users` (h1) + global search + filter: `All orgs` dropdown, `Status` dropdown, `Plan` dropdown
+
+**Table / card list:**
+
+| Column | Notes |
+|--------|-------|
+| Avatar + Name + Email | Avatar component + bold name + muted email |
+| Org(s) | comma-joined org names (may belong to multiple) |
+| Plan | highest plan across memberships |
+| Joined | date |
+| Push token | `● registered` (green) / `○ none` (muted) |
+| Actions | `View` |
+
+---
+
+### User Detail — `[profile_id]/index.tsx`
+
+**Profile card:**
+- Large avatar, name, email, phone, pronouns, graduation year, major
+- `Edit` button → User Editor
+- `Force logout` button (invalidates all sessions) → `POST /superadmin/profiles/{id}/force-logout`
+- `Reset password` button → `POST /superadmin/profiles/{id}/reset-password`
+- `Impersonate` button → generates 15-min token, opens sandboxed tab
+
+**Memberships section:**
+- List of all orgs this user belongs to
+- Each row: org name, plan, membership status, role(s), joined date
+- `View in org` → navigates to Org Detail
+
+**Login history:**
+- Last 10 sign-in events (timestamp, IP, device)
+- Pulled from Supabase auth admin API
+
+**Push token status:**
+- Current token string (truncated)
+- `Send test push` → opens push tester pre-filled with this user's token
+
+---
+
+### User Editor — `[profile_id]/editor.tsx`
+
+- Form: first name, last name, email (with warning that changing email affects auth), phone, pronouns, graduation year, major, bio
+- `Save` → `PATCH /superadmin/profiles/{id}` → logs to `superuser_audit_log`
+- Email change: shows warning modal ("Changing email will update their Supabase auth identity. They'll need to log in again.")
+
+---
+
+### Billing — Subscriptions List
+
+**Header:** `Billing` + `$24,820 MRR` stat chip + `3 past due` warning chip
+
+**Tabs:** `All subscriptions` · `Failed payments` · `Stripe webhooks`
+
+**All subscriptions table:**
+
+| Column | Notes |
+|--------|-------|
+| Org | name + slug |
+| Plan | colored badge |
+| Status | `active` `past_due` `cancelled` `trialing` |
+| MRR | dollar amount |
+| Next renewal | date |
+| Stripe sub ID | truncated, copyable |
+| Actions | `Override plan` |
+
+**Failed payments tab:**
+- Orgs where `subscription.status = 'past_due'`
+- Days overdue, amount at risk, last payment attempt date
+- Contact email of chapter admin
+- `Retry payment` / `Grant grace period` actions
+
+**Stripe webhook log tab:**
+- Paginated list of `billing_events` rows
+- Each row: event type, timestamp, org, processed status
+- Expand row → full JSON payload viewer
+
+---
+
+### Feature Flags — List
+
+**Header:** `Feature flags` + `14 flags · 2 in beta` sub-label + `+ New flag` button
+
+**Table:**
+
+| Column | Notes |
+|--------|-------|
+| Key | monospace text |
+| Description | muted text |
+| Global | toggle switch |
+| Plans | `FREE` `PRO` `COUNCIL` `HQ` pills — highlighted if enabled |
+| Org overrides | count of orgs with non-standard state |
+| Actions | `Edit` |
+
+**Flag Detail / Editor — `flags/[key].tsx`:**
+- Flag key (read-only) + description (editable)
+- `Enabled globally` toggle
+- Plan checkboxes: `Free · Pro · Council · HQ`
+- **Per-org overrides section:**
+  - List of orgs where flag state differs from plan default
+  - Each row: org name, override state (enabled/disabled), who set it, when
+  - `+ Add org override` → org search → toggle → saves to `feature_flags.enabled_for_orgs[]`
+  - `Remove override` → removes org from the array
+- Save → `PATCH /superadmin/feature-flags/{key}` + audit log
+
+---
+
+### Logs & Audit
+
+**Tab navigation:** `Platform audit` · `Org audit` · `Restrictions` · `Excuses` · `Billing events` · `Errors`
+
+**Platform audit tab:**
+- All rows from `superuser_audit_log`, newest first
+- Filter by: `action type` dropdown, `performed_by` (always the superuser), date range
+- Each row: timestamp, action (colored by type), target type + ID, notes
+- Expand row → full `previous_value` / `new_value` JSON diff viewer
+
+**Org audit tab:**
+- Org picker (search + select) → shows `audit_log` filtered to that org
+- Same row format as platform audit
+
+**Restrictions tab:**
+- All `member_restrictions` + `restriction_audit_log` across all orgs
+- Filter by: org, restriction type, active only toggle
+- Each row: org, member name, type, reason, started, ends, active status
+
+**Excuses tab:**
+- All `excuses` across all orgs (read-only overview)
+- Filter by: org, status (pending/approved/denied), date range
+- Useful for debugging "stuck" excuse records
+
+**Billing events tab:**
+- All `billing_events` rows (raw Stripe payloads)
+- Filter by: event type, org, processed status
+- Expand → JSON viewer for full payload
+
+**Error log tab:**
+- Embedded Sentry error feed — link to Sentry project or proxied via `GET /superadmin/logs/errors`
+- Filter by org_id tag (if errors are tagged with org context)
+- Shortcut to open full Sentry dashboard
+
+---
+
+### Support Tools
+
+**Excuse Override — `support/excuse-override.tsx`**
+- Step 1: Search for org → search for member → select event → select excuse record
+- Step 2: Shows excuse details (reason, docs, current status)
+- Step 3: `Approve` or `Deny` + required `reason` field
+- Submits → `PATCH /superadmin/support/excuses/{excuse_id}` → writes audit log
+- Warning banner: "This bypasses officer review. The member will be notified."
+
+**Attendance Override — `support/attendance-override.tsx`**
+- Search org → member → event → shows current attendance record
+- Edit: status dropdown (`present` / `absent` / `excused` / `late`) + reason field
+- `Save` → `PATCH /superadmin/support/attendance/{record_id}` → triggers compliance recalc + audit log
+- Warning: "Changing attendance will recalculate this member's compliance score."
+
+**Compliance Recalculate — `support/compliance-recalc.tsx`**
+- Mode picker: `Single member` or `Entire org`
+- Single: org picker → member search → `Recalculate` button
+- Org: org picker → `Recalculate all members` button + confirmation
+- Submits → `POST /superadmin/support/compliance/recalculate`
+- Shows progress / last calculated timestamps
+
+**QR Code Inspector — `support/qr-inspector.tsx`**
+- Search input: paste any QR code value
+- Result shows:
+  - Event it belongs to (name, date, org)
+  - Created by, created at
+  - `expires_at` — was it valid at time of scan?
+  - `is_active` current state
+  - `scan_count`
+  - Scan history: timestamp, membership, distance from event, result (success/fail)
+- Useful for debugging "my QR didn't work" reports
+
+**Push Notification Tester — `support/push-tester.tsx`**
+- Token input (paste a device token or search by user)
+- Title input + body input + data JSON input (optional)
+- `Send test push` → `POST /superadmin/support/push/test`
+- Shows delivery result (Expo push service response)
+- Audit log entry written for every test push sent
+
+---
+
+### Content & Config
+
+**System Permission Sets — `config/permission-sets.tsx`**
+- Read-only list of all `permission_sets` where `is_system_default = true`
+- For each: name, description, full permission grid (domain × action checkboxes, all read-only)
+- Below each system default: `{N} orgs have cloned this set` — tap to see which orgs
+
+**Feature Flag Defaults — `config/flag-defaults.tsx`**
+- Table: flag key, which plans it's on by default (editable checkboxes)
+- Saving → `PATCH /superadmin/feature-flags/{key}` with updated `enabled_for_plans[]`
+- Changes here affect all new orgs on that plan; existing orgs get the new state on next login
+
+**Email Templates — `config/email-templates.tsx`**
+- List of all Resend notification templates (keyed by notification type)
+- Each template: `View` opens a HTML preview panel, `Edit` opens a code + preview split view
+- Save → `PATCH /superadmin/config/email-templates/{key}` → deploys updated template to Resend
+
+**App Config — `config/app-config.tsx`**
+- Form with platform-level constants:
+
+| Setting | Default | Notes |
+|---------|---------|-------|
+| Max geofence radius (m) | 500 | Cap for all orgs |
+| QR rotation interval (min) | 20 | How often QR codes rotate |
+| Check-in grace period (min) | 15 | How late after close members can still check in |
+| Excuse submission window (days) | 7 | After event, how long to submit |
+| Max org logo size (KB) | 512 | Storage upload limit |
+| Free plan member cap | 50 | Members before forced upgrade |
+| Session timeout (min) | 60 | Superuser session expiry |
+
+- Save → `PATCH /superadmin/config/app` → writes each key to a `platform_config` table
+
+---
+
+## 1.5.4 Database — Platform Config Table
+
+```sql
+-- Stores all platform-level configuration key-value pairs.
+-- Superuser edits these via App Config screen.
+CREATE TABLE platform_config (
+  key         text PRIMARY KEY,
+  value       text NOT NULL,
+  description text,
+  updated_by  uuid REFERENCES profiles(id),
+  updated_at  timestamptz DEFAULT now()
+  -- never hard-delete. To reset: set value back to default.
+);
+
+-- Seed with defaults
+INSERT INTO platform_config (key, value, description) VALUES
+('max_geofence_radius_m',       '500',   'Maximum geofence radius in meters for any org'),
+('qr_rotation_interval_min',    '20',    'Minutes between automatic QR code rotation'),
+('checkin_grace_period_min',    '15',    'Minutes after event close that check-in still works'),
+('excuse_submission_window_d',  '7',     'Days after event that a member can submit an excuse'),
+('max_logo_size_kb',            '512',   'Maximum org logo upload size in KB'),
+('free_plan_member_cap',        '50',    'Member count limit for free plan orgs'),
+('superuser_session_timeout_m', '60',    'Superuser session expiry in minutes');
+```
+
+---
+
+## 1.5.5 API Routes (all under `/superadmin/` prefix, require `is_superuser`)
+
+```
+# Health
+GET    /superadmin/health
+
+# Org management
+GET    /superadmin/orgs
+GET    /superadmin/orgs/{org_id}
+PATCH  /superadmin/orgs/{org_id}
+POST   /superadmin/orgs/{org_id}/deactivate
+POST   /superadmin/orgs/{org_id}/reactivate
+POST   /superadmin/orgs/{org_id}/impersonate
+
+# Org data (read-only debug access)
+GET    /superadmin/orgs/{org_id}/members
+GET    /superadmin/orgs/{org_id}/events
+GET    /superadmin/orgs/{org_id}/attendance
+GET    /superadmin/orgs/{org_id}/compliance
+GET    /superadmin/orgs/{org_id}/excuses
+GET    /superadmin/orgs/{org_id}/dues
+GET    /superadmin/orgs/{org_id}/restrictions
+GET    /superadmin/orgs/{org_id}/audit-log
+
+# User management
+GET    /superadmin/profiles
+GET    /superadmin/profiles/{profile_id}
+PATCH  /superadmin/profiles/{profile_id}
+POST   /superadmin/profiles/{profile_id}/impersonate
+POST   /superadmin/profiles/{profile_id}/reset-password
+POST   /superadmin/profiles/{profile_id}/force-logout
+
+# Billing
+GET    /superadmin/subscriptions
+PATCH  /superadmin/subscriptions/{org_id}
+POST   /superadmin/subscriptions/{org_id}/grant-pro
+POST   /superadmin/subscriptions/{org_id}/revoke-pro
+GET    /superadmin/billing/failed
+GET    /superadmin/billing/webhooks
+
+# Feature flags
+GET    /superadmin/feature-flags
+PATCH  /superadmin/feature-flags/{key}
+POST   /superadmin/feature-flags/{key}/org/{org_id}
+DELETE /superadmin/feature-flags/{key}/org/{org_id}
+
+# Logs
+GET    /superadmin/logs/platform           # superuser_audit_log
+GET    /superadmin/logs/org/{org_id}       # org-specific audit_log
+GET    /superadmin/logs/restrictions
+GET    /superadmin/logs/excuses
+GET    /superadmin/logs/billing
+GET    /superadmin/logs/errors
+
+# Support tools
+PATCH  /superadmin/support/excuses/{excuse_id}
+PATCH  /superadmin/support/attendance/{record_id}
+POST   /superadmin/support/compliance/recalculate
+GET    /superadmin/support/qr/{code}
+POST   /superadmin/support/push/test
+
+# Config
+GET    /superadmin/config/app
+PATCH  /superadmin/config/app
+GET    /superadmin/config/permission-sets
+GET    /superadmin/config/email-templates
+PATCH  /superadmin/config/email-templates/{key}
+```
+
+---
+
+## 1.5.6 UI Design Tokens for Superuser App
+
+The superuser app uses its own dark color palette — distinct from org branding so there's no confusion when impersonating.
+
+```typescript
+export const superuserTheme = {
+  bg:         '#1C1411',   // sidebar + screen backgrounds
+  surface:    '#272018',   // card surfaces
+  surfaceAlt: '#332820',   // active sidebar item, hover states
+  text:       '#FBF6EE',   // primary text
+  textMuted:  '#A89687',   // secondary text, labels
+  textSubtle: '#6E5E54',   // placeholders, disabled
+  border:     '#3D2B22',   // card borders, dividers
+  primary:    '#E26B4A',   // CTA buttons, active nav, highlights
+  danger:     '#C0392B',   // deactivate, delete, error states
+  warning:    '#C99432',   // past-due, at-risk indicators
+  success:    '#5C8A57',   // healthy status, active indicators
+  info:       '#3B82F6',   // informational badges
+};
+```
+
+Impersonation mode overlays a persistent `4px top border` in `danger` red + a floating `IMPERSONATING {orgName}` banner that cannot be dismissed — always visible.
+
+---
+
+## 1.5.7 Security Rules (UI Layer)
+
+- Superuser route group checks `is_superuser` on every screen mount — does not trust the layout guard alone
+- All destructive actions (deactivate org, force logout, plan override) require:
+  1. Confirmation modal with action description
+  2. Text field where superuser types the target name or `CONFIRM` to proceed
+  3. Mandatory `reason` field (logged verbatim in audit log)
+- Impersonation: 15-minute countdown timer shown in the banner; auto-exits when token expires
+- No `is_superuser` value is displayed anywhere in the superuser UI — the presence of the UI itself is the indicator
+- Every form `Save` is disabled until a change is actually made (no accidental saves)
+- Tab-switching away from a dirty form shows "Unsaved changes" warning
+
+---
+
+## 1.5.8 Phase 1.5 Checklist
+
+- [ ] `(superuser)/_layout.tsx` — auth guard + responsive shell (dark sidebar on web, tabs on mobile)
+- [ ] `(superuser)/index.tsx` — Overview dashboard (stat cards, growth chart stub, system health, quick-access grid)
+- [ ] `(superuser)/orgs/index.tsx` — searchable org list with filters
+- [ ] `(superuser)/orgs/[org_id]/index.tsx` — org detail with tabbed sections
+- [ ] `(superuser)/orgs/[org_id]/settings.tsx` — org field editor + subscription override
+- [ ] `(superuser)/orgs/[org_id]/impersonate.tsx` — impersonation view with red banner
+- [ ] `(superuser)/users/index.tsx` — cross-org user search
+- [ ] `(superuser)/users/[profile_id]/index.tsx` — user detail + membership history
+- [ ] `(superuser)/users/[profile_id]/editor.tsx` — user editor
+- [ ] `(superuser)/billing/index.tsx` — subscriptions table
+- [ ] `(superuser)/billing/failed.tsx` — past-due orgs
+- [ ] `(superuser)/billing/webhooks.tsx` — Stripe webhook log
+- [ ] `(superuser)/flags/index.tsx` — feature flags list
+- [ ] `(superuser)/flags/[key].tsx` — flag editor + per-org overrides
+- [ ] `(superuser)/logs/index.tsx` — platform audit log
+- [ ] `(superuser)/logs/org/[org_id].tsx` — org audit trail
+- [ ] `(superuser)/logs/restrictions.tsx` — restriction log
+- [ ] `(superuser)/logs/errors.tsx` — error log
+- [ ] `(superuser)/support/excuse-override.tsx` — excuse override tool
+- [ ] `(superuser)/support/attendance-override.tsx` — attendance override tool
+- [ ] `(superuser)/support/compliance-recalc.tsx` — compliance recalculator
+- [ ] `(superuser)/support/qr-inspector.tsx` — QR inspector
+- [ ] `(superuser)/support/push-tester.tsx` — push notification tester
+- [ ] `(superuser)/config/app-config.tsx` — platform config editor
+- [ ] `(superuser)/config/permission-sets.tsx` — system defaults viewer
+- [ ] `(superuser)/config/email-templates.tsx` — email template editor
+- [ ] `platform_config` table created + seeded
+- [ ] All `/superadmin/*` routes added to FastAPI with `require_superuser` dependency
+- [ ] Every route writes to `superuser_audit_log` before returning
+- [ ] Impersonation token flow tested end-to-end (15-min expiry, audit log, red banner)
+- [ ] Destructive actions (deactivate, force logout, plan override) all require confirmation modal + reason
+
+---
+
 # PHASE 2 — Roles, Entitlements & Custom Permissions
 > Goal: Chapter admins can create fully custom roles with granular permissions. System defaults seed on org creation. Permission checks enforced on every action.
 
