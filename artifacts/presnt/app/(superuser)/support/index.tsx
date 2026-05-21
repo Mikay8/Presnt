@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,7 +13,7 @@ import {
 
 import { Text } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
-import { ALL_PERMISSIONS, PERMISSIONS } from '@/lib/permissions';
+import { ALL_PERMISSIONS } from '@/lib/permissions';
 import { useUserViewStore, type ViewRole } from '@/stores/userViewStore';
 import { su } from '../_layout';
 import type { Tables } from '@/types/database';
@@ -125,7 +126,7 @@ function UserViewTool() {
 
   function handleLaunch() {
     if (!selectedOrg) return;
-    // Need the full org object — fetch it
+    // Fetch the full org row then start the session + navigate imperatively
     supabase
       .from('organizations')
       .select('*')
@@ -138,6 +139,14 @@ function UserViewTool() {
           org,
           permissions: selectedRole === 'officer' ? selectedPerms : [],
         });
+        // Navigate immediately — don't rely on RootLayoutNav's declarative redirect
+        if (selectedRole === 'admin') {
+          router.replace('/(admin)/dashboard' as any);
+        } else if (selectedRole === 'officer') {
+          router.replace('/(officer)/events' as any);
+        } else {
+          router.replace('/(member)' as any);
+        }
       });
   }
 
@@ -185,7 +194,7 @@ function UserViewTool() {
         </View>
 
         <Pressable
-          onPress={stop}
+          onPress={stop}  // navigation not needed — already on support screen
           style={({ pressed }) => ({
             borderRadius: 10,
             borderWidth: 1,

@@ -6,7 +6,7 @@ import {
 } from '@expo-google-fonts/space-grotesk';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Session } from '@supabase/supabase-js';
-import { Redirect, Stack, usePathname, useSegments } from 'expo-router';
+import { Redirect, Stack, router, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -34,7 +34,12 @@ function UserViewBanner() {
   const insets = useSafeAreaInsets();
   if (!session) return null;
 
-  const roleLabel = session.role === 'org_admin' ? 'Admin'
+  function handleExit() {
+    stop();
+    router.replace('/(superuser)/support' as any);
+  }
+
+  const roleLabel = session.role === 'admin' ? 'Admin'
     : session.role === 'officer' ? 'Officer'
     : 'Member';
 
@@ -76,7 +81,7 @@ function UserViewBanner() {
       </View>
 
       <Pressable
-        onPress={stop}
+        onPress={handleExit}
         style={({ pressed }) => ({
           backgroundColor: pressed ? '#E26B4A' : '#E26B4A22',
           borderWidth: 1,
@@ -104,26 +109,12 @@ function RootLayoutNav() {
 
   const inAuth      = segments[0] === '(auth)';
   const inSuperuser = pathname === '/super-user' || pathname.startsWith('/(superuser)');
-  const inAdmin     = pathname.startsWith('/(admin)');
-  const inOfficer   = pathname.startsWith('/(officer)');
-  const inMember    = pathname.startsWith('/(member)');
-  const inSimulated = inAdmin || inOfficer || inMember;
 
   // ── User View mode ──────────────────────────────────────────────────────────
-  // When active, the superuser is simulating a role. Route them to the right
-  // portal if they're not already there, and let them navigate freely within it.
-  // Pressing Exit in the banner clears the session → they land back here →
-  // redirect to superuser dashboard.
-  if (userView) {
-    if (inSuperuser || inAuth) {
-      // Just entered user view OR was on superuser — redirect to correct portal
-      if (userView.role === 'admin') return <Redirect href="/(admin)/dashboard" />;
-      if (userView.role === 'officer') return <Redirect href="/(officer)/events" />;
-      return <Redirect href="/(member)" />;
-    }
-    // Already in a simulated portal — let them browse freely
-    return null;
-  }
+  // Navigation is handled imperatively in the support screen (launch) and banner
+  // (exit). Here we just suppress all redirects while a session is active so the
+  // normal auth guards don't fight the simulated portal.
+  if (userView) return null;
 
   // ── Normal auth flow ────────────────────────────────────────────────────────
 
