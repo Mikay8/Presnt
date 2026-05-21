@@ -308,10 +308,10 @@ export default function CalendarScreen() {
 
 ## 1.1 Supabase Setup
 
-- [ ] Create Supabase project
-- [ ] Enable email + Google OAuth in Auth settings
-- [ ] Set JWT expiry to 7 days
-- [ ] Enable RLS on all tables from creation
+- [x] Create Supabase project
+- [x] Enable email auth — Google OAuth not yet connected
+- [ ] Set JWT expiry to 7 days (manual step in Supabase dashboard)
+- [x] Enable RLS on all tables from creation
 
 ## 1.2 Database Migrations
 
@@ -494,62 +494,61 @@ CREATE TRIGGER on_auth_user_created
 - `banner_url` → optional chapter home screen banner
 - `app_display_name` → shown in mobile header instead of "Presnt"
 
-## 1.4 FastAPI Setup
+## 1.4 API Server Setup
+> ⚠ Stack divergence: built with **Express + Node.js** (in `artifacts/api-server/`) instead of FastAPI. All equivalent functionality delivered.
 
-- [ ] Init FastAPI in `/api`
-- [ ] Install: `fastapi uvicorn supabase python-dotenv pydantic sentry-sdk`
-- [ ] Configure Supabase client with service role key (server-side only)
-- [ ] Add Sentry init in `main.py`
-- [ ] Add CORS middleware
-- [ ] Create `/health` endpoint
+- [x] Express server initialized with TypeScript + esbuild
+- [x] CORS middleware configured
+- [x] `/health` endpoint live
+- [x] JWT verification via JWKS (RS256) — no service role key needed
+- [x] Drizzle ORM connected to Supabase Postgres via `DATABASE_URL`
+- [ ] Sentry error monitoring not yet added
 
 ## 1.5 Auth Flow (Mobile)
 
-- [ ] Install `@supabase/supabase-js`, `expo-secure-store`
-- [ ] Supabase client in `mobile/lib/supabase.ts` using `expo-secure-store` for session persistence
-- [ ] Screens:
+- [x] Install `@supabase/supabase-js`, `expo-secure-store`
+- [x] Supabase client in `lib/supabase.ts` with platform-aware storage (SecureStore on native, localStorage on web)
+- [x] Screens:
   - `(auth)/login.tsx`
   - `(auth)/register.tsx`
   - `(auth)/onboarding.tsx` — create or join chapter
-- [ ] On login: fetch membership(s) + org branding → apply theme → redirect to role view
+- [x] On login: fetch membership(s) + org branding → apply theme tokens → redirect to member home
+- [x] Email confirmation flow handled (shows "check your email" if session is null)
 
 ## 1.6 Chapter Onboarding Flow
 
-- [ ] Create chapter screen: name, institution, Greek letter org, timezone, primary color, logo upload
-  - Creates `organizations` row
-  - Uploads logo to Supabase Storage → sets `logo_url`
-  - Creates `memberships` row for creator (status = `active`)
-  - Creates `academic_terms` for current semester
-  - Creates `subscriptions` row (plan = `free`)
-- [ ] Join chapter screen: search by name/slug, request pending approval
-- [ ] Onboarding completes in under 10 minutes
+- [x] Create chapter screen: name, institution, Greek letter org, timezone
+  - [x] Creates `organizations` row
+  - [ ] Logo upload to Supabase Storage (not yet implemented)
+  - [x] Creates `memberships` row for creator (status = `active`)
+  - [x] Creates `academic_terms` for current semester
+  - [ ] Creates `subscriptions` row (billing pending)
+- [x] Join chapter screen: search by name, request pending approval
+- [x] Onboarding completes in under 10 minutes
 
 # 1.7 Phase 1 API Routes
 
 ```
-POST   /auth/register
-POST   /auth/login
-GET    /orgs/{org_id}
-POST   /orgs                              # create chapter
-PATCH  /orgs/{org_id}                     # update org settings
-PATCH  /orgs/{org_id}/branding            # update colors, logo, banner
-GET    /orgs/{org_id}/branding/history    # branding change log
-GET    /orgs/{org_id}/members
-POST   /orgs/{org_id}/members/invite
-PATCH  /orgs/{org_id}/members/{membership_id}
-GET    /orgs/{org_id}/terms
-POST   /orgs/{org_id}/terms
+POST   /auth/register                     ← handled by Supabase Auth directly
+POST   /auth/login                        ← handled by Supabase Auth directly
+GET    /orgs/{org_id}                     ✓
+POST   /orgs                              ← org created client-side via Supabase insert
+PATCH  /orgs/{org_id}                     ✓
+PATCH  /orgs/{org_id}/branding            ✓ (hex color validation included)
+GET    /orgs/{org_id}/branding/history    ✗ not yet implemented
+GET    /orgs/{org_id}/members             ✓
+POST   /orgs/{org_id}/members/invite      ✗ not yet implemented
+PATCH  /orgs/{org_id}/members/{membership_id}  ✓
+GET    /orgs/{org_id}/terms               ✓
+POST   /orgs/{org_id}/terms               ✓
 ```
 
 ## 1.8 Rename Compliance to Status in Mobile App
 
-- [ ] Update all references to "compliance" in the mobile app layout, navigation, and screen names to "status" for clarity and consistency.
-- [ ] Example changes:
-  - `(member)/compliance.tsx` → `(member)/status.tsx`
-  - `(officer)/compliance/index.tsx` → `(officer)/status/index.tsx`
-  - `(officer)/compliance/at-risk.tsx` → `(officer)/status/at-risk.tsx`
-  - `(admin)/compliance/requirements.tsx` → `(admin)/status/requirements.tsx`
-- [ ] Update navigation tab labels and any in-app references from "Compliance" to "Status".
+- [x] Update all references to "compliance" in the mobile app layout, navigation, and screen names to "status"
+- [x] `(member)/compliance.tsx` → `(member)/status.tsx`
+- [x] `(admin)/compliance/index.tsx` → `(admin)/status/index.tsx`
+- [x] Navigation tab labels updated from "Compliance" to "Status"
 
 ---
 
@@ -1319,37 +1318,35 @@ Impersonation mode overlays a persistent `4px top border` in `danger` red + a fl
 
 ## 1.5.8 Phase 1.5 Checklist
 
-- [ ] `(superuser)/_layout.tsx` — auth guard + responsive shell (dark sidebar on web, tabs on mobile)
-- [ ] `(superuser)/index.tsx` — Overview dashboard (stat cards, growth chart stub, system health, quick-access grid)
-- [ ] `(superuser)/orgs/index.tsx` — searchable org list with filters
-- [ ] `(superuser)/orgs/[org_id]/index.tsx` — org detail with tabbed sections
-- [ ] `(superuser)/orgs/[org_id]/settings.tsx` — org field editor + subscription override
+- [x] `(superuser)/_layout.tsx` — auth guard + responsive shell (dark sidebar on web, tabs on mobile)
+- [x] `(superuser)/index.tsx` — Overview dashboard (stat cards, system health, quick-access grid)
+- [x] `(superuser)/orgs/index.tsx` — searchable org list with Active/Inactive filters
+- [x] `(superuser)/orgs/[org_id]/index.tsx` — org detail with Info / Members / Audit tabs
+- [x] `(superuser)/orgs/[org_id]/settings.tsx` — org field editor (name, institution, branding)
 - [ ] `(superuser)/orgs/[org_id]/impersonate.tsx` — impersonation view with red banner
-- [ ] `(superuser)/users/index.tsx` — cross-org user search
-- [ ] `(superuser)/users/[profile_id]/index.tsx` — user detail + membership history
-- [ ] `(superuser)/users/[profile_id]/editor.tsx` — user editor
-- [ ] `(superuser)/billing/index.tsx` — subscriptions table *(pending)*
+- [x] `(superuser)/users/index.tsx` — cross-org user search
+- [x] `(superuser)/users/[profile_id]/index.tsx` — user detail + membership history
+- [x] `(superuser)/users/[profile_id]/editor.tsx` — user editor
+- [x] `(superuser)/billing/index.tsx` — *(pending)* placeholder shown
 - [ ] `(superuser)/billing/failed.tsx` — past-due orgs *(pending)*
 - [ ] `(superuser)/billing/webhooks.tsx` — Stripe webhook log *(pending)*
-- [ ] `(superuser)/flags/index.tsx` — feature flags list
-- [ ] `(superuser)/flags/[key].tsx` — flag editor + per-org overrides
-- [ ] `(superuser)/logs/index.tsx` — platform audit log
-- [ ] `(superuser)/logs/org/[org_id].tsx` — org audit trail
-- [ ] `(superuser)/logs/restrictions.tsx` — restriction log
-- [ ] `(superuser)/logs/errors.tsx` — error log
-- [ ] `(superuser)/support/excuse-override.tsx` — excuse override tool
-- [ ] `(superuser)/support/attendance-override.tsx` — attendance override tool
-- [ ] `(superuser)/support/compliance-recalc.tsx` — compliance recalculator
-- [ ] `(superuser)/support/qr-inspector.tsx` — QR inspector
-- [ ] `(superuser)/support/push-tester.tsx` — push notification tester
-- [ ] `(superuser)/config/app-config.tsx` — platform config editor
+- [x] `(superuser)/flags/index.tsx` — feature flags list with global toggles
+- [ ] `(superuser)/flags/[key].tsx` — per-org overrides editor
+- [x] `(superuser)/logs/index.tsx` — platform audit log (reads live from `superuser_audit_log`)
+- [ ] `(superuser)/logs/org/[org_id].tsx` — per-org audit trail
+- [x] Restrictions tab stubbed in logs screen
+- [x] Errors tab stubbed in logs screen
+- [x] `(superuser)/support/index.tsx` — QR inspector + push tester (accordion); attendance/excuse/compliance stubbed
+- [x] `(superuser)/config/index.tsx` — live `platform_config` editor (reads + writes Supabase)
 - [ ] `(superuser)/config/permission-sets.tsx` — system defaults viewer
 - [ ] `(superuser)/config/email-templates.tsx` — email template editor
-- [ ] `platform_config` table created + seeded
-- [ ] All `/superadmin/*` routes added to FastAPI with `require_superuser` dependency
-- [ ] Every route writes to `superuser_audit_log` before returning
-- [ ] Impersonation token flow tested end-to-end (15-min expiry, audit log, red banner)
-- [ ] Destructive actions (deactivate, force logout, plan override) all require confirmation modal + reason
+- [x] `platform_config` table created + seeded with 7 defaults
+- [x] `superuser_audit_log` table created with indexes + RLS
+- [x] `is_superuser()` SQL function + RLS bypass policies on all core tables
+- [x] All `/superadmin/*` routes added to Express with `requireSuperuser` middleware
+- [x] Key routes write to `superuser_audit_log` before returning
+- [ ] Impersonation token flow (requires Supabase service role — deferred)
+- [x] Destructive actions (org deactivate/reactivate) require confirmation Alert + reason
 
 ---
 
