@@ -58,8 +58,12 @@
   },
   "dependencies": {
     "@expo-google-fonts/space-grotesk": "^0.4.1",
+    "@react-native-community/datetimepicker": "^9.1.0",
     "@supabase/supabase-js": "^2.106.0",
+    "@types/mapbox-gl": "^3.5.0",
     "expo-secure-store": "~15.0.8",
+    "mapbox-gl": "^3.24.0",
+    "react-map-gl": "^8.1.1",
     "zustand": "^5.0.13"
   }
 }
