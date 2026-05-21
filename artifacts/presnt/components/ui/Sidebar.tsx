@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '@/stores/authStore';
@@ -48,19 +48,18 @@ export function Sidebar() {
         { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
       ]}
     >
-      {/* Logo */}
+      {/* Wordmark */}
       <View style={styles.logoRow}>
-        <View style={styles.logoIcon}>
-          <Text size="md" weight="bold" color="#FFF" style={{ lineHeight: 20 }}>p</Text>
-        </View>
-        <View>
-          <Text size="lg" weight="bold" color="#FBF6EE">presnt</Text>
-          <Text size="xs" color="#6E5E54" style={styles.roleLabel}>
-            {membership?.role
-              ? membership.role.charAt(0).toUpperCase() + membership.role.slice(1).replace('_', ' ')
-              : 'Member'}
-          </Text>
-        </View>
+        <Image
+          source={require('@/assets/images/wordmark-dark.png')}
+          style={{ width: 100, height: 24 }}
+          resizeMode="contain"
+        />
+        <Text size="xs" color="#6E5E54" style={styles.roleLabel}>
+          {membership?.role
+            ? membership.role.toUpperCase().replace('_', ' ')
+            : 'MEMBER'}
+        </Text>
       </View>
 
       {/* Nav items */}
@@ -112,23 +111,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     marginBottom: 32,
-  },
-  logoIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: '#E26B4A',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   roleLabel: {
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: 1,
+    letterSpacing: 1.5,
+    marginTop: 5,
   },
   nav: {
     flex: 1,

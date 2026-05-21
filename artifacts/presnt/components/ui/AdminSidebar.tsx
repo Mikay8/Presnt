@@ -8,7 +8,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
@@ -81,15 +81,14 @@ export function AdminSidebar() {
         { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
       ]}
     >
-      {/* ── Logo ─────────────────────────────────────────────────────── */}
+      {/* ── Wordmark ──────────────────────────────────────────────────── */}
       <View style={styles.logoRow}>
-        <View style={[styles.logoIcon, { backgroundColor: primaryColor }]}>
-          <Text size="md" weight="bold" color="#FFF">p</Text>
-        </View>
-        <View>
-          <Text size="lg" weight="bold" color={ACTIVE_TEXT}>presnt</Text>
-          <Text size="xs" color={SUBTLE_TEXT} style={styles.roleTag}>{roleLabel}</Text>
-        </View>
+        <Image
+          source={require('@/assets/images/wordmark-dark.png')}
+          style={{ width: 100, height: 24 }}
+          resizeMode="contain"
+        />
+        <Text size="xs" color={SUBTLE_TEXT} style={styles.roleTag}>{roleLabel}</Text>
       </View>
 
       {/* ── Nav items ─────────────────────────────────────────────────── */}
@@ -173,23 +172,15 @@ const styles = StyleSheet.create({
   },
 
   logoRow: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           10,
-    marginBottom:  28,
+    flexDirection:    'column',
+    alignItems:       'flex-start',
+    marginBottom:     28,
     paddingHorizontal: 4,
-  },
-  logoIcon: {
-    width:           34,
-    height:          34,
-    borderRadius:    8,
-    alignItems:      'center',
-    justifyContent:  'center',
   },
   roleTag: {
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop:     1,
+    letterSpacing: 1.5,
+    marginTop:     5,
   },
 
   nav: {
