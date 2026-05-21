@@ -9,7 +9,6 @@ import type { Session } from '@supabase/supabase-js';
 import { Redirect, Stack, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -28,14 +27,12 @@ const queryClient = new QueryClient();
 // rather than segments (which can be empty on initial render).
 
 function RootLayoutNav() {
-  const { session, membership } = useAuthStore();
+  const { session, profile, membership } = useAuthStore();
   const segments = useSegments();
   const pathname = usePathname();
 
   const inAuth      = segments[0] === '(auth)';
-  // pathname-based check is reliable even before segments resolve
-  const inSuperuser = pathname === '/super-user'
-                   || pathname.startsWith('/(superuser)');
+  const inSuperuser = pathname === '/super-user' || pathname.startsWith('/(superuser)');
 
   // Superuser routes manage their own auth — never redirect away from them
   if (inSuperuser) return null;
@@ -45,13 +42,26 @@ function RootLayoutNav() {
     return <Redirect href="/(auth)/login" />;
   }
 
+  // Superuser accounts have no chapter membership — route them to their dashboard
+  // as soon as the profile loads (profile is set before membership resolves).
+  if (session && profile?.is_superuser) {
+    return <Redirect href="/(superuser)/" />;
+  }
+
   // Session but no membership → needs onboarding
   if (session && !membership && !inAuth) {
     return <Redirect href="/(auth)/onboarding" />;
   }
 
-  // Authenticated + membership but sitting on an auth screen → go home
+  // Authenticated + membership on an auth screen → route to the correct portal
   if (session && membership && inAuth) {
+    const role = membership.role;
+    if (role === 'org_admin' || role === 'admin') {
+      return <Redirect href="/(admin)/dashboard" />;
+    }
+    if (role === 'officer') {
+      return <Redirect href="/(officer)/events" />;
+    }
     return <Redirect href="/(member)" />;
   }
 
@@ -61,13 +71,11 @@ function RootLayoutNav() {
 // ─── Root layout ───────────────────────────────────────────────────────────────
 
 export default function RootLayout() {
-  const systemScheme   = useColorScheme();
-  const setColorScheme = useThemeStore((s) => s.setColorScheme);
   const setOrgBranding = useThemeStore((s) => s.setOrgBranding);
 
   const {
     isLoading,
-    setSession, setProfile, setMembership, setLoading, clear,
+    setSession, setProfile, setMembership, setCustomRole, setLoading, clear,
   } = useAuthStore();
 
   const [fontsLoaded, fontError] = useFonts({
@@ -75,11 +83,6 @@ export default function RootLayout() {
     SpaceGrotesk_500Medium,
     SpaceGrotesk_600SemiBold,
   });
-
-  // Sync system color scheme
-  useEffect(() => {
-    setColorScheme(systemScheme === 'light' ? 'light' : 'dark');
-  }, [systemScheme]);
 
   // Hide splash only after fonts + initial auth are both done
   useEffect(() => {
@@ -126,7 +129,7 @@ export default function RootLayout() {
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
-        .single(),
+        .maybeSingle(),                        // null (not error) when profile not yet created
       supabase
         .from('memberships')
         .select('*, organizations(*)')
@@ -135,7 +138,7 @@ export default function RootLayout() {
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single(),
+        .maybeSingle(),                        // null (not error) when no membership yet → onboarding
     ]);
 
     const { data: profile }    = profileResult;
@@ -150,16 +153,34 @@ export default function RootLayout() {
       setMembership(membershipOnly, org ?? null);
 
       if (org) {
+        // Only override brand accent colors — not structural colors (background,
+        // text) so the base light theme is always preserved.
         const branding: Record<string, string> = {};
-        if (org.primary_color)    branding.primary    = org.primary_color;
-        if (org.secondary_color)  branding.secondary  = org.secondary_color;
-        if (org.accent_color)     branding.accent     = org.accent_color;
-        if (org.background_color) branding.background = org.background_color;
-        if (org.text_color)       branding.text       = org.text_color;
+        if (org.primary_color)   branding.primary   = org.primary_color;
+        if (org.secondary_color) branding.secondary = org.secondary_color;
+        if (org.accent_color)    branding.accent     = org.accent_color;
         if (Object.keys(branding).length > 0) setOrgBranding(branding);
+      }
+
+      // Load custom officer role if applicable
+      if (membershipOnly.role === 'officer' && membershipOnly.custom_role_id) {
+        const { data: orgRole } = await supabase
+          .from('org_roles')
+          .select('id, name, color, permissions')
+          .eq('id', membershipOnly.custom_role_id)
+          .single();
+        setCustomRole(orgRole ? {
+          id:          orgRole.id,
+          name:        orgRole.name,
+          color:       orgRole.color,
+          permissions: orgRole.permissions ?? [],
+        } : null);
+      } else {
+        setCustomRole(null);
       }
     } else {
       setMembership(null, null);
+      setCustomRole(null);
     }
 
     if (showSpinner) setLoading(false);
