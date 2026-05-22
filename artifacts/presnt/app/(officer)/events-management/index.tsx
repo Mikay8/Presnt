@@ -32,6 +32,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui';
+import { QRCheckinModal } from '@/lib/QRCheckin';
 import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { MapPickerModal } from '@/lib/MapPicker';
 import {
@@ -1342,10 +1343,12 @@ function EventTableRow({
   event,
   onEdit,
   onCancel,
+  onScan,
 }: {
   event:    Event;
   onEdit:   (e: Event) => void;
   onCancel: (e: Event) => void;
+  onScan:   (e: Event) => void;
 }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
@@ -1390,6 +1393,18 @@ function EventTableRow({
       <View style={[dt.statusChip, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
         <Text size="xs" weight="medium" color={statusColor}>{statusLabel}</Text>
       </View>
+      {/* Scan QR — only for ongoing events */}
+      {status === 'ongoing' ? (
+        <Pressable
+          onPress={(e) => { e.stopPropagation?.(); onScan(event); }}
+          style={[dt.scanBtn, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B' }]}
+        >
+          <Ionicons name="qr-code-outline" size={13} color="#F59E0B" />
+          <Text size="xs" weight="medium" style={{ color: '#F59E0B' }}>Scan QR</Text>
+        </Pressable>
+      ) : (
+        <View style={{ width: 80 }} />
+      )}
       <View style={{ width: 36, alignItems: 'center', position: 'relative' }}>
         <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }} style={dt.menuBtn}>
           <Text size="md" color={c.textSubtle}>···</Text>
@@ -1417,6 +1432,7 @@ const dt = StyleSheet.create({
   dateBadge:  { width: 48, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   recurBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
   statusChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, width: 90, alignItems: 'center' },
+  scanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, width: 80, justifyContent: 'center' },
   menuBtn:    { padding: 8 },
   menu:       { position: 'absolute', right: 0, top: 28, zIndex: 200, borderWidth: 1, borderRadius: 10, width: 120, overflow: 'hidden' },
   menuItem:   { padding: 12, borderBottomWidth: 1 },
@@ -1424,7 +1440,7 @@ const dt = StyleSheet.create({
 
 // ─── Mobile Event Card ────────────────────────────────────────────────────────
 
-function EventCard({ event, onEdit }: { event: Event; onEdit: (e: Event) => void }) {
+function EventCard({ event, onEdit, onScan }: { event: Event; onEdit: (e: Event) => void; onScan: (e: Event) => void }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
   const d = fmtDate(displayDate(event));
@@ -1471,13 +1487,23 @@ function EventCard({ event, onEdit }: { event: Event; onEdit: (e: Event) => void
               {STATUS_LABEL[status]}
             </Text>
           </View>
-          <Pressable
-            onPress={(e) => { e.stopPropagation?.(); onEdit(event); }}
-            style={[mc.editBtn, { borderColor: c.border }]}
-          >
-            <Ionicons name="create-outline" size={13} color={c.textSubtle} />
-            <Text size="xs" color={c.textSubtle}>Edit</Text>
-          </Pressable>
+          {status === 'ongoing' ? (
+            <Pressable
+              onPress={(e) => { e.stopPropagation?.(); onScan(event); }}
+              style={[mc.scanBtn, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B' }]}
+            >
+              <Ionicons name="qr-code-outline" size={13} color="#F59E0B" />
+              <Text size="xs" weight="medium" style={{ color: '#F59E0B' }}>Scan QR</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={(e) => { e.stopPropagation?.(); onEdit(event); }}
+              style={[mc.editBtn, { borderColor: c.border }]}
+            >
+              <Ionicons name="create-outline" size={13} color={c.textSubtle} />
+              <Text size="xs" color={c.textSubtle}>Edit</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </Pressable>
@@ -1489,6 +1515,7 @@ const mc = StyleSheet.create({
   dateBadge:  { width: 48, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   statusChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   editBtn:    { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
+  scanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 },
 });
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -1519,6 +1546,7 @@ export default function OfficerEventsScreen() {
   const [editTarget,    setEdit]         = useState<Event | null | false>(false);
   const [saving,        setSaving]       = useState(false);
   const [codeErrorMsg,  setCodeErrorMsg] = useState<string | null>(null);
+  const [scanTarget,    setScanTarget]   = useState<Event | null>(null);
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
@@ -1777,12 +1805,12 @@ export default function OfficerEventsScreen() {
           </View>
         ) : isWide ? (
           displayed.map(e => (
-            <EventTableRow key={e.id} event={e} onEdit={setEdit} onCancel={handleCancel} />
+            <EventTableRow key={e.id} event={e} onEdit={setEdit} onCancel={handleCancel} onScan={(ev) => setScanTarget(ev)} />
           ))
         ) : (
           <View style={{ gap: 10 }}>
             {displayed.map(e => (
-              <EventCard key={e.id} event={e} onEdit={(ev) => setEdit(ev)} />
+              <EventCard key={e.id} event={e} onEdit={(ev) => setEdit(ev)} onScan={(ev) => setScanTarget(ev)} />
             ))}
           </View>
         )}
@@ -1801,6 +1829,15 @@ export default function OfficerEventsScreen() {
         codeErrorMsg={codeErrorMsg}
         onClearCodeError={() => setCodeErrorMsg(null)}
       />
+
+      {scanTarget && (
+        <QRCheckinModal
+          visible={!!scanTarget}
+          eventId={scanTarget.id}
+          orgId={orgId}
+          onClose={() => setScanTarget(null)}
+        />
+      )}
     </View>
   );
 }

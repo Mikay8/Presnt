@@ -27,6 +27,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui';
+import { QRCheckinModal } from '@/lib/QRCheckin';
 import { supabase } from '@/lib/supabase';
 import { MapPickerModal } from '@/lib/MapPicker';
 import {
@@ -1116,7 +1117,9 @@ const ef = StyleSheet.create({
 
 // ─── Desktop Table Row ────────────────────────────────────────────────────────
 
-function TableRow({ event, onEdit, onCancel }: { event: Event; onEdit: () => void; onCancel: () => void }) {
+function TableRow({ event, onEdit, onCancel, onScan }: {
+  event: Event; onEdit: () => void; onCancel: () => void; onScan: () => void;
+}) {
   const { theme } = useThemeStore();
   const c = theme.colors;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1160,6 +1163,18 @@ function TableRow({ event, onEdit, onCancel }: { event: Event; onEdit: () => voi
       <View style={[tr.statusChip, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
         <Text size="xs" weight="medium" color={statusColor}>{statusLabel}</Text>
       </View>
+      {/* Scan QR button — only shown for ongoing events */}
+      {status === 'ongoing' ? (
+        <Pressable
+          onPress={(e) => { e.stopPropagation?.(); onScan(); }}
+          style={[tr.scanBtn, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B' }]}
+        >
+          <Ionicons name="qr-code-outline" size={13} color="#F59E0B" />
+          <Text size="xs" weight="medium" style={{ color: '#F59E0B' }}>Scan QR</Text>
+        </Pressable>
+      ) : (
+        <View style={{ width: 80 }} />
+      )}
       <View style={{ width: 36, position: 'relative' }}>
         <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }} style={{ padding: 8 }}>
           <Text size="md" color={c.textSubtle}>···</Text>
@@ -1187,13 +1202,14 @@ const tr = StyleSheet.create({
   dateBadge:  { width: 48, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   recurBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
   statusChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, width: 90, alignItems: 'center' },
+  scanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, width: 80, justifyContent: 'center' },
   menu:       { position: 'absolute', right: 0, top: 28, zIndex: 200, borderWidth: 1, borderRadius: 10, width: 120, overflow: 'hidden' },
   menuItem:   { padding: 12, borderBottomWidth: 1 },
 });
 
 // ─── Mobile Card ─────────────────────────────────────────────────────────────
 
-function MobileCard({ event, onEdit }: { event: Event; onEdit: () => void }) {
+function MobileCard({ event, onEdit, onScan }: { event: Event; onEdit: () => void; onScan: () => void }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
   const d      = fmtDate(displayDate(event));
@@ -1240,13 +1256,23 @@ function MobileCard({ event, onEdit }: { event: Event; onEdit: () => void }) {
               {STATUS_LABEL[status]}
             </Text>
           </View>
-          <Pressable
-            onPress={(e) => { e.stopPropagation?.(); onEdit(); }}
-            style={[mc.editBtn, { borderColor: c.border }]}
-          >
-            <Ionicons name="create-outline" size={13} color={c.textSubtle} />
-            <Text size="xs" color={c.textSubtle}>Edit</Text>
-          </Pressable>
+          {status === 'ongoing' ? (
+            <Pressable
+              onPress={(e) => { e.stopPropagation?.(); onScan(); }}
+              style={[mc.scanBtn, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B' }]}
+            >
+              <Ionicons name="qr-code-outline" size={13} color="#F59E0B" />
+              <Text size="xs" weight="medium" style={{ color: '#F59E0B' }}>Scan QR</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={(e) => { e.stopPropagation?.(); onEdit(); }}
+              style={[mc.editBtn, { borderColor: c.border }]}
+            >
+              <Ionicons name="create-outline" size={13} color={c.textSubtle} />
+              <Text size="xs" color={c.textSubtle}>Edit</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </Pressable>
@@ -1258,6 +1284,7 @@ const mc = StyleSheet.create({
   dateBadge:  { width: 48, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   statusChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   editBtn:    { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
+  scanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 },
 });
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -1283,6 +1310,7 @@ export default function AdminEventsScreen() {
   const [editing,       setEditing]      = useState<Event | null | false>(false);
   const [saving,        setSaving]       = useState(false);
   const [codeErrorMsg,  setCodeErrorMsg] = useState<string | null>(null);
+  const [scanTarget,    setScanTarget]   = useState<Event | null>(null);
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
@@ -1481,11 +1509,11 @@ export default function AdminEventsScreen() {
           </View>
         ) : isWide ? (
           displayed.map(e => (
-            <TableRow key={e.id} event={e} onEdit={() => setEditing(e)} onCancel={() => handleCancel(e)} />
+            <TableRow key={e.id} event={e} onEdit={() => setEditing(e)} onCancel={() => handleCancel(e)} onScan={() => setScanTarget(e)} />
           ))
         ) : (
           <View style={{ gap: 10 }}>
-            {displayed.map(e => <MobileCard key={e.id} event={e} onEdit={() => setEditing(e)} />)}
+            {displayed.map(e => <MobileCard key={e.id} event={e} onEdit={() => setEditing(e)} onScan={() => setScanTarget(e)} />)}
           </View>
         )}
       </ScrollView>
@@ -1502,6 +1530,15 @@ export default function AdminEventsScreen() {
         codeErrorMsg={codeErrorMsg}
         onClearCodeError={() => setCodeErrorMsg(null)}
       />
+
+      {scanTarget && (
+        <QRCheckinModal
+          visible={!!scanTarget}
+          eventId={scanTarget.id}
+          orgId={orgId}
+          onClose={() => setScanTarget(null)}
+        />
+      )}
     </View>
   );
 }

@@ -8,7 +8,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, Text } from '@/components/ui';
@@ -21,6 +22,7 @@ export default function AdminProfileScreen() {
   const insets          = useSafeAreaInsets();
   const { profile, membership, organization } = useAuthStore();
   const [signingOut, setSigningOut] = useState(false);
+  const [showQR,     setShowQR]     = useState(false);
   const c = theme.colors;
 
   const firstName = profile?.first_name ?? '';
@@ -68,6 +70,19 @@ export default function AdminProfileScreen() {
           {organization && (
             <Text size="xs" color={c.textSubtle} style={{ marginTop: 2 }}>{organization.name}</Text>
           )}
+
+          {/* QR Code */}
+          {profile?.id && (
+            <Pressable
+              onPress={() => setShowQR(true)}
+              style={[styles.qrBox, { backgroundColor: '#fff', borderColor: c.border }]}
+            >
+              <QRCode value={`presnt://user/${profile.id}`} size={130} />
+              <Text size="xs" color={c.textMuted} style={{ marginTop: 8, textAlign: 'center' }}>
+                Your check-in QR · Tap to enlarge
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Info card */}
@@ -104,9 +119,37 @@ export default function AdminProfileScreen() {
           onPress={handleSignOut}
         />
       </ScrollView>
+
+      {/* Enlarged QR modal */}
+      {profile?.id && (
+        <Modal visible={showQR} animationType="fade" transparent presentationStyle="overFullScreen" onRequestClose={() => setShowQR(false)}>
+          <Pressable style={qrS.overlay} onPress={() => setShowQR(false)}>
+            <View style={[qrS.card, { backgroundColor: c.surface }]}>
+              <Text size="lg" weight="bold" style={{ marginBottom: 4 }}>{fullName}</Text>
+              <Text size="xs" color={c.textMuted} style={{ marginBottom: 20 }}>Show this to check in at events</Text>
+              <View style={[qrS.qrWrap, { borderColor: c.border }]}>
+                <QRCode value={`presnt://user/${profile.id}`} size={220} />
+              </View>
+              <Text size="xs" color={c.textSubtle} style={{ marginTop: 16, textAlign: 'center' }}>
+                {profile.id}
+              </Text>
+              <Pressable onPress={() => setShowQR(false)} style={[qrS.closeBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
+                <Text size="sm" weight="medium" color={c.text}>Close</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }
+
+const qrS = StyleSheet.create({
+  overlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  card:     { borderRadius: 24, padding: 28, alignItems: 'center', width: 320 },
+  qrWrap:   { borderWidth: 1, borderRadius: 16, padding: 16, backgroundColor: '#fff' },
+  closeBtn: { marginTop: 20, borderWidth: 1, borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12 },
+});
 
 const styles = StyleSheet.create({
   header:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
@@ -118,4 +161,5 @@ const styles = StyleSheet.create({
   avatar:        { width: 80, height: 80, borderRadius: 40, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
 
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 4 },
+  qrBox:   { borderWidth: 1, borderRadius: 16, padding: 16, alignItems: 'center', marginTop: 20 },
 });

@@ -16,6 +16,9 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.presnt.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Presnt uses your camera to scan member QR codes for event check-in."
+      },
       "icon": "./assets/images/icon-1024-dark.png",
       "splash": {
         "image": "./assets/images/splash-1290x2796-light.png",
@@ -29,6 +32,7 @@
     },
     "android": {
       "package": "com.presnt.app",
+      "permissions": ["android.permission.CAMERA"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon-1024-square-dark.png",
         "backgroundColor": "#1A1411"
@@ -55,7 +59,8 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-camera"
     ],
     "experiments": {
       "typedRoutes": true,
