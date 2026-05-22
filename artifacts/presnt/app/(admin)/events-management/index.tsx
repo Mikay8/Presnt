@@ -145,6 +145,32 @@ function fmtDate(iso: string) {
   };
 }
 
+// ── Helpers shared by nextOccurrenceAfter ──────────────────────────────────────
+
+const NTH_DOW_MAP: Record<string, number> = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+
+/**
+ * Returns the date of the Nth weekday in a given month/year.
+ * nth: 1=first … 4=fourth, -1=last.
+ * dow: 0=Sun … 6=Sat.
+ */
+function nthWeekdayOfMonth(year: number, month: number, nth: number, dow: number): Date | null {
+  if (nth >= 1) {
+    // Find the first occurrence of `dow` in the month, then skip (nth-1) weeks
+    const first = new Date(year, month, 1);
+    const offset = (dow - first.getDay() + 7) % 7;
+    const d = new Date(year, month, 1 + offset + (nth - 1) * 7);
+    // Guard: if we overshot into next month (e.g. 5th weekday doesn't exist)
+    if (d.getMonth() !== month) return null;
+    return d;
+  } else {
+    // Last: start from the last day of the month and walk backward
+    const last = new Date(year, month + 1, 0);
+    const offset = (last.getDay() - dow + 7) % 7;
+    return new Date(year, month + 1, 0 - offset);
+  }
+}
+
 function nextOccurrenceAfter(rruleStr: string, startIso: string, now: Date): Date | null {
   try {
     const raw = rruleStr.replace(/^RRULE:/i, '');
@@ -162,15 +188,42 @@ function nextOccurrenceAfter(rruleStr: string, startIso: string, now: Date): Dat
     const byDay    = params['BYDAY']?.split(',') ?? [];
     const base     = new Date(startIso);
     const limit    = new Date(now.getTime() + 5 * 365 * 24 * 3600 * 1000);
-    let   occ      = new Date(base);
-    let   n        = 0;
+
+    // ── Monthly Nth-weekday (BYDAY has a numeric prefix, e.g. '1MO' or '-1FR') ──
+    if (freq === 'MONTHLY' && byDay.length === 1 && /^-?\d/.test(byDay[0])) {
+      const nth    = parseInt(byDay[0]);
+      const dowStr = byDay[0].replace(/^-?\d+/, '');
+      const dow    = NTH_DOW_MAP[dowStr] ?? 0;
+      // Preserve time-of-day from the base event
+      const timeMs = base.getTime() - new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime();
+      let   yr     = base.getFullYear();
+      let   mo     = base.getMonth(); // 0-based
+      let   n      = 0;
+      // Start from the base month (first occurrence)
+      while (true) {
+        const candidate = nthWeekdayOfMonth(yr, mo, nth, dow);
+        if (!candidate) { mo += interval; yr += Math.floor(mo / 12); mo = mo % 12; continue; }
+        const occ = new Date(candidate.getTime() + timeMs);
+        if (until && occ > until) return null;
+        if (count !== null && n >= count) return null;
+        if (occ > limit) return null;
+        if (occ >= now) return occ;
+        n++;
+        mo += interval;
+        yr += Math.floor(mo / 12);
+        mo = mo % 12;
+      }
+    }
+
+    // ── Weekly / monthly-by-date / daily ─────────────────────────────────────
+    let occ = new Date(base);
+    let n   = 0;
     while (occ <= limit) {
       if (until && occ > until) return null;
       if (count !== null && n >= count) return null;
       let matches = true;
       if (byDay.length && freq === 'WEEKLY') {
-        const DAY_MAP: Record<string,number> = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
-        matches = byDay.some(d => DAY_MAP[d.replace(/^[-\d]+/, '')] === occ.getDay());
+        matches = byDay.some(d => NTH_DOW_MAP[d.replace(/^[-\d]+/, '')] === occ.getDay());
       }
       if (matches && occ >= now) return occ;
       if (freq === 'WEEKLY') {
@@ -451,8 +504,8 @@ function EventForm({
       setForm(f);
       setSavedLoc(null);
       onClearCodeError?.();
-      // Auto-generate code for new public events (no initial) that don't already have a code
-      if (!initial && f.is_public && !f.event_code) {
+      // Auto-generate code for all new events that don't already have a code
+      if (!initial && !f.event_code) {
         generateCode(f.type, f.dateObj);
       }
     }
@@ -582,63 +635,59 @@ function EventForm({
           </View>
           <Switch
             value={form.is_public}
-            onValueChange={(v) => {
-              set('is_public')(v);
-              onClearCodeError?.();
-              if (v && !form.event_code) {
-                generateCode(form.type, form.isMultiDay ? form.dateRange.start : form.dateObj);
-              }
-            }}
+            onValueChange={(v) => { set('is_public')(v); onClearCodeError?.(); }}
             trackColor={{ false: c.border, true: c.primary }}
             thumbColor="#fff"
           />
         </View>
 
-        {/* ── EVENT CODE (only shown when public) ── */}
-        {form.is_public && (
-          <View style={{ marginBottom: 14 }}>
-            <Text size="xs" weight="medium" color={c.textSubtle} style={[ef.fieldLabel, { marginTop: 10 }]}>EVENT CODE</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <TextInput
-                style={[inputStyle, { flex: 1, marginBottom: 0, fontFamily: 'monospace', paddingVertical: 13,
-                  borderColor: codeError ? '#EF4444' : c.border }]}
-                value={form.event_code}
-                onChangeText={(v) => { setCodeError(null); set('event_code')(sanitiseCode(v)); }}
-                placeholder="e.g. meeting-0522"
-                placeholderTextColor={c.textSubtle}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Pressable
-                onPress={() => { setCodeError(null); generateCode(form.type, form.isMultiDay ? form.dateRange.start : form.dateObj); }}
-                disabled={codeGenerating}
-                style={({ pressed }) => ({
-                  borderWidth: 1, borderColor: c.border, borderRadius: 10,
-                  paddingHorizontal: 12, paddingVertical: 13,
-                  backgroundColor: pressed ? c.surfaceAlt : c.surface,
-                  opacity: codeGenerating ? 0.5 : 1,
-                })}
-              >
-                {codeGenerating
-                  ? <ActivityIndicator size="small" color={c.primary} />
-                  : <Ionicons name="refresh-outline" size={16} color={c.textSubtle} />
-                }
-              </Pressable>
-            </View>
-            {codeError ? (
-              <Text size="xs" color="#EF4444" style={{ marginBottom: 4 }}>{codeError}</Text>
-            ) : null}
-            {form.event_code ? (
+        {/* ── EVENT CODE (always shown — used as internal URL slug too) ── */}
+        <View style={{ marginBottom: 14 }}>
+          <Text size="xs" weight="medium" color={c.textSubtle} style={[ef.fieldLabel, { marginTop: 6 }]}>EVENT CODE</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <TextInput
+              style={[inputStyle, { flex: 1, marginBottom: 0, fontFamily: 'monospace', paddingVertical: 13,
+                borderColor: codeError ? '#EF4444' : c.border }]}
+              value={form.event_code}
+              onChangeText={(v) => { setCodeError(null); set('event_code')(sanitiseCode(v)); }}
+              placeholder="e.g. meeting-0522"
+              placeholderTextColor={c.textSubtle}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Pressable
+              onPress={() => { setCodeError(null); generateCode(form.type, form.isMultiDay ? form.dateRange.start : form.dateObj); }}
+              disabled={codeGenerating}
+              style={({ pressed }) => ({
+                borderWidth: 1, borderColor: c.border, borderRadius: 10,
+                paddingHorizontal: 12, paddingVertical: 13,
+                backgroundColor: pressed ? c.surfaceAlt : c.surface,
+                opacity: codeGenerating ? 0.5 : 1,
+              })}
+            >
+              {codeGenerating
+                ? <ActivityIndicator size="small" color={c.primary} />
+                : <Ionicons name="refresh-outline" size={16} color={c.textSubtle} />
+              }
+            </Pressable>
+          </View>
+          {codeError ? (
+            <Text size="xs" color="#EF4444" style={{ marginBottom: 4 }}>{codeError}</Text>
+          ) : null}
+          {form.event_code ? (
+            form.is_public ? (
               <Text size="xs" color={c.textSubtle} style={{ fontFamily: 'monospace' }}>
                 presnt.app/c/{orgSlug}/events/{form.event_code}
               </Text>
             ) : (
               <Text size="xs" color={c.textSubtle}>
-                A code is required for public events. Tap ↺ to generate one.
+                Internal URL: /event/{form.event_code} · enable Public to share externally
               </Text>
-            )}
-          </View>
-        )}
+            )
+          ) : (
+            <Text size="xs" color={c.textSubtle}>Used as the in-app URL slug. Tap ↺ to generate.</Text>
+          )}
+        </View>
 
         {/* Type + Mandatory row */}
         <View style={{ flexDirection: 'row', gap: 10, zIndex: showTypeMenu ? 100 : 1 }}>
@@ -1304,7 +1353,7 @@ export default function AdminEventsScreen() {
         checkin_open_minutes:  form.checkin_open_minutes.trim()  !== '' ? parseInt(form.checkin_open_minutes)  || null : null,
         checkin_grace_minutes: form.checkin_grace_minutes.trim() !== '' ? parseInt(form.checkin_grace_minutes) || null : null,
         is_public:             form.is_public,
-        event_code:            form.is_public ? (form.event_code.trim() || null) : null,
+        event_code:            form.event_code.trim() || null,
       };
 
       const editingEvent: Event | null = editing === false || editing === null ? null : editing;
