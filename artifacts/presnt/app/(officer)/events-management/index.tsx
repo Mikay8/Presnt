@@ -587,6 +587,7 @@ function EventForm({
   const { theme } = useThemeStore();
   const { width } = useWindowDimensions();
   const isWide    = width >= DESKTOP;
+  const insets    = useSafeAreaInsets();
   const c = theme.colors;
 
   const [form, setForm]   = useState<EventFormState>(BLANK_FORM);
@@ -1206,10 +1207,10 @@ function EventForm({
 
   return (
     <>
-      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+      <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
         <View style={{ flex: 1, backgroundColor: c.background }}>
           {/* Header */}
-          <View style={[ef.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <View style={[ef.header, { backgroundColor: c.surface, borderBottomColor: c.border, paddingTop: insets.top + 14 }]}>
             <Pressable onPress={onClose} style={ef.closeBtn}>
               <Ionicons name="close" size={18} color={c.text} />
             </Pressable>
@@ -1238,7 +1239,7 @@ function EventForm({
           {/* Body */}
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={[ef.formScroll, isWide && ef.formScrollWide]}
+            contentContainerStyle={[ef.formScroll, isWide && ef.formScrollWide, { paddingBottom: insets.bottom + 60 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -1613,7 +1614,7 @@ export default function OfficerEventsScreen() {
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c              = theme.colors;
-  const { edit: editId } = useLocalSearchParams<{ edit?: string }>();
+  const { edit: editId, new: openNew } = useLocalSearchParams<{ edit?: string; new?: string }>();
 
   const orgId     = userView?.org.id ?? organization?.id ?? '';
   const orgSlug   = (userView?.org as any)?.slug ?? (organization as any)?.slug ?? '';
@@ -1659,6 +1660,13 @@ export default function OfficerEventsScreen() {
       router.setParams({ edit: '' });
     }
   }, [editId, loading, events]);
+
+  // Auto-open new event form when navigated from calendar with ?new=1
+  useEffect(() => {
+    if (openNew !== '1' || loading) return;
+    setEdit(null);
+    router.setParams({ new: '' });
+  }, [openNew, loading]);
 
   const upcomingCount = events.filter(e => { const s = eventStatus(e); return s === 'upcoming' || s === 'ongoing'; }).length;
   const pastCount     = events.filter(e => eventStatus(e) === 'past').length;

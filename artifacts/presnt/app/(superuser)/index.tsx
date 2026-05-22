@@ -35,7 +35,7 @@ function StatCard({
       <Text style={{ color: accent ? '#fff' : su.textMuted, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' }}>
         {label}
       </Text>
-      <Text style={{ color: accent ? '#fff' : su.text, fontSize: 28, fontWeight: '700', marginTop: 8 }}>
+      <Text style={{ color: accent ? '#fff' : su.text, fontSize: 22, fontWeight: '700', marginTop: 8 }}>
         {value}
       </Text>
       {sub && (

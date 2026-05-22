@@ -333,7 +333,7 @@ export default function AdminCalendarScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             {navHeader}
             <Pressable
-              onPress={() => router.push('/(admin)/events-management' as any)}
+              onPress={() => router.push({ pathname: '/(admin)/events-management', params: { new: '1' } } as any)}
               style={[styles.newBtn, { backgroundColor: c.primary }]}
             >
               <Text size="sm" weight="medium" style={{ color: '#fff' }}>+ New event</Text>

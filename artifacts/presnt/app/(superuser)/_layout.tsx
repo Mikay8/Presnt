@@ -235,6 +235,7 @@ function MobileTabBar() {
 export default function SuperuserLayout() {
   const { session, profile } = useAuthStore();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isWide = width >= 800;
 
   const [checking, setChecking] = useState(true);
@@ -274,8 +275,14 @@ export default function SuperuserLayout() {
     <View style={{ flex: 1, flexDirection: isWide ? 'row' : 'column', backgroundColor: su.bg }}>
       {isWide && <Sidebar profile={safeProfile} />}
 
-      <View style={{ flex: 1 }}>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: su.bg } }} />
+      <View style={{ flex: 1, paddingTop: isWide ? 0 : insets.top }}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: su.bg },
+            animation: isWide ? 'default' : 'none',
+          }}
+        />
       </View>
 
       {!isWide && <MobileTabBar />}

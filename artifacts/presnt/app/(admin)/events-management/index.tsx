@@ -480,6 +480,7 @@ function EventForm({
   const { theme } = useThemeStore();
   const { width } = useWindowDimensions();
   const isWide    = width >= DESKTOP;
+  const insets    = useSafeAreaInsets();
   const c = theme.colors;
 
   const [form, setForm] = useState<EventFormState>(BLANK_FORM);
@@ -1023,9 +1024,9 @@ function EventForm({
 
   return (
     <>
-      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
+      <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
         <View style={{ flex: 1, backgroundColor: c.background }}>
-          <View style={[ef.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <View style={[ef.header, { backgroundColor: c.surface, borderBottomColor: c.border, paddingTop: insets.top + 14 }]}>
             <Pressable onPress={onClose} style={ef.closeBtn}>
               <Ionicons name="close" size={18} color={c.text} />
             </Pressable>
@@ -1047,7 +1048,7 @@ function EventForm({
           </View>
 
           <ScrollView style={{ flex: 1 }}
-            contentContainerStyle={[ef.formScroll, isWide && ef.formScrollWide]}
+            contentContainerStyle={[ef.formScroll, isWide && ef.formScrollWide, { paddingBottom: insets.bottom + 60 }]}
             keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {isWide ? (
               <View style={{ flexDirection: 'row', gap: 24, alignItems: 'flex-start' }}>
@@ -1383,7 +1384,7 @@ export default function AdminEventsScreen() {
   const c              = theme.colors;
   const orgId          = organization?.id ?? '';
   const orgSlug        = (organization as any)?.slug ?? '';
-  const { edit: editId } = useLocalSearchParams<{ edit?: string }>();
+  const { edit: editId, new: openNew } = useLocalSearchParams<{ edit?: string; new?: string }>();
 
   const [events,  setEvents]  = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1413,10 +1414,16 @@ export default function AdminEventsScreen() {
     const target = events.find(e => e.id === editId);
     if (target) {
       setEditing(target);
-      // Clear the param so back-navigation doesn't re-open the form
       router.setParams({ edit: '' });
     }
   }, [editId, loading, events]);
+
+  // Auto-open new event form when navigated from calendar with ?new=1
+  useEffect(() => {
+    if (openNew !== '1' || loading) return;
+    setEditing(null);
+    router.setParams({ new: '' });
+  }, [openNew, loading]);
 
   const upcomingCount = events.filter(e => { const s = eventStatus(e); return s === 'upcoming' || s === 'ongoing'; }).length;
   const pastCount     = events.filter(e => eventStatus(e) === 'past').length;

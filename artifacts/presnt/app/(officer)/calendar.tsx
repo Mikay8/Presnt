@@ -339,7 +339,7 @@ export default function OfficerCalendarScreen() {
             {navHeader}
             {canManageEvents && (
               <Pressable
-                onPress={() => router.push('/(officer)/events-management' as any)}
+                onPress={() => router.push({ pathname: '/(officer)/events-management', params: { new: '1' } } as any)}
                 style={[styles.newBtn, { backgroundColor: c.primary }]}
               >
                 <Text size="sm" weight="medium" style={{ color: '#fff' }}>+ New event</Text>
