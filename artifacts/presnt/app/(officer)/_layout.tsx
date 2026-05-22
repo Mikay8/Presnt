@@ -11,6 +11,9 @@ import { useUserViewStore } from '@/stores/userViewStore';
 
 const DESKTOP_BREAKPOINT = 768;
 
+// Tab bar item that renders nothing — hides the slot completely
+const HIDDEN: any = { href: null, tabBarItemStyle: { display: 'none' } };
+
 export default function OfficerLayout() {
   const { theme }      = useThemeStore();
   const { membership } = useAuthStore();
@@ -25,18 +28,16 @@ export default function OfficerLayout() {
   }
 
   // In user-view officer mode, use the simulated permission set
-  const viewPerms    = userView?.role === 'officer' ? userView.permissions : null;
-  const hasViewPerm  = (p: string) => viewPerms?.includes(p) ?? false;
+  const viewPerms = userView?.role === 'officer' ? userView.permissions : null;
+  const hasPerm   = (p: string) => viewPerms ? viewPerms.includes(p) : can(p as any);
 
-  const showEvents     = viewPerms ? hasViewPerm(PERMISSIONS.MANAGE_EVENTS)      : can(PERMISSIONS.MANAGE_EVENTS);
-  const showAttendance = viewPerms ? hasViewPerm(PERMISSIONS.MANAGE_ATTENDANCE)  : can(PERMISSIONS.MANAGE_ATTENDANCE);
-  const showExcuses    = viewPerms
-    ? hasViewPerm(PERMISSIONS.MANAGE_ATTENDANCE) || hasViewPerm(PERMISSIONS.MANAGE_MEMBERS)
-    : can(PERMISSIONS.MANAGE_ATTENDANCE) || can(PERMISSIONS.MANAGE_MEMBERS);
-  const showMembers    = viewPerms ? hasViewPerm(PERMISSIONS.MANAGE_MEMBERS)     : can(PERMISSIONS.MANAGE_MEMBERS);
+  const hasEvents     = hasPerm(PERMISSIONS.MANAGE_EVENTS);
+  const hasAttendance = hasPerm(PERMISSIONS.MANAGE_ATTENDANCE);
+  const hasMembers    = hasPerm(PERMISSIONS.MANAGE_MEMBERS);
+  const hasExcuses    = hasPerm(PERMISSIONS.MANAGE_ATTENDANCE) || hasPerm(PERMISSIONS.MANAGE_MEMBERS);
 
   // Officer with zero relevant permissions → fall back to member portal
-  if (!showEvents && !showAttendance && !showExcuses && !showMembers) {
+  if (!hasEvents && !hasAttendance && !hasExcuses && !hasMembers) {
     return <Redirect href="/(member)" />;
   }
 
@@ -44,14 +45,9 @@ export default function OfficerLayout() {
 
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
-      {/* Sidebar — desktop only */}
       {isWide && <OfficerSidebar />}
-
-      {/* Content area */}
       <View style={{ flex: 1 }}>
-        {/* TopBar — desktop only */}
         {isWide && <TopBar />}
-
         <Tabs
           screenOptions={{
             headerShown: false,
@@ -68,64 +64,50 @@ export default function OfficerLayout() {
             },
           }}
         >
+          {/* ── Visible tabs ──────────────────────────────────────────── */}
           <Tabs.Screen
-            name="events-management"
-            options={showEvents ? {
-              title: 'Events',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="list-outline" size={size} color={color} />
-              ),
-            } : { href: null }}
+            name="dashboard"
+            options={{
+              title: 'Dashboard',
+              tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
+            }}
           />
           <Tabs.Screen
             name="calendar"
-            options={showEvents ? {
+            options={{
               title: 'Calendar',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="calendar-outline" size={size} color={color} />
-              ),
-            } : { href: null }}
+              tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" size={size} color={color} />,
+            }}
           />
           <Tabs.Screen
-            name="attendance"
-            options={showAttendance ? {
-              title: 'Attendance',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="checkmark-done-outline" size={size} color={color} />
-              ),
-            } : { href: null }}
-          />
-          <Tabs.Screen
-            name="excuses"
-            options={showExcuses ? {
-              title: 'Excuses',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="document-text-outline" size={size} color={color} />
-              ),
-            } : { href: null }}
-          />
-          <Tabs.Screen
-            name="members"
-            options={showMembers ? {
+            name="members/index"
+            options={{
               title: 'Members',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="people-outline" size={size} color={color} />
-              ),
-            } : { href: null }}
+              tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
+            }}
+          />
+          <Tabs.Screen
+            name="more"
+            options={{
+              title: 'More',
+              tabBarIcon: ({ color, size }) => <Ionicons name="apps-outline" size={size} color={color} />,
+            }}
           />
           <Tabs.Screen
             name="settings"
             options={{
               title: 'Settings',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="settings-outline" size={size} color={color} />
-              ),
+              tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
             }}
           />
-          {/* Hidden sub-routes */}
-          <Tabs.Screen name="events-management/[id]" options={{ href: null }} />
-          <Tabs.Screen name="locations"   options={{ href: null }} />
-          <Tabs.Screen name="categories"  options={{ href: null }} />
+
+          {/* ── Hidden sub-routes ─────────────────────────────────────── */}
+          <Tabs.Screen name="events-management/index" options={HIDDEN} />
+          <Tabs.Screen name="events-management/[id]"  options={HIDDEN} />
+          <Tabs.Screen name="attendance/index"        options={HIDDEN} />
+          <Tabs.Screen name="excuses/index"           options={HIDDEN} />
+          <Tabs.Screen name="locations/index"         options={HIDDEN} />
+          <Tabs.Screen name="categories/index"        options={HIDDEN} />
         </Tabs>
       </View>
     </View>

@@ -24,6 +24,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card, Text } from '@/components/ui';
 import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
+import { usePermissions } from '@/hooks/usePermissions';
+import { PERMISSIONS } from '@/lib/permissions';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useUserViewStore } from '@/stores/userViewStore';
@@ -72,10 +74,12 @@ function RosterModal({
   event,
   orgId,
   onClose,
+  canMark,
 }: {
-  event:   EventRow;
-  orgId:   string;
-  onClose: () => void;
+  event:    EventRow;
+  orgId:    string;
+  onClose:  () => void;
+  canMark:  boolean;
 }) {
   const { theme } = useThemeStore();
   const { width } = useWindowDimensions();
@@ -200,15 +204,17 @@ function RosterModal({
           <View style={{ flex: 1 }}>
             <Text size="lg" weight="bold">{event.title} · {d.full.split(',')[0].replace(' ', ' ')}</Text>
           </View>
-          <Pressable
-            onPress={markAllPresent}
-            style={[rh.markAllBtn, { borderColor: c.border }]}
-          >
-            <Text size="sm" weight="medium">Mark all present</Text>
-          </Pressable>
-          <View style={[rh.saveChip, { backgroundColor: c.primary }]}>
-            <Text size="sm" weight="bold" style={{ color: '#fff' }}>
-              Save · {counts.present}/{members.length}
+          {canMark && (
+            <Pressable
+              onPress={markAllPresent}
+              style={[rh.markAllBtn, { borderColor: c.border }]}
+            >
+              <Text size="sm" weight="medium">Mark all present</Text>
+            </Pressable>
+          )}
+          <View style={[rh.saveChip, { backgroundColor: canMark ? c.primary : c.surfaceAlt }]}>
+            <Text size="sm" weight="bold" style={{ color: canMark ? '#fff' : c.textMuted }}>
+              {canMark ? `Save · ${counts.present}/${members.length}` : `${counts.present}/${members.length} present`}
             </Text>
           </View>
         </View>
@@ -265,13 +271,13 @@ function RosterModal({
                 <Pressable
                   key={m.id}
                   onPress={() => {
-                    if (isSaving) return;
+                    if (isSaving || !canMark) return;
                     // Cycle: none→present→absent→none
                     if (!att)             mark(uid, 'present');
                     else if (isPresent)   mark(uid, 'absent');
                     else                  mark(uid, null);
                   }}
-                  style={[rh.memberCell, { borderColor: c.border }]}
+                  style={[rh.memberCell, { borderColor: c.border, opacity: canMark ? 1 : 0.6 }]}
                 >
                   {/* Checkbox */}
                   {isSaving ? (
@@ -382,11 +388,15 @@ export default function AttendanceScreen() {
   const insets         = useSafeAreaInsets();
   const { organization } = useAuthStore();
   const userView       = useUserViewStore((s) => s.session);
+  const { can }        = usePermissions();
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c = theme.colors;
 
-  const orgId = userView?.org.id ?? organization?.id ?? '';
+  const orgId     = userView?.org.id ?? organization?.id ?? '';
+  const canMark   = userView
+    ? userView.role === 'admin' || userView.permissions.includes(PERMISSIONS.MANAGE_ATTENDANCE)
+    : can(PERMISSIONS.MANAGE_ATTENDANCE);
 
   const [events,  setEvents]  = useState<EventRow[]>([]);
   const [total,   setTotal]   = useState(0);
@@ -493,6 +503,7 @@ export default function AttendanceScreen() {
           event={open}
           orgId={orgId}
           onClose={() => { setOpen(null); load(); }}
+          canMark={canMark}
         />
       )}
     </View>

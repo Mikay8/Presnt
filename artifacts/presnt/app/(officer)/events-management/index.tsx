@@ -53,6 +53,8 @@ import {
   describeRule,
 } from '@/lib/recurrence';
 import { supabase } from '@/lib/supabase';
+import { usePermissions } from '@/hooks/usePermissions';
+import { PERMISSIONS } from '@/lib/permissions';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useUserViewStore } from '@/stores/userViewStore';
@@ -1427,11 +1429,13 @@ function EventTableRow({
   onEdit,
   onCancel,
   onScan,
+  canManage,
 }: {
-  event:    Event;
-  onEdit:   (e: Event) => void;
-  onCancel: (e: Event) => void;
-  onScan:   (e: Event) => void;
+  event:      Event;
+  onEdit:     (e: Event) => void;
+  onCancel:   (e: Event) => void;
+  onScan:     (e: Event) => void;
+  canManage:  boolean;
 }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
@@ -1488,24 +1492,26 @@ function EventTableRow({
       ) : (
         <View style={{ width: 80 }} />
       )}
-      <View style={{ width: 36, alignItems: 'center', position: 'relative' }}>
-        <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }} style={dt.menuBtn}>
-          <Text size="md" color={c.textSubtle}>···</Text>
-        </Pressable>
-        {menuOpen && (
-          <View style={[dt.menu, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onEdit(event); }}
-              style={[dt.menuItem, { borderBottomColor: c.border }]}>
-              <Text size="sm">Edit</Text>
-            </Pressable>
-            {status !== 'cancelled' && status !== 'past' && (
-              <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onCancel(event); }} style={dt.menuItem}>
-                <Text size="sm" color="#EF4444">Cancel</Text>
+      {canManage && (
+        <View style={{ width: 36, alignItems: 'center', position: 'relative' }}>
+          <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }} style={dt.menuBtn}>
+            <Text size="md" color={c.textSubtle}>···</Text>
+          </Pressable>
+          {menuOpen && (
+            <View style={[dt.menu, { backgroundColor: c.surface, borderColor: c.border }]}>
+              <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onEdit(event); }}
+                style={[dt.menuItem, { borderBottomColor: c.border }]}>
+                <Text size="sm">Edit</Text>
               </Pressable>
-            )}
-          </View>
-        )}
-      </View>
+              {status !== 'cancelled' && status !== 'past' && (
+                <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onCancel(event); }} style={dt.menuItem}>
+                  <Text size="sm" color="#EF4444">Cancel</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -1523,7 +1529,7 @@ const dt = StyleSheet.create({
 
 // ─── Mobile Event Card ────────────────────────────────────────────────────────
 
-function EventCard({ event, onEdit, onScan }: { event: Event; onEdit: (e: Event) => void; onScan: (e: Event) => void }) {
+function EventCard({ event, onEdit, onScan, canManage }: { event: Event; onEdit: (e: Event) => void; onScan: (e: Event) => void; canManage: boolean }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
   const d = fmtDate(displayDate(event));
@@ -1578,7 +1584,7 @@ function EventCard({ event, onEdit, onScan }: { event: Event; onEdit: (e: Event)
               <Ionicons name="qr-code-outline" size={13} color="#F59E0B" />
               <Text size="xs" weight="medium" style={{ color: '#F59E0B' }}>Scan QR</Text>
             </Pressable>
-          ) : (
+          ) : canManage ? (
             <Pressable
               onPress={(e) => { e.stopPropagation?.(); onEdit(event); }}
               style={[mc.editBtn, { borderColor: c.border }]}
@@ -1586,7 +1592,7 @@ function EventCard({ event, onEdit, onScan }: { event: Event; onEdit: (e: Event)
               <Ionicons name="create-outline" size={13} color={c.textSubtle} />
               <Text size="xs" color={c.textSubtle}>Edit</Text>
             </Pressable>
-          )}
+          ) : null}
         </View>
       </View>
     </Pressable>
@@ -1611,6 +1617,7 @@ export default function OfficerEventsScreen() {
   const insets         = useSafeAreaInsets();
   const { organization, membership, profile } = useAuthStore();
   const userView       = useUserViewStore((s) => s.session);
+  const { can }        = usePermissions();
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c              = theme.colors;
@@ -1619,8 +1626,8 @@ export default function OfficerEventsScreen() {
   const orgId     = userView?.org.id ?? organization?.id ?? '';
   const orgSlug   = (userView?.org as any)?.slug ?? (organization as any)?.slug ?? '';
   const canManage = userView
-    ? userView.role === 'admin' || userView.permissions.includes('manage_events')
-    : true;
+    ? userView.role === 'admin' || userView.permissions.includes(PERMISSIONS.MANAGE_EVENTS)
+    : can(PERMISSIONS.MANAGE_EVENTS);
 
   const [events,    setEvents]    = useState<Event[]>([]);
   const [loading,   setLoading]   = useState(true);
@@ -1910,12 +1917,12 @@ export default function OfficerEventsScreen() {
           </View>
         ) : isWide ? (
           displayed.map(e => (
-            <EventTableRow key={e.id} event={e} onEdit={setEdit} onCancel={handleCancel} onScan={(ev) => setScanTarget(ev)} />
+            <EventTableRow key={e.id} event={e} onEdit={setEdit} onCancel={handleCancel} onScan={(ev) => setScanTarget(ev)} canManage={canManage} />
           ))
         ) : (
           <View style={{ gap: 10 }}>
             {displayed.map(e => (
-              <EventCard key={e.id} event={e} onEdit={(ev) => setEdit(ev)} onScan={(ev) => setScanTarget(ev)} />
+              <EventCard key={e.id} event={e} onEdit={(ev) => setEdit(ev)} onScan={(ev) => setScanTarget(ev)} canManage={canManage} />
             ))}
           </View>
         )}

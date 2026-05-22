@@ -105,25 +105,25 @@ export default function AdminLayout() {
 
           {/* ── Hidden routes ───────────────────────────────────────── */}
           {/* Cover both Expo Router 6 naming conventions            */}
-          <Tabs.Screen name="roles/index"        options={{ href: null }} />
-          <Tabs.Screen name="dues/index"         options={{ href: null }} />
-          <Tabs.Screen name="committees/index"   options={{ href: null }} />
-          <Tabs.Screen name="status/index"       options={{ href: null }} />
-          <Tabs.Screen name="organization/index" options={{ href: null }} />
-          <Tabs.Screen name="profile"            options={{ href: null }} />
-          <Tabs.Screen name="events-management/index" options={{ href: null }} />
-          <Tabs.Screen name="events-management/[id]" options={{ href: null }} />
-          <Tabs.Screen name="locations/index"        options={{ href: null }} />
-          <Tabs.Screen name="categories/index"       options={{ href: null }} />
+          <Tabs.Screen name="roles/index"        options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="dues/index"         options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="committees/index"   options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="status/index"       options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="organization/index" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="profile"            options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="events-management/index" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="events-management/[id]"  options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="locations/index"         options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="categories/index"        options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
 
-          <Tabs.Screen name="roles"              options={{ href: null }} />
-          <Tabs.Screen name="dues"               options={{ href: null }} />
-          <Tabs.Screen name="committees"         options={{ href: null }} />
-          <Tabs.Screen name="status"             options={{ href: null }} />
-          <Tabs.Screen name="organization"       options={{ href: null }} />
-          <Tabs.Screen name="events-management"  options={{ href: null }} />
-          <Tabs.Screen name="locations"          options={{ href: null }} />
-          <Tabs.Screen name="categories"         options={{ href: null }} />
+          <Tabs.Screen name="roles"              options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="dues"               options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="committees"         options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="status"             options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="organization"       options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="events-management"  options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="locations"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="categories"         options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
         </Tabs>
       </View>
     </View>

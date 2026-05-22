@@ -27,17 +27,19 @@ export function Sidebar() {
   const orgName    = organization?.name        ?? 'My Chapter';
   const institution = organization?.institution ?? '';
 
-  // Match active item: pathname is like "/" for index, "/calendar", "/status", "/profile"
+  // Match active item: on web Expo Router strips route groups so pathname is like
+  // "/", "/calendar", "/status", "/profile" (no "/(member)/" prefix).
   const isActive = (segment: string) => {
-    if (segment === 'index') return pathname === '/' || pathname === '';
-    return pathname.startsWith(`/${segment}`);
+    if (segment === 'index') return pathname === '/' || pathname === '' || pathname === '/(member)';
+    return pathname === `/${segment}` || pathname.startsWith(`/${segment}/`)
+        || pathname === `/(member)/${segment}` || pathname.startsWith(`/(member)/${segment}/`);
   };
 
   const navigate = (segment: string) => {
     if (segment === 'index') {
-      router.push('/' as any);
+      router.push('/(member)' as any);
     } else {
-      router.push(`/${segment}` as any);
+      router.push(`/(member)/${segment}` as any);
     }
   };
 

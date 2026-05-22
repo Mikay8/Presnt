@@ -29,6 +29,7 @@ export default function LoginScreen() {
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [unverified, setUnverified] = useState(false);
 
   async function handleLogin() {
     if (!email.trim() || !password) {
@@ -36,13 +37,35 @@ export default function LoginScreen() {
       return;
     }
     setError('');
+    setUnverified(false);
     setLoading(true);
     const { error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
     setLoading(false);
-    if (authError) setError(authError.message);
+    if (authError) {
+      // Supabase returns "Email not confirmed" for unverified accounts
+      if (
+        authError.message.toLowerCase().includes('email not confirmed') ||
+        authError.message.toLowerCase().includes('not confirmed')
+      ) {
+        setUnverified(true);
+      } else {
+        setError(authError.message);
+      }
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!email.trim()) {
+      setError('Enter your email address above first.');
+      return;
+    }
+    await supabase.auth.resend({ type: 'signup', email: email.trim() });
+    // Always show success to avoid email enumeration
+    setUnverified(false);
+    setError('Verification email resent — check your inbox.');
   }
 
   const formContent = (
@@ -91,6 +114,25 @@ export default function LoginScreen() {
         
 
         {error ? <Text size="sm" color={theme.colors.error}>{error}</Text> : null}
+
+        {unverified && (
+          <View style={[styles.unverifiedBox, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
+            <Ionicons name="mail-outline" size={18} color="#B45309" style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              <Text size="sm" weight="medium" style={{ color: '#92400E' }}>
+                Please verify your email
+              </Text>
+              <Text size="xs" style={{ color: '#92400E', marginTop: 2 }}>
+                Check your inbox for a confirmation link before signing in.
+              </Text>
+              <TouchableOpacity onPress={handleResendVerification} style={{ marginTop: 6 }}>
+                <Text size="xs" weight="medium" style={{ color: '#B45309', textDecorationLine: 'underline' }}>
+                  Resend verification email
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         <Button label="Log in" onPress={handleLogin} loading={loading} style={styles.cta} />
 
@@ -168,4 +210,5 @@ const styles = StyleSheet.create({
   ssoBtn:          { width: 80 },
 
   footer:          { flexDirection: 'row', justifyContent: 'center', marginTop: 28 },
+  unverifiedBox:   { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 10, padding: 12, alignItems: 'flex-start' },
 });
