@@ -272,9 +272,61 @@ export type Database = {
           },
         ]
       }
+      event_categories: {
+        Row: {
+          id:          string
+          org_id:      string
+          name:        string
+          color:       string
+          description: string | null
+          is_deleted:  boolean | null
+          created_by:  string | null
+          created_at:  string | null
+          updated_at:  string | null
+        }
+        Insert: {
+          id?:          string
+          org_id:       string
+          name:         string
+          color?:       string
+          description?: string | null
+          is_deleted?:  boolean | null
+          created_by?:  string | null
+          created_at?:  string | null
+          updated_at?:  string | null
+        }
+        Update: {
+          id?:          string
+          org_id?:      string
+          name?:        string
+          color?:       string
+          description?: string | null
+          is_deleted?:  boolean | null
+          created_by?:  string | null
+          created_at?:  string | null
+          updated_at?:  string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_categories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_categories_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           allow_excuses:         boolean | null
+          category_id:           string | null
           checkin_grace_minutes: number | null
           checkin_open_minutes:  number | null
           created_at:            string | null
@@ -310,6 +362,7 @@ export type Database = {
         }
         Insert: {
           allow_excuses?:         boolean | null
+          category_id?:           string | null
           checkin_grace_minutes?: number | null
           checkin_open_minutes?:  number | null
           created_at?:            string | null
@@ -345,6 +398,7 @@ export type Database = {
         }
         Update: {
           allow_excuses?:         boolean | null
+          category_id?:           string | null
           checkin_grace_minutes?: number | null
           checkin_open_minutes?:  number | null
           created_at?:            string | null
@@ -379,6 +433,13 @@ export type Database = {
           updated_at?:            string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "events_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "event_categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "events_created_by_fkey"
             columns: ["created_by"]

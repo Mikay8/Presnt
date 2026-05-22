@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import React from 'react';
 import {
   Image,
@@ -11,13 +11,24 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
+import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 
 export default function OnboardingScreen() {
   const theme = useThemeStore((s) => s.theme);
+  const { membership } = useAuthStore();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isWide = width >= 800;
+
+  // If the user already has a membership (e.g. they navigated here after
+  // creating/joining a chapter), send them directly to their portal.
+  if (membership) {
+    const role = membership.role;
+    if (role === 'org_admin' || role === 'admin') return <Redirect href="/(admin)/dashboard" />;
+    if (role === 'officer') return <Redirect href="/(officer)/events-management" />;
+    return <Redirect href="/(member)" />;
+  }
 
   return (
     <ScrollView

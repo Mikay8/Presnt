@@ -309,7 +309,7 @@ export default function ExcusesScreen() {
 
       {/* List */}
       <ScrollView
-        contentContainerStyle={isWide ? xs.desktopScroll : xs.mobileScroll}
+        contentContainerStyle={isWide ? xs.desktopScroll : [xs.mobileScroll, { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refresh} onRefresh={() => { setRefresh(true); load(); }} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >

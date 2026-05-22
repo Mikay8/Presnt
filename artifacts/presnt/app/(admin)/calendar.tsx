@@ -6,14 +6,15 @@
  * screen. Admins can also tap "+ New event" to create one.
  *
  * Desktop: grid calendar + month nav
- * Mobile:  compact cell grid + upcoming list
+ * Mobile:  compact cell grid + day/upcoming list + swipe-to-change-month
  */
 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  PanResponder,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -35,6 +36,7 @@ type CalEvent = {
   title:            string;
   type:             string;
   start_time:       string;
+  end_time:         string | null;
   location:         string | null;
   is_occurrence:    boolean | null;
   parent_event_id:  string | null;
@@ -64,6 +66,10 @@ function dateKey(d: Date) {
 function isToday(d: Date) {
   const t = new Date();
   return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -100,6 +106,7 @@ export default function AdminCalendarScreen() {
   const [events, setEvents]         = useState<CalEvent[]>([]);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const orgId = organization?.id;
 
@@ -111,7 +118,7 @@ export default function AdminCalendarScreen() {
 
     const { data } = await supabase
       .from('events')
-      .select('id, title, type, start_time, location, is_occurrence, parent_event_id, recurrence_rule, occurrences_horizon')
+      .select('id, title, type, start_time, end_time, location, is_occurrence, parent_event_id, recurrence_rule, occurrences_horizon')
       .eq('org_id', orgId)
       .eq('is_deleted', false)
       .eq('is_cancelled', false)
@@ -140,6 +147,9 @@ export default function AdminCalendarScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Clear selected date when month changes
+  useEffect(() => { setSelectedDate(null); }, [year, month]);
+
   const grid = useMemo(() => buildGrid(year, month), [year, month]);
 
   const eventsByDate = useMemo(() => {
@@ -152,8 +162,20 @@ export default function AdminCalendarScreen() {
     return map;
   }, [events]);
 
+  const selectedDayEvents = useMemo(() => {
+    if (!selectedDate) return null;
+    return eventsByDate[dateKey(selectedDate)] ?? [];
+  }, [selectedDate, eventsByDate]);
+
+  // Upcoming + ongoing events: started in the future, OR started already but not yet ended
   const upcomingEvents = useMemo(() => {
-    return events.filter((ev) => new Date(ev.start_time) >= today).slice(0, 5);
+    const now = new Date();
+    return events.filter((ev) => {
+      const start = new Date(ev.start_time);
+      if (start >= now) return true;
+      if (ev.end_time && new Date(ev.end_time) > now) return true;
+      return false;
+    });
   }, [events]);
 
   const prevMonth = () => {
@@ -170,6 +192,19 @@ export default function AdminCalendarScreen() {
   function openEvent(ev: CalEvent) {
     router.push(`/(admin)/events-management/${ev.id}` as any);
   }
+
+  // ── Swipe gesture for mobile month navigation ──────────────────────────────
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) => {
+      return Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5;
+    },
+    onPanResponderRelease: (_, gs) => {
+      const THRESHOLD = 50;
+      if (gs.dx < -THRESHOLD) nextMonth();
+      else if (gs.dx > THRESHOLD) prevMonth();
+    },
+  }), [month, year]);
 
   // ── Desktop grid ──
   const desktopGrid = (
@@ -216,7 +251,7 @@ export default function AdminCalendarScreen() {
   // ── Mobile grid ──
   const CELL_SIZE = Math.floor((width - 32) / 7);
   const mobileGrid = (
-    <View>
+    <View {...panResponder.panHandlers}>
       <View style={styles.mobileDayHeaderRow}>
         {DAY_LABELS_MOB.map((d, i) => (
           <View key={i} style={{ width: CELL_SIZE, alignItems: 'center', paddingVertical: 6 }}>
@@ -232,24 +267,24 @@ export default function AdminCalendarScreen() {
             }
             const evs = eventsByDate[dateKey(date)] ?? [];
             const isT = isToday(date);
+            const isSel = selectedDate ? isSameDay(date, selectedDate) : false;
             return (
               <Pressable
                 key={date.toISOString()}
                 style={[
                   styles.mobileDayCell,
                   { width: CELL_SIZE, height: CELL_SIZE },
-                  isT && { backgroundColor: c.primary + '20', borderRadius: 8 },
+                  isT && !isSel && { backgroundColor: c.primary + '20', borderRadius: 8 },
+                  isSel && { backgroundColor: c.primary, borderRadius: 8 },
                 ]}
-                onPress={() => {
-                  if (evs.length === 1) openEvent(evs[0]);
-                }}
+                onPress={() => setSelectedDate(isSel ? null : date)}
               >
-                <Text size="sm" weight={isT ? 'bold' : 'regular'}
-                  color={isT ? c.primary : c.text}>
+                <Text size="sm" weight={isT || isSel ? 'bold' : 'regular'}
+                  color={isSel ? '#FFF' : isT ? c.primary : c.text}>
                   {date.getDate()}
                 </Text>
                 {evs.length > 0 && (
-                  <View style={[styles.eventDot, { backgroundColor: c.primary }]} />
+                  <View style={[styles.eventDot, { backgroundColor: isSel ? '#FFF' : c.primary }]} />
                 )}
               </Pressable>
             );
@@ -311,6 +346,12 @@ export default function AdminCalendarScreen() {
   }
 
   // ── Mobile ──
+  const sectionLabel = selectedDate
+    ? `${MONTH_NAMES[selectedDate.getMonth()].slice(0, 3)} ${selectedDate.getDate()}`
+    : 'Upcoming & Ongoing';
+
+  const sectionEvents = selectedDate ? (selectedDayEvents ?? []) : upcomingEvents;
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: c.background }}
@@ -337,17 +378,19 @@ export default function AdminCalendarScreen() {
 
       <Text size="xs" weight="medium" color={c.textMuted}
         style={{ textTransform: 'uppercase', letterSpacing: 1, marginTop: 28, marginBottom: 12 }}>
-        Upcoming
+        {sectionLabel}
       </Text>
 
-      {upcomingEvents.length === 0 ? (
+      {sectionEvents.length === 0 ? (
         <Card style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
           <Ionicons name="calendar-outline" size={28} color={c.textSubtle} />
-          <Text size="sm" color={c.textMuted}>No upcoming events</Text>
+          <Text size="sm" color={c.textMuted}>
+            {selectedDate ? 'No events on this day' : 'No upcoming or ongoing events'}
+          </Text>
         </Card>
       ) : (
         <View style={{ gap: 10 }}>
-          {upcomingEvents.map((ev) => {
+          {sectionEvents.map((ev) => {
             const d = new Date(ev.start_time);
             return (
               <Pressable key={ev.id} onPress={() => openEvent(ev)}>

@@ -66,7 +66,7 @@ export default function MoreScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
         <Card style={{ paddingVertical: 0 }}>

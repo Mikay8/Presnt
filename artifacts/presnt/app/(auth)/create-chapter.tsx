@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -30,16 +31,16 @@ function slugify(text: string) {
 
 function generateJoinCode(name: string): string {
   const base = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-  const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
+  const rand  = Math.random().toString(36).slice(2, 5).toUpperCase();
   return `${base}-${rand}`;
 }
 
 function getCurrentSemester() {
-  const now = new Date();
+  const now   = new Date();
   const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  if (month <= 5)  return { name: `Spring ${year}`, start: `${year}-01-15`, end: `${year}-05-15` };
-  if (month <= 7)  return { name: `Summer ${year}`, start: `${year}-05-16`, end: `${year}-08-15` };
+  const year  = now.getFullYear();
+  if (month <= 5) return { name: `Spring ${year}`, start: `${year}-01-15`, end: `${year}-05-15` };
+  if (month <= 7) return { name: `Summer ${year}`, start: `${year}-05-16`, end: `${year}-08-15` };
   return { name: `Fall ${year}`, start: `${year}-08-16`, end: `${year}-12-20` };
 }
 
@@ -49,17 +50,47 @@ export default function CreateChapterScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isWide = width >= 800;
+  const c = theme.colors;
 
-  const [name, setName] = useState('');
-  const [institution, setInstitution] = useState('');
-  const [greekLetterOrg, setGreekLetterOrg] = useState('');
-  const [primaryColor, setPrimaryColor] = useState(BRAND_COLORS[0]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [name,          setName]         = useState('');
+  const [institution,   setInstitution]  = useState('');
+  const [greekLetterOrg,setGreekLetter]  = useState('');
+  const [primaryColor,  setPrimaryColor] = useState(BRAND_COLORS[0]);
+  // Join code — pre-generated but editable; regenerates when name changes if still pristine
+  const [joinCode,      setJoinCode]     = useState('');
+  const [codeEdited,    setCodeEdited]   = useState(false);
+  const [loading,       setLoading]      = useState(false);
+  const [error,         setError]        = useState('');
+
+  // Auto-update the join code as the user types the chapter name,
+  // unless they've manually edited the code field.
+  function handleNameChange(val: string) {
+    setName(val);
+    if (!codeEdited && val.trim()) {
+      setJoinCode(generateJoinCode(val));
+    }
+  }
+
+  function handleRegenerateCode() {
+    const base = name.trim() || 'CHAPTER';
+    setJoinCode(generateJoinCode(base));
+    setCodeEdited(false);
+  }
+
+  function handleCodeChange(val: string) {
+    // Force uppercase, allow letters, digits, hyphens
+    setJoinCode(val.toUpperCase().replace(/[^A-Z0-9-]/g, ''));
+    setCodeEdited(true);
+  }
 
   async function handleCreate() {
     if (!name.trim() || !institution.trim()) {
       setError('Chapter name and school are required.');
+      return;
+    }
+    const code = joinCode.trim() || generateJoinCode(name);
+    if (code.length < 3) {
+      setError('Join code must be at least 3 characters.');
       return;
     }
 
@@ -83,7 +114,7 @@ export default function CreateChapterScreen() {
         greek_letter_org: greekLetterOrg.trim() || null,
         primary_color:    primaryColor,
         timezone:         'America/New_York',
-        join_code:        generateJoinCode(name),
+        join_code:        code,
         created_by:       userId,
       })
       .select()
@@ -98,11 +129,12 @@ export default function CreateChapterScreen() {
     const { data: membership, error: membershipError } = await supabase
       .from('memberships')
       .insert({
-        user_id:   userId,
-        org_id:    org.id,
-        status:    'active',
-        role:      'admin',
-        joined_at: new Date().toISOString().split('T')[0],
+        user_id:    userId,
+        org_id:     org.id,
+        status:     'active',
+        role:       'admin',
+        is_deleted: false,
+        joined_at:  new Date().toISOString().split('T')[0],
       })
       .select()
       .single();
@@ -115,22 +147,24 @@ export default function CreateChapterScreen() {
 
     const semester = getCurrentSemester();
     await supabase.from('academic_terms').insert({
-      org_id: org.id,
-      name: semester.name,
+      org_id:     org.id,
+      name:       semester.name,
       start_date: semester.start,
-      end_date: semester.end,
-      is_active: true,
+      end_date:   semester.end,
+      is_active:  true,
     });
 
+    // Refresh session so _layout reloads membership from DB.
+    await supabase.auth.refreshSession();
     setMembership(membership, org);
     setLoading(false);
-    router.replace('/(member)');
+    router.replace('/(admin)/dashboard');
   }
 
   const formContent = (
-    <View style={[styles.formCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+    <View style={[styles.formCard, { backgroundColor: c.surface, borderColor: c.border }]}>
       {/* IDENTITY */}
-      <Text size="xs" weight="medium" color={theme.colors.textMuted} style={styles.sectionLabel}>
+      <Text size="xs" weight="medium" color={c.textMuted} style={styles.sectionLabel}>
         Identity
       </Text>
 
@@ -139,7 +173,7 @@ export default function CreateChapterScreen() {
           <Input
             label="Chapter name"
             value={name}
-            onChangeText={setName}
+            onChangeText={handleNameChange}
             placeholder="e.g. Kappa Sigma"
             autoCapitalize="words"
           />
@@ -158,32 +192,48 @@ export default function CreateChapterScreen() {
       <Input
         label="Greek letters (optional)"
         value={greekLetterOrg}
-        onChangeText={setGreekLetterOrg}
+        onChangeText={setGreekLetter}
         placeholder="Kappa Sigma"
         autoCapitalize="words"
       />
 
+      {/* JOIN CODE */}
+      <View style={styles.sectionDivider} />
+      <Text size="xs" weight="medium" color={c.textMuted} style={styles.sectionLabel}>
+        Join Code
+      </Text>
+      <Text size="xs" color={c.textSubtle} style={{ marginBottom: 8, marginTop: -4 }}>
+        Members will enter this code to join your chapter. You can change it anytime in Settings.
+      </Text>
+
+      <View style={styles.codeRow}>
+        <View style={{ flex: 1 }}>
+          <Input
+            label=""
+            value={joinCode}
+            onChangeText={handleCodeChange}
+            placeholder="e.g. KAPPA-ABC"
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+        </View>
+        <Pressable
+          onPress={handleRegenerateCode}
+          style={[styles.regenBtn, { borderColor: c.border, backgroundColor: c.surfaceAlt }]}
+        >
+          <Ionicons name="refresh-outline" size={18} color={c.textMuted} />
+        </Pressable>
+      </View>
+
       {/* BRANDING */}
       <View style={styles.sectionDivider} />
-      <Text size="xs" weight="medium" color={theme.colors.textMuted} style={styles.sectionLabel}>
+      <Text size="xs" weight="medium" color={c.textMuted} style={styles.sectionLabel}>
         Branding
       </Text>
 
-      {/* Logo placeholder */}
-      <View style={styles.logoRow}>
-        <View style={[styles.logoBox, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}>
-          <Ionicons name="image-outline" size={28} color={theme.colors.textSubtle} />
-        </View>
-        <View style={{ flex: 1, gap: 8 }}>
-          <Text size="sm" weight="medium" color={theme.colors.text}>Chapter logo</Text>
-          <Text size="xs" color={theme.colors.textMuted}>PNG or SVG, square recommended</Text>
-          <Button label="Upload logo" variant="outline" size="sm" onPress={() => {}} />
-        </View>
-      </View>
-
       {/* Color swatches */}
       <View style={styles.colorRow}>
-        <Text size="xs" weight="medium" color={theme.colors.textMuted} style={[styles.sectionLabel, { marginBottom: 0, marginRight: 12 }]}>
+        <Text size="xs" weight="medium" color={c.textMuted} style={[styles.sectionLabel, { marginBottom: 0, marginRight: 12 }]}>
           Color
         </Text>
         <View style={styles.swatches}>
@@ -205,22 +255,21 @@ export default function CreateChapterScreen() {
         </View>
       </View>
 
-      {error ? <Text size="sm" color={theme.colors.error}>{error}</Text> : null}
+      {error ? <Text size="sm" color={c.error}>{error}</Text> : null}
     </View>
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: c.background, paddingTop: insets.top }]}>
       {/* Top bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={22} color={theme.colors.text} />
+          <Ionicons name="chevron-back" size={22} color={c.text} />
         </TouchableOpacity>
-        {/* Step dots */}
         <View style={styles.dots}>
-          <View style={[styles.dot, { backgroundColor: theme.colors.primary }]} />
-          <View style={[styles.dot, { backgroundColor: theme.colors.border }]} />
-          <View style={[styles.dot, { backgroundColor: theme.colors.border }]} />
+          <View style={[styles.dot, { backgroundColor: c.primary }]} />
+          <View style={[styles.dot, { backgroundColor: c.border }]} />
+          <View style={[styles.dot, { backgroundColor: c.border }]} />
         </View>
       </View>
 
@@ -230,13 +279,12 @@ export default function CreateChapterScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text size="h1" weight="bold" style={styles.heading}>Create your chapter</Text>
-        <Text size="md" color={theme.colors.textMuted} style={styles.subheading}>
+        <Text size="md" color={c.textMuted} style={styles.subheading}>
           This takes under 2 minutes. You can update everything later.
         </Text>
 
         {formContent}
 
-        {/* Actions */}
         <View style={[styles.actions, isWide && styles.actionsWide]}>
           <Button label="Cancel" variant="outline" onPress={() => router.back()} style={styles.cancelBtn} />
           <Button label="Create chapter" onPress={handleCreate} loading={loading} style={styles.submitBtn} />
@@ -261,22 +309,23 @@ const styles = StyleSheet.create({
 
   formCard:     { borderRadius: 16, borderWidth: 1, padding: 24, gap: 16 },
 
-  sectionLabel: { textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: -4 },
+  sectionLabel:   { textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: -4 },
   sectionDivider: { height: 1, backgroundColor: 'transparent' },
 
-  row:          { flexDirection: 'row', gap: 12 },
-  col:          { flexDirection: 'column' },
+  row:     { flexDirection: 'row', gap: 12 },
+  col:     { flexDirection: 'column' },
 
-  logoRow:      { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
-  logoBox:      { width: 72, height: 72, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  // Join code row: input + regen button side-by-side
+  codeRow:   { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  regenBtn:  { width: 44, height: 44, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
 
-  colorRow:     { flexDirection: 'row', alignItems: 'center' },
-  swatches:     { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  swatch:       { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  colorRow:  { flexDirection: 'row', alignItems: 'center' },
+  swatches:  { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  swatch:    { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   swatchSelected: { borderWidth: 3, borderColor: '#ffffff', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
 
-  actions:      { flexDirection: 'row', gap: 12, justifyContent: 'flex-end' },
-  actionsWide:  {},
-  cancelBtn:    { flex: 1, maxWidth: 120 },
-  submitBtn:    { flex: 1, maxWidth: 200 },
+  actions:    { flexDirection: 'row', gap: 12, justifyContent: 'flex-end' },
+  actionsWide:{},
+  cancelBtn:  { flex: 1, maxWidth: 120 },
+  submitBtn:  { flex: 1, maxWidth: 200 },
 });

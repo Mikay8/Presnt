@@ -436,7 +436,7 @@ export default function AdminMembersScreen() {
 
       <ScrollView
         style={{ backgroundColor: c.background }}
-        contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
+        contentContainerStyle={[styles.scroll, isWide && styles.scrollWide, !isWide && { paddingBottom: insets.bottom + 24 }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

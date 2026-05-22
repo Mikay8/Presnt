@@ -83,6 +83,8 @@ const EVENT_TYPES = [
 
 const DESKTOP = 768;
 
+type EventCategory = { id: string; name: string; color: string };
+
 type EventFormState = {
   title:               string;
   type:                string;
@@ -99,6 +101,7 @@ type EventFormState = {
   location_text:       string;
   location_lat:        number | null;
   location_lng:        number | null;
+  category_id:         string | null;
   recurrence:          RecurrenceRule;
   description:         string;
   required_attendance:  boolean;
@@ -124,6 +127,7 @@ const BLANK_FORM: EventFormState = {
   hasEndTime:   true,
   location_type: 'in-person', meeting_url: '',
   location_id: null, location_text: '', location_lat: null, location_lng: null,
+  category_id: null,
   recurrence:  { ...BLANK_RULE },
   description: '',
   required_attendance: true, qr_checkin: true, geofence_required: true,
@@ -312,6 +316,7 @@ function formFromEvent(e: Event): EventFormState {
     location_text:  e.location ?? '',
     location_lat:   null,
     location_lng:   null,
+    category_id:    (e as any).category_id ?? null,
     recurrence:     { ...BLANK_RULE },
     description:    e.description ?? '',
     required_attendance: !!(e as any).is_mandatory,
@@ -490,9 +495,24 @@ function EventForm({
   const [savedLoc,        setSavedLoc]        = useState<OrgLocation | null>(null);
   const [confirmDelete,   setConfirmDelete]   = useState<'single' | 'recurring' | null>(null);
   const [codeGenerating,  setCodeGenerating]  = useState(false);
+  const [categories,      setCategories]      = useState<EventCategory[]>([]);
+  const [showCatMenu,     setShowCatMenu]     = useState(false);
   // codeError is driven by parent (screen) so it persists through re-renders
   const codeError    = codeErrorMsg ?? null;
   const setCodeError = onClearCodeError ? (_: null) => onClearCodeError() : (_: null) => {};
+
+  // Load categories whenever the form opens
+  useEffect(() => {
+    if (visible && orgId) {
+      supabase
+        .from('event_categories')
+        .select('id, name, color')
+        .eq('org_id', orgId)
+        .eq('is_deleted', false)
+        .order('name')
+        .then(({ data }) => setCategories((data ?? []) as EventCategory[]));
+    }
+  }, [visible, orgId]);
 
   // Auto-generate event_code for new events when form opens
   useEffect(() => {
@@ -719,6 +739,68 @@ function EventForm({
                 trackColor={{ false: c.border, true: c.primary }} thumbColor="#fff" />
             </View>
           </View>
+        </View>
+
+        {/* ── CATEGORY ── */}
+        <View style={{ marginTop: 14, zIndex: showCatMenu ? 200 : 1 }}>
+          <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>CATEGORY</Text>
+          <Pressable
+            onPress={() => setShowCatMenu(!showCatMenu)}
+            style={[inputStyle, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, marginBottom: 0 }]}
+          >
+            {form.category_id && categories.find(cat => cat.id === form.category_id) ? (() => {
+              const cat = categories.find(c2 => c2.id === form.category_id)!;
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
+                  <Text size="sm" color={c.text}>{cat.name}</Text>
+                </View>
+              );
+            })() : (
+              <Text size="sm" color={c.textSubtle}>None</Text>
+            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {form.category_id && (
+                <Pressable onPress={(e) => { e.stopPropagation?.(); set('category_id')(null); setShowCatMenu(false); }} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={c.textSubtle} />
+                </Pressable>
+              )}
+              <Ionicons name={showCatMenu ? 'chevron-up' : 'chevron-down'} size={14} color={c.textSubtle} />
+            </View>
+          </Pressable>
+          {showCatMenu && (
+            <View style={[ef.dropdown, { backgroundColor: c.surface, borderColor: c.border }]}>
+              <Pressable
+                onPress={() => { set('category_id')(null); setShowCatMenu(false); }}
+                style={[ef.dropdownItem, { borderBottomColor: c.border }]}
+              >
+                <Text size="sm" color={c.textMuted}>None</Text>
+              </Pressable>
+              {categories.map(cat => (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => { set('category_id')(cat.id); setShowCatMenu(false); }}
+                  style={[ef.dropdownItem, { borderBottomColor: c.border }]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
+                    <Text size="sm" color={form.category_id === cat.id ? c.primary : c.text}
+                      weight={form.category_id === cat.id ? 'medium' : 'regular'}>
+                      {cat.name}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+              {categories.length === 0 && (
+                <Pressable
+                  onPress={() => { setShowCatMenu(false); router.push('/(admin)/categories' as any); }}
+                  style={[ef.dropdownItem, { borderBottomColor: c.border }]}
+                >
+                  <Text size="sm" color={c.primary}>+ Create categories</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={[ef.divider, { backgroundColor: c.border, marginTop: 20 }]} />
@@ -1382,6 +1464,7 @@ export default function AdminEventsScreen() {
         checkin_grace_minutes: form.checkin_grace_minutes.trim() !== '' ? parseInt(form.checkin_grace_minutes) || null : null,
         is_public:             form.is_public,
         event_code:            form.event_code.trim() || null,
+        category_id:           form.category_id ?? null,
       };
 
       const editingEvent: Event | null = editing === false || editing === null ? null : editing;
@@ -1457,12 +1540,32 @@ export default function AdminEventsScreen() {
             {upcomingCount} upcoming · {pastCount} past
           </Text>
         </View>
-        <Pressable style={[sc.importBtn, { borderColor: c.border }]}>
-          <Text size="sm" weight="medium">Import</Text>
-        </Pressable>
-        <Pressable onPress={() => setEditing(null)} style={[sc.newBtn, { backgroundColor: c.primary }]}>
-          <Text size="sm" weight="medium" style={{ color: '#fff' }}>+ New event</Text>
-        </Pressable>
+        <View style={sc.headerActions}>
+          {isWide && (
+            <Pressable style={[sc.importBtn, { borderColor: c.border }]}>
+              <Text size="sm" weight="medium">Import</Text>
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => router.push('/(admin)/locations' as any)}
+            style={[sc.iconBtn, { borderColor: c.border }]}
+          >
+            <Ionicons name="location-outline" size={16} color={c.text} />
+            {isWide && <Text size="sm" weight="medium">Locations</Text>}
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/(admin)/categories' as any)}
+            style={[sc.iconBtn, { borderColor: c.border }]}
+          >
+            <Ionicons name="pricetag-outline" size={16} color={c.text} />
+            {isWide && <Text size="sm" weight="medium">Categories</Text>}
+          </Pressable>
+          <Pressable onPress={() => setEditing(null)} style={[sc.newBtn, { backgroundColor: c.primary }]}>
+            <Ionicons name="add" size={16} color="#fff" />
+            {isWide && <Text size="sm" weight="medium" style={{ color: '#fff' }}>New event</Text>}
+            {!isWide && <Text size="sm" weight="medium" style={{ color: '#fff' }}>New</Text>}
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.tabRow}
@@ -1494,7 +1597,7 @@ export default function AdminEventsScreen() {
       )}
 
       <ScrollView
-        contentContainerStyle={isWide ? undefined : sc.mobileScroll}
+        contentContainerStyle={isWide ? undefined : [sc.mobileScroll, { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refresh} onRefresh={() => { setRefresh(true); load(); }} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}>
         {displayed.length === 0 ? (
@@ -1544,12 +1647,14 @@ export default function AdminEventsScreen() {
 }
 
 const sc = StyleSheet.create({
-  header:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
-  importBtn:   { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
-  newBtn:      { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
-  tabRow:      { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
-  tabChip:     { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
-  tableHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
-  mobileScroll:{ padding: 14, gap: 10, paddingBottom: 48 },
-  empty:       { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+  header:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  importBtn:     { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
+  iconBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9 },
+  newBtn:        { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  tabRow:        { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
+  tabChip:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  tableHeader:   { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
+  mobileScroll:  { padding: 14, gap: 10, paddingBottom: 48 },
+  empty:         { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
 });

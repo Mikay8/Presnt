@@ -148,7 +148,7 @@ export default function OrganizationAdminScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
+        contentContainerStyle={[styles.scroll, isWide && styles.scrollWide, !isWide && { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >

@@ -11,6 +11,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Clipboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -73,6 +74,12 @@ function SectionHeader({ label }: { label: string }) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
+function generateJoinCode(name: string): string {
+  const base = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  const rand  = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `${base}-${rand}`;
+}
+
 export default function AdminSettingsScreen() {
   const { theme }    = useThemeStore();
   const insets       = useSafeAreaInsets();
@@ -82,14 +89,19 @@ export default function AdminSettingsScreen() {
 
   const [displayName, setDisplayName] = useState(organization?.app_display_name ?? organization?.name ?? '');
   const [institution, setInstitution] = useState(organization?.institution ?? '');
-  const [saving, setSaving]           = useState(false);
-  const [dirty, setDirty]             = useState(false);
+  const [joinCode,    setJoinCode]    = useState(organization?.join_code ?? '');
+  const [saving,      setSaving]      = useState(false);
+  const [dirty,       setDirty]       = useState(false);
+  const [codeCopied,  setCodeCopied]  = useState(false);
+  const [codeSaving,  setCodeSaving]  = useState(false);
 
   useEffect(() => {
     setDisplayName(organization?.app_display_name ?? organization?.name ?? '');
     setInstitution(organization?.institution ?? '');
+    setJoinCode(organization?.join_code ?? '');
   }, [organization]);
 
+  const isAdmin    = membership?.role === 'admin' || membership?.role === 'org_admin';
   const isOrgAdmin = membership?.role === 'org_admin';
   const c = theme.colors;
 
@@ -115,6 +127,37 @@ export default function AdminSettingsScreen() {
     }
   }
 
+  async function handleSaveCode() {
+    const code = joinCode.trim().toUpperCase();
+    if (!code || !organization?.id) return;
+    setCodeSaving(true);
+    const { error } = await supabase
+      .from('organizations')
+      .update({ join_code: code, updated_at: new Date().toISOString() })
+      .eq('id', organization.id);
+    setCodeSaving(false);
+    if (error) {
+      Alert.alert('Error', 'Failed to update join code.');
+    } else {
+      // Patch the local store so the UI reflects the new code immediately
+      setMembership(membership, { ...organization, join_code: code });
+      Alert.alert('Updated', `Join code is now ${code}`);
+    }
+  }
+
+  function handleCopyCode() {
+    const code = organization?.join_code ?? joinCode;
+    if (!code) return;
+    Clipboard.setString(code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  }
+
+  function handleRegenerateCode() {
+    const base = organization?.name ?? 'CHAPTER';
+    setJoinCode(generateJoinCode(base));
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       {/* Header */}
@@ -130,7 +173,7 @@ export default function AdminSettingsScreen() {
 
       <ScrollView
         style={{ backgroundColor: c.background }}
-        contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}
+        contentContainerStyle={[styles.scroll, isWide && styles.scrollWide, !isWide && { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Account */}
@@ -193,7 +236,7 @@ export default function AdminSettingsScreen() {
           </>
         )}
 
-        {/* Chapter info (read-only for non-org-admin) */}
+        {/* Chapter info + join code */}
         <SectionHeader label="Chapter" />
         <Card style={{ paddingVertical: 0 }}>
           <SettingRow
@@ -205,13 +248,63 @@ export default function AdminSettingsScreen() {
             icon="school-outline"
             label="Institution"
             value={organization?.institution ?? '—'}
+            last={!isAdmin}
           />
-          <SettingRow
-            icon="key-outline"
-            label="Join Code"
-            value={organization?.join_code ?? '—'}
-            last
-          />
+
+          {/* Join code — editable for admins */}
+          {isAdmin && (
+            <View style={[styles.codeSection, { borderTopColor: c.border }]}>
+              <View style={styles.codeLabelRow}>
+                <Ionicons name="key-outline" size={18} color={c.textMuted} />
+                <View style={{ flex: 1 }}>
+                  <Text size="sm" weight="medium">Join Code</Text>
+                  <Text size="xs" color={c.textSubtle} style={{ marginTop: 1 }}>
+                    Members enter this to join your chapter
+                  </Text>
+                </View>
+                {/* Copy button */}
+                <Pressable onPress={handleCopyCode} style={[styles.codeAction, { borderColor: c.border }]}>
+                  <Ionicons name={codeCopied ? 'checkmark' : 'copy-outline'} size={15} color={codeCopied ? '#22C55E' : c.textMuted} />
+                </Pressable>
+                {/* Regenerate button */}
+                <Pressable onPress={handleRegenerateCode} style={[styles.codeAction, { borderColor: c.border }]}>
+                  <Ionicons name="refresh-outline" size={15} color={c.textMuted} />
+                </Pressable>
+              </View>
+
+              {/* Editable input */}
+              <View style={styles.codeInputRow}>
+                <TextInput
+                  value={joinCode}
+                  onChangeText={(v) => setJoinCode(v.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                  placeholder="e.g. KAPPA-ABC"
+                  placeholderTextColor={c.textSubtle}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  style={[styles.codeInput, {
+                    backgroundColor: c.background,
+                    borderColor: c.border,
+                    color: c.text,
+                    fontFamily: theme.typography.fontFamily.medium,
+                  }]}
+                />
+                <Pressable
+                  onPress={handleSaveCode}
+                  disabled={codeSaving || !joinCode.trim() || joinCode.trim() === (organization?.join_code ?? '')}
+                  style={({ pressed }) => [
+                    styles.codeSaveBtn,
+                    { backgroundColor: c.primary, opacity: pressed ? 0.75 : 1 },
+                    (codeSaving || !joinCode.trim() || joinCode.trim() === (organization?.join_code ?? '')) && { opacity: 0.4 },
+                  ]}
+                >
+                  {codeSaving
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text size="xs" weight="medium" style={{ color: '#fff' }}>Save</Text>
+                  }
+                </Pressable>
+              </View>
+            </View>
+          )}
         </Card>
 
         {/* Roles */}
@@ -247,6 +340,14 @@ const styles = StyleSheet.create({
   header:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
   scroll:    { padding: 20, gap: 12, paddingBottom: 48 },
   scrollWide:{ paddingHorizontal: 48, maxWidth: 760, alignSelf: 'center', width: '100%' },
+
+  // Join code section inside the Chapter card
+  codeSection:  { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 10 },
+  codeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  codeAction:   { width: 32, height: 32, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  codeInputRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  codeInput:    { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, letterSpacing: 1 },
+  codeSaveBtn:  { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 4 },
 

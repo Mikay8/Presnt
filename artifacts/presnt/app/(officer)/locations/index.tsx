@@ -569,7 +569,7 @@ export default function LocationsScreen() {
       )}
 
       <ScrollView
-        contentContainerStyle={[ls.grid, isWide && ls.gridWide]}
+        contentContainerStyle={[ls.grid, isWide && ls.gridWide, !isWide && { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refresh} onRefresh={() => { setRefresh(true); load(); }} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >

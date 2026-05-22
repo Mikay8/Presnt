@@ -371,6 +371,7 @@ export default function AdminRolesScreen() {
           styles.scroll,
           isWide && styles.scrollWide,
           roles.length === 0 && { flex: 1 },
+          !isWide && { paddingBottom: insets.bottom + 24 },
         ]}
         refreshControl={
           <RefreshControl

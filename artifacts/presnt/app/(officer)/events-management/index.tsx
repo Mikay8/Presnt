@@ -70,6 +70,8 @@ type Event = Tables<'events'> & {
   recurrence_rule?:   string | null;
 };
 
+type EventCategory = { id: string; name: string; color: string };
+
 type OrgLocation = {
   id:            string;
   name:          string;
@@ -106,6 +108,7 @@ type EventFormState = {
   location_text:       string;
   location_lat:        number | null;
   location_lng:        number | null;
+  category_id:         string | null;
   // Recurrence
   recurrence:          RecurrenceRule;
   // Description
@@ -134,6 +137,7 @@ const BLANK_FORM: EventFormState = {
   hasEndTime:   true,
   location_type: 'in-person', meeting_url: '',
   location_id: null, location_text: '', location_lat: null, location_lng: null,
+  category_id: null,
   recurrence:  { ...BLANK_RULE },
   description: '',
   required_attendance: true, qr_checkin: true, geofence_required: true,
@@ -342,6 +346,7 @@ function formFromEvent(e: Event): EventFormState {
     location_text:  e.location ?? '',
     location_lat:   null,
     location_lng:   null,
+    category_id:    (e as any).category_id ?? null,
     recurrence:     { ...BLANK_RULE },
     description:    e.description ?? '',
     required_attendance: !!(e as any).is_mandatory,
@@ -598,8 +603,23 @@ function EventForm({
   const [savedLoc,       setSavedLoc]       = useState<OrgLocation | null>(null);
   const [confirmDelete,  setConfirmDelete]  = useState<'single' | 'recurring' | null>(null);
   const [codeGenerating, setCodeGenerating] = useState(false);
+  const [categories,     setCategories]     = useState<EventCategory[]>([]);
+  const [showCatMenu,    setShowCatMenu]    = useState(false);
   const codeError    = codeErrorMsg ?? null;
   const setCodeError = onClearCodeError ? (_: null) => onClearCodeError() : (_: null) => {};
+
+  // Load categories when the form opens
+  useEffect(() => {
+    if (visible && orgId) {
+      supabase
+        .from('event_categories')
+        .select('id, name, color')
+        .eq('org_id', orgId)
+        .eq('is_deleted', false)
+        .order('name')
+        .then(({ data }) => setCategories((data ?? []) as EventCategory[]));
+    }
+  }, [visible, orgId]);
 
   useEffect(() => {
     if (visible) {
@@ -843,6 +863,68 @@ function EventForm({
               />
             </View>
           </View>
+        </View>
+
+        {/* ── CATEGORY ── */}
+        <View style={{ marginTop: 14, zIndex: showCatMenu ? 200 : 1 }}>
+          <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>CATEGORY</Text>
+          <Pressable
+            onPress={() => setShowCatMenu(!showCatMenu)}
+            style={[inputStyle, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, marginBottom: 0 }]}
+          >
+            {form.category_id && categories.find(cat => cat.id === form.category_id) ? (() => {
+              const cat = categories.find(c2 => c2.id === form.category_id)!;
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
+                  <Text size="sm" color={c.text}>{cat.name}</Text>
+                </View>
+              );
+            })() : (
+              <Text size="sm" color={c.textSubtle}>None</Text>
+            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {form.category_id && (
+                <Pressable onPress={(e) => { e.stopPropagation?.(); set('category_id')(null); setShowCatMenu(false); }} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={c.textSubtle} />
+                </Pressable>
+              )}
+              <Ionicons name={showCatMenu ? 'chevron-up' : 'chevron-down'} size={14} color={c.textSubtle} />
+            </View>
+          </Pressable>
+          {showCatMenu && (
+            <View style={[ef.dropdown, { backgroundColor: c.surface, borderColor: c.border }]}>
+              <Pressable
+                onPress={() => { set('category_id')(null); setShowCatMenu(false); }}
+                style={[ef.dropdownItem, { borderBottomColor: c.border }]}
+              >
+                <Text size="sm" color={c.textMuted}>None</Text>
+              </Pressable>
+              {categories.map(cat => (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => { set('category_id')(cat.id); setShowCatMenu(false); }}
+                  style={[ef.dropdownItem, { borderBottomColor: c.border }]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
+                    <Text size="sm" color={form.category_id === cat.id ? c.primary : c.text}
+                      weight={form.category_id === cat.id ? 'medium' : 'regular'}>
+                      {cat.name}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+              {categories.length === 0 && (
+                <Pressable
+                  onPress={() => { setShowCatMenu(false); router.push('/(officer)/categories' as any); }}
+                  style={[ef.dropdownItem, { borderBottomColor: c.border }]}
+                >
+                  <Text size="sm" color={c.primary}>+ Create categories</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={[ef.divider, { backgroundColor: c.border, marginTop: 20 }]} />
@@ -1624,6 +1706,7 @@ export default function OfficerEventsScreen() {
         checkin_grace_minutes: form.checkin_grace_minutes.trim() !== '' ? parseInt(form.checkin_grace_minutes) || null : null,
         is_public:             form.is_public,
         event_code:            form.event_code.trim() || null,
+        category_id:           form.category_id ?? null,
       };
 
       const editingEvent: Event | null = editTarget === false || editTarget === null ? null : editTarget;
@@ -1724,13 +1807,27 @@ export default function OfficerEventsScreen() {
     <View style={{ flex: 1, backgroundColor: c.background }}>
       {/* Header */}
       <View style={[sc.header, { paddingTop: isWide ? 20 : insets.top + 12, backgroundColor: c.background, borderBottomColor: c.border }]}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text size="xxl" weight="bold">Events</Text>
           <Text size="xs" color={c.textMuted} style={{ marginTop: 2 }}>
             {upcomingCount} upcoming · {pastCount} past
           </Text>
         </View>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={sc.headerActions}>
+          <Pressable
+            onPress={() => router.push('/(officer)/locations' as any)}
+            style={[sc.iconBtn, { borderColor: c.border }]}
+          >
+            <Ionicons name="location-outline" size={16} color={c.text} />
+            {isWide && <Text size="sm" weight="medium">Locations</Text>}
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/(officer)/categories' as any)}
+            style={[sc.iconBtn, { borderColor: c.border }]}
+          >
+            <Ionicons name="pricetag-outline" size={16} color={c.text} />
+            {isWide && <Text size="sm" weight="medium">Categories</Text>}
+          </Pressable>
           {canManage && (
             <Pressable
               onPress={() => setEdit(null)}
@@ -1738,7 +1835,7 @@ export default function OfficerEventsScreen() {
             >
               <Ionicons name="add" size={16} color="#fff" />
               <Text size="sm" weight="medium" style={{ color: '#fff' }}>
-                {isWide ? '+ New event' : ''}
+                {isWide ? 'New event' : 'New'}
               </Text>
             </Pressable>
           )}
@@ -1787,7 +1884,7 @@ export default function OfficerEventsScreen() {
 
       {/* List */}
       <ScrollView
-        contentContainerStyle={isWide ? undefined : sc.mobileScroll}
+        contentContainerStyle={isWide ? undefined : [sc.mobileScroll, { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefresh(true); load(); }} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >
@@ -1843,11 +1940,13 @@ export default function OfficerEventsScreen() {
 }
 
 const sc = StyleSheet.create({
-  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
-  primaryBtn:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
-  tabRow:      { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
-  tabChip:     { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
-  tableHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
-  mobileScroll:{ padding: 14, gap: 10, paddingBottom: 48 },
-  empty:       { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+  header:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, gap: 10 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  iconBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9 },
+  primaryBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
+  tabRow:        { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
+  tabChip:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  tableHeader:   { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
+  mobileScroll:  { padding: 14, gap: 10, paddingBottom: 48 },
+  empty:         { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
 });

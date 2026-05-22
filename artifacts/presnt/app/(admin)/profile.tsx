@@ -59,7 +59,7 @@ export default function AdminProfileScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
         {/* Avatar + name */}
         <View style={styles.avatarSection}>
           <View style={[styles.avatar, { backgroundColor: c.primary + '22', borderColor: c.primary }]}>

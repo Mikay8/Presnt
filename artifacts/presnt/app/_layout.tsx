@@ -9,7 +9,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Redirect, Stack, router, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,6 +33,8 @@ const queryClient = new QueryClient();
 function UserViewBanner() {
   const { session, stop } = useUserViewStore();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
   if (!session) return null;
 
   function handleExit() {
@@ -44,10 +46,15 @@ function UserViewBanner() {
     : session.role === 'officer' ? 'Officer'
     : 'Member';
 
+  // On mobile the tab bar is ~49 px tall — lift the banner above it.
+  // On desktop the tab bar is hidden, so no extra offset needed.
+  const TAB_BAR_HEIGHT = isWide ? 0 : 49;
+  const bottomOffset = insets.bottom + 12 + TAB_BAR_HEIGHT;
+
   return (
     <View style={{
       position: 'absolute',
-      bottom: insets.bottom + 12,
+      bottom: bottomOffset,
       left: 16,
       right: 16,
       flexDirection: 'row',
@@ -315,6 +322,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(admin)"     />
                 <Stack.Screen name="(superuser)" />
                 <Stack.Screen name="super-user"  />
+                <Stack.Screen name="logout"      />
                 <Stack.Screen name="+not-found"  />
               </Stack>
               <RootLayoutNav />

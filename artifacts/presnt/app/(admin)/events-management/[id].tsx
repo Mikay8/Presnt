@@ -27,6 +27,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui';
+import { QRCheckinModal } from '@/lib/QRCheckin';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -222,6 +223,7 @@ export default function AdminEventDetailScreen() {
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<TabKey>('registrations');
   const [addModal,  setAddModal]  = useState<TabKey | null>(null);
+  const [showScan,  setShowScan]  = useState(false);
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -555,18 +557,29 @@ export default function AdminEventDetailScreen() {
           );
         })}
 
-        {/* Add button */}
-        <Pressable
-          onPress={() => setAddModal(tab)}
-          style={[tp.addBtn, { backgroundColor: c.primary, marginLeft: 'auto', marginRight: 16, marginVertical: 8 }]}
-        >
-          <Ionicons name="person-add-outline" size={14} color="#fff" />
-          <Text size="xs" weight="medium" style={{ color: '#fff' }}>Add</Text>
-        </Pressable>
+        {/* Action buttons — right side of tab bar */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto', marginRight: 16, marginVertical: 8 }}>
+          {detailStatus === 'ongoing' && (
+            <Pressable
+              onPress={() => setShowScan(true)}
+              style={[tp.addBtn, { backgroundColor: '#F59E0B18', borderWidth: 1, borderColor: '#F59E0B' }]}
+            >
+              <Ionicons name="qr-code-outline" size={14} color="#F59E0B" />
+              <Text size="xs" weight="medium" style={{ color: '#F59E0B' }}>Scan QR</Text>
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => setAddModal(tab)}
+            style={[tp.addBtn, { backgroundColor: c.primary }]}
+          >
+            <Ionicons name="person-add-outline" size={14} color="#fff" />
+            <Text size="xs" weight="medium" style={{ color: '#fff' }}>Add</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* List */}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: isWide ? 40 : insets.bottom + 40 }}>
         {tab === 'registrations' ? <RsvpList /> : <AttendList />}
       </ScrollView>
     </View>
@@ -631,6 +644,15 @@ export default function AdminEventDetailScreen() {
         onAdd={addAttendance}
         onClose={() => setAddModal(null)}
       />
+
+      {id && (
+        <QRCheckinModal
+          visible={showScan}
+          eventId={id}
+          orgId={orgId}
+          onClose={() => { setShowScan(false); load(); }}
+        />
+      )}
     </View>
   );
 }

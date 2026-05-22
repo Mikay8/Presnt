@@ -464,7 +464,7 @@ export default function OfficerMembersScreen() {
 
       {/* List */}
       <ScrollView
-        contentContainerStyle={isWide ? ms.desktopScroll : ms.mobileScroll}
+        contentContainerStyle={isWide ? ms.desktopScroll : [ms.mobileScroll, { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refresh} onRefresh={() => { setRefresh(true); load(); }} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >

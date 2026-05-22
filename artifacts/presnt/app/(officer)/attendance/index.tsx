@@ -463,7 +463,7 @@ export default function AttendanceScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={as.scroll}
+        contentContainerStyle={[as.scroll, !isWide && { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={refresh} onRefresh={() => { setRefresh(true); load(); }} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >
