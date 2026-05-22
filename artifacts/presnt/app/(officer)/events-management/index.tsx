@@ -13,7 +13,7 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -99,6 +99,8 @@ type EventFormState = {
   endTimeObj:          Date;
   hasEndTime:          boolean;
   // Location
+  location_type:       'in-person' | 'remote';
+  meeting_url:         string;
   location_id:         string | null;
   location_text:       string;
   location_lat:        number | null;
@@ -108,12 +110,14 @@ type EventFormState = {
   // Description
   description:         string;
   // Settings
-  required_attendance: boolean;
-  qr_checkin:          boolean;
-  geofence_required:   boolean;
-  allow_excuses:       boolean;
-  rsvp_required:       boolean;
-  points:              string;
+  required_attendance:  boolean;
+  qr_checkin:           boolean;
+  geofence_required:    boolean;
+  allow_excuses:        boolean;
+  rsvp_required:        boolean;
+  points:               string;
+  checkin_open_minutes: string;   // minutes before start; '' = disabled
+  checkin_grace_minutes:string;   // minutes grace after start/end; '' = disabled
 };
 
 const now = new Date();
@@ -125,12 +129,15 @@ const BLANK_FORM: EventFormState = {
   startTimeObj: (() => { const d = new Date(now); d.setHours(18, 0, 0, 0); return d; })(),
   endTimeObj:   (() => { const d = new Date(now); d.setHours(20, 0, 0, 0); return d; })(),
   hasEndTime:   true,
+  location_type: 'in-person', meeting_url: '',
   location_id: null, location_text: '', location_lat: null, location_lng: null,
   recurrence:  { ...BLANK_RULE },
   description: '',
   required_attendance: true, qr_checkin: true, geofence_required: true,
   allow_excuses: true, rsvp_required: false,
   points: '2',
+  checkin_open_minutes:  '15',
+  checkin_grace_minutes: '15',
 };
 
 const DESKTOP = 768;
@@ -147,31 +154,128 @@ function fmtDate(iso: string) {
   };
 }
 
-function isUpcoming(event: Event) { return new Date(event.start_time) > new Date(); }
+/**
+ * Given an RRULE string and a base start date, return the next occurrence
+ * on-or-after `now`. Returns null if the series has ended or we can't parse.
+ * Handles FREQ=WEEKLY/MONTHLY with BYDAY, INTERVAL, COUNT, UNTIL.
+ */
+function nextOccurrenceAfter(rruleStr: string, startIso: string, now: Date): Date | null {
+  try {
+    // Strip leading "RRULE:" prefix
+    const raw = rruleStr.replace(/^RRULE:/i, '');
+    const params: Record<string, string> = {};
+    raw.split(';').forEach(p => {
+      const [k, v] = p.split('=');
+      if (k && v !== undefined) params[k.toUpperCase()] = v;
+    });
+
+    const freq     = params['FREQ']?.toUpperCase();
+    const interval = parseInt(params['INTERVAL'] ?? '1') || 1;
+    const count    = params['COUNT'] ? parseInt(params['COUNT']) : null;
+    const until    = params['UNTIL'] ? new Date(
+      params['UNTIL'].replace(/^(\d{4})(\d{2})(\d{2}).*/, '$1-$2-$3')
+    ) : null;
+    const byDay    = params['BYDAY']?.split(',') ?? [];
+
+    const base = new Date(startIso);
+    // Walk up to 5 years of occurrences
+    const limit = new Date(now.getTime() + 5 * 365 * 24 * 3600 * 1000);
+    let   occ   = new Date(base);
+    let   n     = 0;
+
+    while (occ <= limit) {
+      if (until && occ > until) return null;
+      if (count !== null && n >= count) return null;
+
+      // Check if this occurrence matches BYDAY (for weekly)
+      let matches = true;
+      if (byDay.length && (freq === 'WEEKLY')) {
+        const DAY_MAP: Record<string,number> = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+        matches = byDay.some(d => DAY_MAP[d.replace(/^[-\d]+/, '')] === occ.getDay());
+      }
+
+      if (matches && occ >= now) return occ;
+
+      // Advance
+      if (freq === 'WEEKLY') {
+        if (byDay.length > 1) {
+          // Move one day at a time within the week cycle
+          occ = new Date(occ.getTime() + 24 * 3600 * 1000);
+          // When we've wrapped a full interval*week cycle back to base day, count it
+          const daysDiff = Math.round((occ.getTime() - base.getTime()) / (24 * 3600 * 1000));
+          if (daysDiff % (7 * interval) === 0) n++;
+        } else {
+          occ = new Date(occ.getTime() + 7 * interval * 24 * 3600 * 1000);
+          n++;
+        }
+      } else if (freq === 'MONTHLY') {
+        occ = new Date(occ);
+        occ.setMonth(occ.getMonth() + interval);
+        n++;
+      } else if (freq === 'DAILY') {
+        occ = new Date(occ.getTime() + interval * 24 * 3600 * 1000);
+        n++;
+      } else {
+        // Unsupported — bail
+        return null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** True if the event has an upcoming occurrence (accounts for recurrence). */
+function isUpcoming(event: Event): boolean {
+  const now = new Date();
+  const rrule = (event as any).recurrence_rule as string | null;
+  if (rrule) {
+    return nextOccurrenceAfter(rrule, event.start_time, now) !== null;
+  }
+  return new Date(event.start_time) > now;
+}
+
+/** Display date: for recurring events show next occurrence, else base start. */
+function displayDate(event: Event): string {
+  const rrule = (event as any).recurrence_rule as string | null;
+  if (rrule) {
+    const next = nextOccurrenceAfter(rrule, event.start_time, new Date());
+    if (next) return next.toISOString();
+  }
+  return event.start_time;
+}
 
 function formFromEvent(e: Event): EventFormState {
-  const start = new Date(e.start_time);
-  const end   = e.end_time ? new Date(e.end_time) : new Date(start.getTime() + 2 * 3600000);
+  const start      = new Date(e.start_time);
+  const end        = e.end_time ? new Date(e.end_time) : new Date(start.getTime() + 2 * 3600000);
+  const meetingUrl = (e as any).meeting_url ?? '';
   return {
     title:          e.title,
     type:           e.type,
     is_mandatory:   !!(e as any).is_mandatory,
+    isMultiDay:     false,
     dateObj:        start,
+    dateRange:      { start, end },
     startTimeObj:   start,
     endTimeObj:     end,
     hasEndTime:     !!e.end_time,
+    location_type:  meetingUrl ? 'remote' : 'in-person',
+    meeting_url:    meetingUrl,
     location_id:    (e as any).location_id ?? null,
     location_text:  e.location ?? '',
     location_lat:   null,
     location_lng:   null,
-    recurrence:     { ...BLANK_RULE }, // TODO: parse recurrence_rule back
+    recurrence:     { ...BLANK_RULE },
     description:    e.description ?? '',
-    required_attendance: true,
+    required_attendance: !!(e as any).is_mandatory,
     qr_checkin:     !!(e as any).qr_checkin,
     geofence_required: !!(e as any).geofence_required,
-    allow_excuses:  (e as any).allow_excuses !== false,
-    rsvp_required:  !!e.rsvp_required,
-    points:         String((e as any).points ?? 2),
+    allow_excuses:         (e as any).allow_excuses !== false,
+    rsvp_required:         !!e.rsvp_required,
+    points:                String((e as any).points ?? 2),
+    checkin_open_minutes:  (e as any).checkin_open_minutes  != null ? String((e as any).checkin_open_minutes)  : '',
+    checkin_grace_minutes: (e as any).checkin_grace_minutes != null ? String((e as any).checkin_grace_minutes) : '',
   };
 }
 
@@ -380,14 +484,16 @@ function EventForm({
   orgId,
   onClose,
   onSave,
+  onDelete,
   saving,
 }: {
-  visible:  boolean;
-  initial:  Event | null;
-  orgId:    string;
-  onClose:  () => void;
-  onSave:   (form: EventFormState) => void;
-  saving:   boolean;
+  visible:   boolean;
+  initial:   Event | null;
+  orgId:     string;
+  onClose:   () => void;
+  onSave:    (form: EventFormState) => void;
+  onDelete:  (event: Event, mode: 'this' | 'series') => void;
+  saving:    boolean;
 }) {
   const { theme } = useThemeStore();
   const { width } = useWindowDimensions();
@@ -406,6 +512,7 @@ function EventForm({
   const [showMapPicker,  setShowMapPicker]  = useState(false);
   const [showTypeMenu,   setShowTypeMenu]   = useState(false);
   const [savedLoc,       setSavedLoc]       = useState<OrgLocation | null>(null);
+  const [confirmDelete,  setConfirmDelete]  = useState<'single' | 'recurring' | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -446,6 +553,52 @@ function EventForm({
         ))}
       </View>
 
+      {/* ── Check-in window ── */}
+      <View style={[ef.panelSection, { borderTopWidth: 1, borderTopColor: c.border, paddingTop: 14 }]}>
+        <Text size="xs" weight="medium" color={c.textMuted}
+          style={{ textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+          Check-in window
+        </Text>
+
+        {/* Open before */}
+        <Text size="xs" color={c.textSubtle} style={{ marginBottom: 5 }}>
+          Opens before start (minutes)
+        </Text>
+        <View style={[ef.checkinRow, { borderColor: c.border, backgroundColor: c.surfaceAlt }]}>
+          <Ionicons name="time-outline" size={15} color={c.textSubtle} />
+          <TextInput
+            style={{ flex: 1, fontSize: 14, color: c.text }}
+            value={form.checkin_open_minutes}
+            onChangeText={set('checkin_open_minutes')}
+            keyboardType="number-pad"
+            placeholder="e.g. 15"
+            placeholderTextColor={c.textSubtle}
+          />
+          <Text size="xs" color={c.textSubtle}>min</Text>
+        </View>
+
+        {/* Grace after */}
+        <Text size="xs" color={c.textSubtle} style={{ marginTop: 10, marginBottom: 5 }}>
+          Grace period after start/end (minutes)
+        </Text>
+        <View style={[ef.checkinRow, { borderColor: c.border, backgroundColor: c.surfaceAlt }]}>
+          <Ionicons name="hourglass-outline" size={15} color={c.textSubtle} />
+          <TextInput
+            style={{ flex: 1, fontSize: 14, color: c.text }}
+            value={form.checkin_grace_minutes}
+            onChangeText={set('checkin_grace_minutes')}
+            keyboardType="number-pad"
+            placeholder="e.g. 15"
+            placeholderTextColor={c.textSubtle}
+          />
+          <Text size="xs" color={c.textSubtle}>min</Text>
+        </View>
+        <Text size="xs" color={c.textSubtle} style={{ marginTop: 6, lineHeight: 16 }}>
+          Leave blank to use no pre-open window or no grace period.
+        </Text>
+      </View>
+
+      {/* ── Points ── */}
       <View style={[ef.panelSection, { marginTop: 0, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 14 }]}>
         <Text size="xs" weight="medium" color={c.textMuted}
           style={{ textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
@@ -647,61 +800,117 @@ function EventForm({
         {/* ── WHERE ── */}
         <Text size="xs" weight="medium" color={c.textMuted} style={ef.sectionLabel}>WHERE</Text>
 
-        {/* Saved location picker */}
-        <Pressable
-          onPress={() => setShowLocPicker(true)}
-          style={[ef.locRow, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
-        >
-          <Ionicons name="business-outline" size={16} color={c.primary} />
-          <View style={{ flex: 1 }}>
-            {savedLoc ? (
-              <>
-                <Text size="sm" weight="medium">{savedLoc.name}</Text>
-                {savedLoc.address && <Text size="xs" color={c.textSubtle}>{savedLoc.address}</Text>}
-                {savedLoc.radius_meters && (
-                  <Text size="xs" color={c.textSubtle}>Geofence: {savedLoc.radius_meters}m</Text>
-                )}
-              </>
-            ) : form.location_text ? (
-              <Text size="sm" color={c.text}>{form.location_text}</Text>
-            ) : (
-              <Text size="sm" color={c.textSubtle}>Choose from saved locations</Text>
-            )}
-          </View>
-          <Text size="xs" weight="medium" color={c.primary}>
-            {savedLoc || form.location_text ? 'Change' : 'Select'}
-          </Text>
-        </Pressable>
-
-        {/* Or — pick on map */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
-          <View style={[ef.orLine, { backgroundColor: c.border }]} />
-          <Text size="xs" color={c.textSubtle}>or</Text>
-          <View style={[ef.orLine, { backgroundColor: c.border }]} />
+        {/* In-person / Remote toggle */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+          {(['in-person', 'remote'] as const).map((mode) => {
+            const active = form.location_type === mode;
+            return (
+              <Pressable
+                key={mode}
+                onPress={() => set('location_type')(mode)}
+                style={[ef.modeChip, {
+                  backgroundColor: active ? c.primary : c.surfaceAlt,
+                  borderColor:     active ? c.primary : c.border,
+                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                }]}
+              >
+                <Ionicons
+                  name={mode === 'remote' ? 'videocam-outline' : 'location-outline'}
+                  size={14}
+                  color={active ? '#fff' : c.textSubtle}
+                />
+                <Text size="sm" weight={active ? 'bold' : 'regular'}
+                  color={active ? '#fff' : c.text}>
+                  {mode === 'remote' ? 'Remote' : 'In-Person'}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-        <Pressable
-          onPress={() => setShowMapPicker(true)}
-          style={[ef.mapBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
-        >
-          <Ionicons name="map-outline" size={15} color={c.primary} />
-          <Text size="sm" weight="medium" color={c.text}>
-            {form.location_lat ? 'Adjust pin on map' : 'Drop a pin on map'}
-          </Text>
-          {form.location_lat && (
-            <Text size="xs" color={c.textSubtle} style={{ marginLeft: 'auto' }}>
-              {form.location_lat.toFixed(4)}, {form.location_lng?.toFixed(4)}
-            </Text>
-          )}
-        </Pressable>
 
-        {/* Free text */}
-        <TextInput
-          style={[inputStyle, { marginTop: 10, paddingVertical: 11 }]}
-          value={form.location_text}
-          onChangeText={set('location_text')}
-          placeholder="Or type a location name / address"
-          placeholderTextColor={c.textSubtle}
-        />
+        {form.location_type === 'remote' ? (
+          /* ── Remote: meeting URL input ── */
+          <>
+            <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>MEETING LINK</Text>
+            <View style={[ef.urlRow, { backgroundColor: c.surfaceAlt, borderColor: form.meeting_url ? c.primary : c.border }]}>
+              <Ionicons name="link-outline" size={16} color={form.meeting_url ? c.primary : c.textSubtle} />
+              <TextInput
+                style={{ flex: 1, fontSize: 14, color: c.text }}
+                value={form.meeting_url}
+                onChangeText={set('meeting_url')}
+                placeholder="https://zoom.us/j/… or meet.google.com/…"
+                placeholderTextColor={c.textSubtle}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+              {!!form.meeting_url && (
+                <Pressable onPress={() => set('meeting_url')('')}>
+                  <Ionicons name="close-circle" size={16} color={c.textSubtle} />
+                </Pressable>
+              )}
+            </View>
+          </>
+        ) : (
+          /* ── In-Person: saved location + map ── */
+          <>
+            {/* Saved location picker */}
+            <Pressable
+              onPress={() => setShowLocPicker(true)}
+              style={[ef.locRow, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+            >
+              <Ionicons name="business-outline" size={16} color={c.primary} />
+              <View style={{ flex: 1 }}>
+                {savedLoc ? (
+                  <>
+                    <Text size="sm" weight="medium">{savedLoc.name}</Text>
+                    {savedLoc.address && <Text size="xs" color={c.textSubtle}>{savedLoc.address}</Text>}
+                    {savedLoc.radius_meters && (
+                      <Text size="xs" color={c.textSubtle}>Geofence: {savedLoc.radius_meters}m</Text>
+                    )}
+                  </>
+                ) : form.location_text ? (
+                  <Text size="sm" color={c.text}>{form.location_text}</Text>
+                ) : (
+                  <Text size="sm" color={c.textSubtle}>Choose from saved locations</Text>
+                )}
+              </View>
+              <Text size="xs" weight="medium" color={c.primary}>
+                {savedLoc || form.location_text ? 'Change' : 'Select'}
+              </Text>
+            </Pressable>
+
+            {/* Or — pick on map */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
+              <View style={[ef.orLine, { backgroundColor: c.border }]} />
+              <Text size="xs" color={c.textSubtle}>or</Text>
+              <View style={[ef.orLine, { backgroundColor: c.border }]} />
+            </View>
+            <Pressable
+              onPress={() => setShowMapPicker(true)}
+              style={[ef.mapBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+            >
+              <Ionicons name="map-outline" size={15} color={c.primary} />
+              <Text size="sm" weight="medium" color={c.text}>
+                {form.location_lat ? 'Adjust pin on map' : 'Drop a pin on map'}
+              </Text>
+              {form.location_lat && (
+                <Text size="xs" color={c.textSubtle} style={{ marginLeft: 'auto' }}>
+                  {form.location_lat.toFixed(4)}, {form.location_lng?.toFixed(4)}
+                </Text>
+              )}
+            </Pressable>
+
+            {/* Free text */}
+            <TextInput
+              style={[inputStyle, { marginTop: 10, paddingVertical: 11 }]}
+              value={form.location_text}
+              onChangeText={set('location_text')}
+              placeholder="Or type a location name / address"
+              placeholderTextColor={c.textSubtle}
+            />
+          </>
+        )}
 
         <View style={[ef.divider, { backgroundColor: c.border, marginTop: 20 }]} />
 
@@ -722,7 +931,12 @@ function EventForm({
             onPress={handleDelete}
             style={[ef.deleteBtn, { borderColor: '#EF4444', marginTop: 20 }]}
           >
-            <Text size="sm" weight="medium" color="#EF4444">Delete event</Text>
+            <Ionicons name="trash-outline" size={14} color="#EF4444" />
+            <Text size="sm" weight="medium" color="#EF4444">
+              {(initial as any)?.recurrence_rule || (initial as any)?.is_occurrence
+                ? 'Delete event…'
+                : 'Delete event'}
+            </Text>
           </Pressable>
         )}
       </View>
@@ -730,17 +944,10 @@ function EventForm({
   }
 
   function handleDelete() {
-    Alert.alert('Delete Event', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          if (!initial) return;
-          await supabase.from('events').update({ is_deleted: true }).eq('id', initial.id);
-          onClose();
-        },
-      },
-    ]);
+    if (!initial) return;
+    const isMaster     = !!(initial as any).recurrence_rule && !(initial as any).is_occurrence;
+    const isOccurrence = !!(initial as any).is_occurrence;
+    setConfirmDelete(isMaster || isOccurrence ? 'recurring' : 'single');
   }
 
   return (
@@ -798,11 +1005,73 @@ function EventForm({
                 onPress={handleDelete}
                 style={[ef.deleteBtn, { borderColor: '#EF4444' }]}
               >
-                <Text size="sm" weight="medium" color="#EF4444">Delete event</Text>
+                <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                <Text size="sm" weight="medium" color="#EF4444">
+                  {(initial as any)?.recurrence_rule || (initial as any)?.is_occurrence
+                    ? 'Delete event…'
+                    : 'Delete event'}
+                </Text>
               </Pressable>
             )}
           </ScrollView>
         </View>
+      </Modal>
+
+      {/* ── Inline delete confirm (no Alert.alert — works on web) ── */}
+      <Modal
+        visible={confirmDelete !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmDelete(null)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
+          onPress={() => setConfirmDelete(null)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: c.surface, borderRadius: 16, padding: 24, width: 320, gap: 12 }}>
+              <Text size="md" weight="bold" color="#EF4444">
+                {confirmDelete === 'recurring' ? 'Delete recurring event' : 'Delete event'}
+              </Text>
+              <Text size="sm" color={c.textMuted} style={{ lineHeight: 20 }}>
+                {confirmDelete === 'recurring'
+                  ? 'Do you want to delete just this occurrence or the entire series?'
+                  : 'This cannot be undone.'}
+              </Text>
+              <View style={{ gap: 8, marginTop: 4 }}>
+                {confirmDelete === 'recurring' ? (
+                  <>
+                    <Pressable
+                      onPress={() => { setConfirmDelete(null); onDelete(initial!, 'this'); }}
+                      style={({ pressed }) => ({ borderWidth: 1, borderColor: '#EF4444', borderRadius: 10, paddingVertical: 12, alignItems: 'center', backgroundColor: pressed ? '#FEE2E2' : 'transparent' })}
+                    >
+                      <Text size="sm" weight="medium" color="#EF4444">This occurrence only</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { setConfirmDelete(null); onDelete(initial!, 'series'); }}
+                      style={({ pressed }) => ({ borderRadius: 10, paddingVertical: 12, alignItems: 'center', backgroundColor: pressed ? '#DC2626' : '#EF4444' })}
+                    >
+                      <Text size="sm" weight="bold" style={{ color: '#fff' }}>Entire series</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable
+                    onPress={() => { setConfirmDelete(null); onDelete(initial!, 'this'); }}
+                    style={({ pressed }) => ({ borderRadius: 10, paddingVertical: 12, alignItems: 'center', backgroundColor: pressed ? '#DC2626' : '#EF4444' })}
+                  >
+                    <Text size="sm" weight="bold" style={{ color: '#fff' }}>Delete</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  onPress={() => setConfirmDelete(null)}
+                  style={({ pressed }) => ({ borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingVertical: 12, alignItems: 'center', backgroundColor: pressed ? c.surfaceAlt : 'transparent' })}
+                >
+                  <Text size="sm" weight="medium">Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Start time picker */}
@@ -882,6 +1151,7 @@ const ef = StyleSheet.create({
   divider:     { height: 1, marginBottom: 16 },
   locRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 14 },
   mapBtn:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 4 },
+  urlRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
   orLine:      { flex: 1, height: 1 },
   deleteBtn:   { borderWidth: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   modeChip:    { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
@@ -892,6 +1162,7 @@ const ef = StyleSheet.create({
   panel:       { borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
   panelSection:{ padding: 16 },
   toggleRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+  checkinRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
 });
 
 // ─── Desktop Table Row ────────────────────────────────────────────────────────
@@ -908,14 +1179,17 @@ function EventTableRow({
   const { theme } = useThemeStore();
   const c = theme.colors;
   const [menuOpen, setMenuOpen] = useState(false);
-  const d = fmtDate(event.start_time);
+  const d = fmtDate(displayDate(event));
   const upcoming   = isUpcoming(event);
   const cancelled  = !!event.is_cancelled;
   const statusLabel = cancelled ? 'Cancelled' : upcoming ? 'Upcoming' : 'Past';
   const statusColor = cancelled ? '#EF4444' : upcoming ? '#22C55E' : c.textSubtle;
 
   return (
-    <View style={[dt.row, { borderBottomColor: c.border }]}>
+    <Pressable
+      onPress={() => router.push(`/(officer)/events-management/${event.id}` as any)}
+      style={({ pressed }) => [dt.row, { borderBottomColor: c.border, backgroundColor: pressed ? c.surfaceAlt : 'transparent' }]}
+    >
       <View style={[dt.dateBadge, { backgroundColor: c.surfaceAlt }]}>
         <Text size="xs" weight="medium" color={c.textSubtle}>{d.month}</Text>
         <Text size="md" weight="bold">{d.day}</Text>
@@ -932,32 +1206,39 @@ function EventTableRow({
           )}
         </View>
       </View>
-      <Text size="sm" color={c.textMuted} style={{ flex: 1 }} numberOfLines={1}>
-        {event.location ?? '—'}
-      </Text>
+      <View style={{ flex: 1 }}>
+        {(event as any).meeting_url ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="videocam-outline" size={13} color={c.primary} />
+            <Text size="sm" color={c.primary} numberOfLines={1}>Remote</Text>
+          </View>
+        ) : (
+          <Text size="sm" color={c.textMuted} numberOfLines={1}>{event.location ?? '—'}</Text>
+        )}
+      </View>
       <Text size="sm" color={c.textMuted} style={{ width: 60, textAlign: 'center' }}>—</Text>
       <View style={[dt.statusChip, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
         <Text size="xs" weight="medium" color={statusColor}>{statusLabel}</Text>
       </View>
       <View style={{ width: 36, alignItems: 'center', position: 'relative' }}>
-        <Pressable onPress={() => setMenuOpen(!menuOpen)} style={dt.menuBtn}>
+        <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }} style={dt.menuBtn}>
           <Text size="md" color={c.textSubtle}>···</Text>
         </Pressable>
         {menuOpen && (
           <View style={[dt.menu, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <Pressable onPress={() => { setMenuOpen(false); onEdit(event); }}
+            <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onEdit(event); }}
               style={[dt.menuItem, { borderBottomColor: c.border }]}>
               <Text size="sm">Edit</Text>
             </Pressable>
             {!cancelled && upcoming && (
-              <Pressable onPress={() => { setMenuOpen(false); onCancel(event); }} style={dt.menuItem}>
+              <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onCancel(event); }} style={dt.menuItem}>
                 <Text size="sm" color="#EF4444">Cancel</Text>
               </Pressable>
             )}
           </View>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -976,14 +1257,14 @@ const dt = StyleSheet.create({
 function EventCard({ event, onEdit }: { event: Event; onEdit: (e: Event) => void }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
-  const d = fmtDate(event.start_time);
+  const d = fmtDate(displayDate(event));
   const upcoming  = isUpcoming(event);
   const cancelled = !!event.is_cancelled;
   const statusColor = cancelled ? '#EF4444' : upcoming ? c.primary : c.textSubtle;
 
   return (
     <Pressable
-      onPress={() => onEdit(event)}
+      onPress={() => router.push(`/(officer)/events-management/${event.id}` as any)}
       style={[mc.card, { backgroundColor: c.surface, borderColor: c.border }]}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -993,7 +1274,21 @@ function EventCard({ event, onEdit }: { event: Event; onEdit: (e: Event) => void
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text size="sm" weight="medium">{event.title}</Text>
-          <Text size="xs" color={c.textSubtle}>{d.time} · {event.location ?? event.type}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text size="xs" color={c.textSubtle}>{d.time}</Text>
+              {(event as any).meeting_url ? (
+                <>
+                  <Text size="xs" color={c.textSubtle}>·</Text>
+                  <Ionicons name="videocam-outline" size={11} color={c.primary} />
+                  <Text size="xs" color={c.primary}>Remote</Text>
+                </>
+              ) : (
+                event.location ? (
+                  <><Text size="xs" color={c.textSubtle}>·</Text>
+                  <Text size="xs" color={c.textSubtle}>{event.location}</Text></>
+                ) : null
+              )}
+            </View>
           {(event as any).recurrence_rule && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
               <Ionicons name="repeat" size={11} color={c.primary} />
@@ -1001,10 +1296,19 @@ function EventCard({ event, onEdit }: { event: Event; onEdit: (e: Event) => void
             </View>
           )}
         </View>
-        <View style={[mc.statusChip, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
-          <Text size="xs" weight="medium" color={statusColor}>
-            {cancelled ? 'Cancelled' : upcoming ? 'Upcoming' : 'Past'}
-          </Text>
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <View style={[mc.statusChip, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
+            <Text size="xs" weight="medium" color={statusColor}>
+              {cancelled ? 'Cancelled' : upcoming ? 'Upcoming' : 'Past'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={(e) => { e.stopPropagation?.(); onEdit(event); }}
+            style={[mc.editBtn, { borderColor: c.border }]}
+          >
+            <Ionicons name="create-outline" size={13} color={c.textSubtle} />
+            <Text size="xs" color={c.textSubtle}>Edit</Text>
+          </Pressable>
         </View>
       </View>
     </Pressable>
@@ -1015,6 +1319,7 @@ const mc = StyleSheet.create({
   card:       { borderWidth: 1, borderRadius: 14, padding: 14 },
   dateBadge:  { width: 48, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   statusChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  editBtn:    { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
 });
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -1030,6 +1335,7 @@ export default function OfficerEventsScreen() {
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c              = theme.colors;
+  const { edit: editId } = useLocalSearchParams<{ edit?: string }>();
 
   const orgId     = userView?.org.id ?? organization?.id ?? '';
   const canManage = userView
@@ -1053,6 +1359,7 @@ export default function OfficerEventsScreen() {
         .select('*')
         .eq('org_id', orgId)
         .eq('is_deleted', false)
+        .eq('is_occurrence', false)
         .order('start_time', { ascending: false }),
     });
     setEvents((data ?? []) as Event[]);
@@ -1061,6 +1368,16 @@ export default function OfficerEventsScreen() {
   }, [orgId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-open edit form when navigated from [id].tsx with ?edit=<id>
+  useEffect(() => {
+    if (!editId || loading || events.length === 0) return;
+    const target = events.find(e => e.id === editId);
+    if (target) {
+      setEdit(target);
+      router.setParams({ edit: '' });
+    }
+  }, [editId, loading, events]);
 
   const upcomingCount = events.filter(e => isUpcoming(e) && !e.is_cancelled).length;
   const pastCount     = events.filter(e => !isUpcoming(e)).length;
@@ -1084,23 +1401,27 @@ export default function OfficerEventsScreen() {
         : form.hasEndTime ? combineDateTime(form.dateObj, form.endTimeObj) : null;
       const rrule    = buildRRule(form.recurrence);
 
+      const isRemote = form.location_type === 'remote';
       const payload: any = {
         title:             form.title.trim(),
         type:              form.type,
         description:       form.description.trim() || null,
-        location:          form.location_text.trim() || null,
-        location_id:       form.location_id ?? null,
-        location_lat:      form.location_lat ?? null,
-        location_lng:      form.location_lng ?? null,
+        location:          isRemote ? null : (form.location_text.trim() || null),
+        location_id:       isRemote ? null : (form.location_id ?? null),
+        location_lat:      isRemote ? null : (form.location_lat ?? null),
+        location_lng:      isRemote ? null : (form.location_lng ?? null),
+        meeting_url:       isRemote ? (form.meeting_url.trim() || null) : null,
         start_time:        startIso,
         end_time:          endIso,
         is_mandatory:      form.is_mandatory,
         rsvp_required:     form.rsvp_required,
         allow_excuses:     form.allow_excuses,
         qr_checkin:        form.qr_checkin,
-        geofence_required: form.geofence_required,
-        points:            parseInt(form.points) || 0,
-        recurrence_rule:   rrule,
+        geofence_required:    isRemote ? false : form.geofence_required,
+        points:               parseInt(form.points) || 0,
+        recurrence_rule:      rrule,
+        checkin_open_minutes:  form.checkin_open_minutes.trim()  !== '' ? parseInt(form.checkin_open_minutes)  || null : null,
+        checkin_grace_minutes: form.checkin_grace_minutes.trim() !== '' ? parseInt(form.checkin_grace_minutes) || null : null,
       };
 
       const editingEvent: Event | null = editTarget === false || editTarget === null ? null : editTarget;
@@ -1126,6 +1447,43 @@ export default function OfficerEventsScreen() {
       Alert.alert('Error', 'Failed to save event.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete(event: Event, mode: 'this' | 'series') {
+    try {
+      const isMaster = !!(event as any).recurrence_rule && !(event as any).is_occurrence;
+      const parentId = (event as any).parent_event_id as string | null;
+
+      if (mode === 'series') {
+        const masterId = isMaster ? event.id : (parentId ?? event.id);
+        const { error: e1 } = await loggedQuery({
+          domain: DOMAIN.EVENTS, method: 'DELETE', endpoint: 'events/series',
+          orgId, userId: profile?.id,
+          requestBody: { master_id: masterId },
+          query: supabase.from('events').update({ is_deleted: true }).eq('id', masterId),
+        });
+        if (e1) throw e1;
+        // Occurrences share parent_event_id — soft-delete them all too
+        const { error: e2 } = await supabase
+          .from('events')
+          .update({ is_deleted: true })
+          .eq('parent_event_id', masterId);
+        if (e2) throw e2;
+      } else {
+        const { error } = await loggedQuery({
+          domain: DOMAIN.EVENTS, method: 'DELETE', endpoint: 'events',
+          orgId, userId: profile?.id,
+          requestBody: { id: event.id },
+          query: supabase.from('events').update({ is_deleted: true }).eq('id', event.id),
+        });
+        if (error) throw error;
+      }
+
+      await load();
+      setEdit(false);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message ?? 'Failed to delete event.');
     }
   }
 
@@ -1184,7 +1542,7 @@ export default function OfficerEventsScreen() {
       <ScrollView
         horizontal showsHorizontalScrollIndicator={false}
         contentContainerStyle={sc.tabRow}
-        style={{ backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{ height: 48, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
       >
         {TABS.map((t) => {
           const active = tab === t;
@@ -1258,6 +1616,7 @@ export default function OfficerEventsScreen() {
         orgId={orgId}
         onClose={() => setEdit(false)}
         onSave={handleSave}
+        onDelete={handleDelete}
         saving={saving}
       />
     </View>
@@ -1267,7 +1626,7 @@ export default function OfficerEventsScreen() {
 const sc = StyleSheet.create({
   header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
   primaryBtn:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
-  tabRow:      { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  tabRow:      { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
   tabChip:     { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
   tableHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
   mobileScroll:{ padding: 14, gap: 10, paddingBottom: 48 },

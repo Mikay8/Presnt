@@ -69,9 +69,18 @@ export default function OfficerLayout() {
           }}
         >
           <Tabs.Screen
-            name="events"
+            name="events-management"
             options={showEvents ? {
               title: 'Events',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="list-outline" size={size} color={color} />
+              ),
+            } : { href: null }}
+          />
+          <Tabs.Screen
+            name="calendar"
+            options={showEvents ? {
+              title: 'Calendar',
               tabBarIcon: ({ color, size }) => (
                 <Ionicons name="calendar-outline" size={size} color={color} />
               ),
@@ -105,6 +114,7 @@ export default function OfficerLayout() {
             } : { href: null }}
           />
           {/* Hidden sub-routes */}
+          <Tabs.Screen name="events-management/[id]" options={{ href: null }} />
           <Tabs.Screen name="locations" options={{ href: null }} />
         </Tabs>
       </View>

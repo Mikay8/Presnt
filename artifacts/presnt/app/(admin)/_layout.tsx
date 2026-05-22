@@ -67,6 +67,15 @@ export default function AdminLayout() {
             }}
           />
           <Tabs.Screen
+            name="calendar"
+            options={{
+              title: 'Calendar',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="calendar-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
             name="members/index"
             options={{
               title: 'Members',
@@ -102,16 +111,17 @@ export default function AdminLayout() {
           <Tabs.Screen name="status/index"       options={{ href: null }} />
           <Tabs.Screen name="organization/index" options={{ href: null }} />
           <Tabs.Screen name="profile"            options={{ href: null }} />
-          <Tabs.Screen name="events/index"       options={{ href: null }} />
-          <Tabs.Screen name="locations/index"    options={{ href: null }} />
+          <Tabs.Screen name="events-management/index" options={{ href: null }} />
+          <Tabs.Screen name="events-management/[id]" options={{ href: null }} />
+          <Tabs.Screen name="locations/index"        options={{ href: null }} />
 
-          <Tabs.Screen name="roles"        options={{ href: null }} />
-          <Tabs.Screen name="dues"         options={{ href: null }} />
-          <Tabs.Screen name="committees"   options={{ href: null }} />
-          <Tabs.Screen name="status"       options={{ href: null }} />
-          <Tabs.Screen name="organization" options={{ href: null }} />
-          <Tabs.Screen name="events"       options={{ href: null }} />
-          <Tabs.Screen name="locations"    options={{ href: null }} />
+          <Tabs.Screen name="roles"              options={{ href: null }} />
+          <Tabs.Screen name="dues"               options={{ href: null }} />
+          <Tabs.Screen name="committees"         options={{ href: null }} />
+          <Tabs.Screen name="status"             options={{ href: null }} />
+          <Tabs.Screen name="organization"       options={{ href: null }} />
+          <Tabs.Screen name="events-management"  options={{ href: null }} />
+          <Tabs.Screen name="locations"          options={{ href: null }} />
         </Tabs>
       </View>
     </View>

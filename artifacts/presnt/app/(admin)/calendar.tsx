@@ -1,3 +1,14 @@
+/**
+ * Admin — Calendar
+ *
+ * Full month-view calendar showing all org events (non-recurring one-offs and
+ * expanded occurrence rows). Tapping an event opens the Events management
+ * screen. Admins can also tap "+ New event" to create one.
+ *
+ * Desktop: grid calendar + month nav
+ * Mobile:  compact cell grid + upcoming list
+ */
+
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -12,19 +23,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Text } from '@/components/ui';
+import { Card, Text } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type EventType = 'mandatory' | 'social' | 'optional';
-
 type CalEvent = {
   id:               string;
   title:            string;
-  type:             EventType;
+  type:             string;
   start_time:       string;
   location:         string | null;
   is_occurrence:    boolean | null;
@@ -77,24 +86,23 @@ function EventPill({ event, onPress }: { event: CalEvent; onPress: () => void })
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export default function CalendarScreen() {
-  const { theme }       = useThemeStore();
-  const { width }       = useWindowDimensions();
-  const insets          = useSafeAreaInsets();
-  const isWide          = width >= 800;
+export default function AdminCalendarScreen() {
+  const { theme }        = useThemeStore();
+  const { width }        = useWindowDimensions();
+  const insets           = useSafeAreaInsets();
+  const isWide           = width >= 800;
   const { organization } = useAuthStore();
+  const c                = theme.colors;
 
   const today = new Date();
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
-  const [events, setEvents]       = useState<CalEvent[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [events, setEvents]         = useState<CalEvent[]>([]);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const orgId = organization?.id;
 
-  // Fetch events for a month and trigger a top-up if any recurring series
-  // horizon is within 90 days of the viewed month end.
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
 
@@ -107,8 +115,6 @@ export default function CalendarScreen() {
       .eq('org_id', orgId)
       .eq('is_deleted', false)
       .eq('is_cancelled', false)
-      // Exclude master series rows (they have no start_time that maps to a calendar day).
-      // Only show: non-recurring one-off events OR occurrence rows.
       .or('recurrence_rule.is.null,is_occurrence.eq.true')
       .gte('start_time', start)
       .lte('start_time', end)
@@ -119,8 +125,7 @@ export default function CalendarScreen() {
     setLoading(false);
     setRefreshing(false);
 
-    // Top-up recurring occurrences if the viewed month end is within 90 days
-    // of any series horizon. Fire-and-forget — calendar refreshes on next nav.
+    // Top-up recurring occurrences if horizon is approaching
     const viewedEnd  = new Date(year, month + 1, 0);
     const cutoff     = new Date(viewedEnd.getTime() + 90 * 24 * 3600 * 1000);
     const needsTopup = rows.some(ev =>
@@ -129,8 +134,7 @@ export default function CalendarScreen() {
       new Date(ev.occurrences_horizon) < cutoff
     );
     if (needsTopup) {
-      supabase.rpc('topup_recurring_events', { p_org_id: orgId, lookahead_days: 90 })
-        .then(() => { /* occurrences repopulated — next load() will pick them up */ });
+      supabase.rpc('topup_recurring_events', { p_org_id: orgId, lookahead_days: 90 }).then(() => {});
     }
   }, [orgId, year, month]);
 
@@ -138,7 +142,6 @@ export default function CalendarScreen() {
 
   const grid = useMemo(() => buildGrid(year, month), [year, month]);
 
-  // Map date key → events
   const eventsByDate = useMemo(() => {
     const map: Record<string, CalEvent[]> = {};
     for (const ev of events) {
@@ -149,11 +152,8 @@ export default function CalendarScreen() {
     return map;
   }, [events]);
 
-  // Upcoming events from today
   const upcomingEvents = useMemo(() => {
-    return events
-      .filter((ev) => new Date(ev.start_time) >= today)
-      .slice(0, 5);
+    return events.filter((ev) => new Date(ev.start_time) >= today).slice(0, 5);
   }, [events]);
 
   const prevMonth = () => {
@@ -167,41 +167,45 @@ export default function CalendarScreen() {
 
   function onRefresh() { setRefreshing(true); load(); }
 
+  function openEvent(_ev: CalEvent) {
+    router.push('/(admin)/events-management' as any);
+  }
+
   // ── Desktop grid ──
   const desktopGrid = (
-    <View style={[styles.gridWrapper, { borderColor: theme.colors.border }]}>
+    <View style={[styles.gridWrapper, { borderColor: c.border }]}>
       <View style={styles.dayHeaderRow}>
         {DAY_LABELS_WIDE.map((d) => (
-          <View key={d} style={[styles.dayHeaderCell, { borderColor: theme.colors.border }]}>
-            <Text size="xs" weight="medium" color={theme.colors.textSubtle}>{d}</Text>
+          <View key={d} style={[styles.dayHeaderCell, { borderColor: c.border }]}>
+            <Text size="xs" weight="medium" color={c.textSubtle}>{d}</Text>
           </View>
         ))}
       </View>
       <View style={styles.gridRows}>
         {Array.from({ length: Math.ceil(grid.length / 7) }).map((_, rowIdx) => (
-          <View key={rowIdx} style={[styles.gridRow, { borderColor: theme.colors.border }]}>
+          <View key={rowIdx} style={[styles.gridRow, { borderColor: c.border }]}>
             {grid.slice(rowIdx * 7, rowIdx * 7 + 7).map((date, colIdx) => {
               if (!date) {
-                return <View key={`blank-${rowIdx}-${colIdx}`} style={[styles.dayCell, { borderColor: theme.colors.border }]} />;
+                return <View key={`blank-${rowIdx}-${colIdx}`} style={[styles.dayCell, { borderColor: c.border }]} />;
               }
-              const evs      = eventsByDate[dateKey(date)] ?? [];
-              const todayBg  = isToday(date) ? { backgroundColor: theme.colors.primary + '18' } : {};
+              const evs     = eventsByDate[dateKey(date)] ?? [];
+              const todayBg = isToday(date) ? { backgroundColor: c.primary + '18' } : {};
               return (
-                <View key={date.toISOString()} style={[styles.dayCell, { borderColor: theme.colors.border }, todayBg]}>
+                <View key={date.toISOString()} style={[styles.dayCell, { borderColor: c.border }, todayBg]}>
                   <Text size="sm"
                     weight={isToday(date) ? 'bold' : 'regular'}
-                    color={isToday(date) ? theme.colors.primary : theme.colors.text}
+                    color={isToday(date) ? c.primary : c.text}
                     style={{ marginBottom: 4 }}>
                     {date.getDate()}
                   </Text>
                   {evs.map((ev) => (
-                    <EventPill key={ev.id} event={ev} onPress={() => router.push(`/(member)/event/${ev.id}` as any)} />
+                    <EventPill key={ev.id} event={ev} onPress={() => openEvent(ev)} />
                   ))}
                 </View>
               );
             })}
             {Array.from({ length: 7 - grid.slice(rowIdx * 7, rowIdx * 7 + 7).length }).map((_, i) => (
-              <View key={`pad-${i}`} style={[styles.dayCell, { borderColor: theme.colors.border }]} />
+              <View key={`pad-${i}`} style={[styles.dayCell, { borderColor: c.border }]} />
             ))}
           </View>
         ))}
@@ -216,7 +220,7 @@ export default function CalendarScreen() {
       <View style={styles.mobileDayHeaderRow}>
         {DAY_LABELS_MOB.map((d, i) => (
           <View key={i} style={{ width: CELL_SIZE, alignItems: 'center', paddingVertical: 6 }}>
-            <Text size="xs" color={theme.colors.textSubtle}>{d}</Text>
+            <Text size="xs" color={c.textSubtle}>{d}</Text>
           </View>
         ))}
       </View>
@@ -234,18 +238,18 @@ export default function CalendarScreen() {
                 style={[
                   styles.mobileDayCell,
                   { width: CELL_SIZE, height: CELL_SIZE },
-                  isT && { backgroundColor: theme.colors.primary + '20', borderRadius: 8 },
+                  isT && { backgroundColor: c.primary + '20', borderRadius: 8 },
                 ]}
                 onPress={() => {
-                  if (evs.length === 1) router.push(`/(member)/event/${evs[0].id}` as any);
+                  if (evs.length === 1) openEvent(evs[0]);
                 }}
               >
                 <Text size="sm" weight={isT ? 'bold' : 'regular'}
-                  color={isT ? theme.colors.primary : theme.colors.text}>
+                  color={isT ? c.primary : c.text}>
                   {date.getDate()}
                 </Text>
                 {evs.length > 0 && (
-                  <View style={[styles.eventDot, { backgroundColor: theme.colors.primary }]} />
+                  <View style={[styles.eventDot, { backgroundColor: c.primary }]} />
                 )}
               </Pressable>
             );
@@ -260,22 +264,22 @@ export default function CalendarScreen() {
 
   const navHeader = (
     <View style={styles.navHeader}>
-      <Pressable onPress={prevMonth} style={[styles.navBtn, { borderColor: theme.colors.border }]}>
-        <Ionicons name="chevron-back-outline" size={16} color={theme.colors.text} />
+      <Pressable onPress={prevMonth} style={[styles.navBtn, { borderColor: c.border }]}>
+        <Ionicons name="chevron-back-outline" size={16} color={c.text} />
       </Pressable>
       <Text size="md" weight="medium" style={{ minWidth: 140, textAlign: 'center' }}>
         {MONTH_NAMES[month]} {year}
       </Text>
-      <Pressable onPress={nextMonth} style={[styles.navBtn, { borderColor: theme.colors.border }]}>
-        <Ionicons name="chevron-forward-outline" size={16} color={theme.colors.text} />
+      <Pressable onPress={nextMonth} style={[styles.navBtn, { borderColor: c.border }]}>
+        <Ionicons name="chevron-forward-outline" size={16} color={c.text} />
       </Pressable>
     </View>
   );
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={theme.colors.primary} />
+      <View style={{ flex: 1, backgroundColor: c.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={c.primary} />
       </View>
     );
   }
@@ -284,23 +288,21 @@ export default function CalendarScreen() {
   if (isWide) {
     return (
       <ScrollView
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
+        style={{ flex: 1, backgroundColor: c.background }}
         contentContainerStyle={styles.widePad}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
       >
         <View style={styles.wideTitleRow}>
           <Text size="h1" weight="bold">Calendar</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             {navHeader}
-            <View style={[styles.viewToggle, { borderColor: theme.colors.border }]}>
-              {(['Month', 'Week', 'List'] as const).map((v) => (
-                <Pressable key={v}
-                  style={[styles.viewToggleBtn, v === 'Month' && { backgroundColor: theme.colors.primary }]}>
-                  <Text size="sm" weight="medium" color={v === 'Month' ? '#FFF' : theme.colors.text}>{v}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <Pressable
+              onPress={() => router.push('/(admin)/events-management' as any)}
+              style={[styles.newBtn, { backgroundColor: c.primary }]}
+            >
+              <Text size="sm" weight="medium" style={{ color: '#fff' }}>+ New event</Text>
+            </Pressable>
           </View>
         </View>
         {desktopGrid}
@@ -311,47 +313,56 @@ export default function CalendarScreen() {
   // ── Mobile ──
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
+      style={{ flex: 1, backgroundColor: c.background }}
       contentContainerStyle={[styles.mobilePad, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.primary} />}
     >
-      <Text size="h1" weight="bold" style={{ marginBottom: 16 }}>Calendar</Text>
-      <View style={[styles.mobileNavRow, { borderColor: theme.colors.border }]}>
-        <Pressable onPress={prevMonth}><Ionicons name="chevron-back-outline" size={20} color={theme.colors.text} /></Pressable>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Text size="h1" weight="bold">Calendar</Text>
+        <Pressable
+          onPress={() => router.push('/(admin)/events-management' as any)}
+          style={[styles.newBtn, { backgroundColor: c.primary }]}
+        >
+          <Text size="sm" weight="medium" style={{ color: '#fff' }}>+ New event</Text>
+        </Pressable>
+      </View>
+
+      <View style={[styles.mobileNavRow, { borderColor: c.border }]}>
+        <Pressable onPress={prevMonth}><Ionicons name="chevron-back-outline" size={20} color={c.text} /></Pressable>
         <Text size="md" weight="medium">{MONTH_NAMES[month]} {year}</Text>
-        <Pressable onPress={nextMonth}><Ionicons name="chevron-forward-outline" size={20} color={theme.colors.text} /></Pressable>
+        <Pressable onPress={nextMonth}><Ionicons name="chevron-forward-outline" size={20} color={c.text} /></Pressable>
       </View>
       {mobileGrid}
 
-      <Text size="xs" weight="medium" color={theme.colors.textMuted}
+      <Text size="xs" weight="medium" color={c.textMuted}
         style={{ textTransform: 'uppercase', letterSpacing: 1, marginTop: 28, marginBottom: 12 }}>
         Upcoming
       </Text>
 
       {upcomingEvents.length === 0 ? (
         <Card style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
-          <Ionicons name="calendar-outline" size={28} color={theme.colors.textSubtle} />
-          <Text size="sm" color={theme.colors.textMuted}>No upcoming events</Text>
+          <Ionicons name="calendar-outline" size={28} color={c.textSubtle} />
+          <Text size="sm" color={c.textMuted}>No upcoming events</Text>
         </Card>
       ) : (
         <View style={{ gap: 10 }}>
           {upcomingEvents.map((ev) => {
             const d = new Date(ev.start_time);
             return (
-              <Pressable key={ev.id} onPress={() => router.push(`/(member)/event/${ev.id}` as any)}>
+              <Pressable key={ev.id} onPress={() => openEvent(ev)}>
                 <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                  <View style={[styles.upcomingIcon, { backgroundColor: theme.colors.primary + '20' }]}>
-                    <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
+                  <View style={[styles.upcomingIcon, { backgroundColor: c.primary + '20' }]}>
+                    <Ionicons name="calendar-outline" size={20} color={c.primary} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text size="md" weight="medium">{ev.title}</Text>
-                    <Text size="sm" color={theme.colors.textMuted}>
+                    <Text size="sm" color={c.textMuted}>
                       {MONTH_NAMES[d.getMonth()].slice(0, 3)} {d.getDate()}
                       {` · ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward-outline" size={16} color={theme.colors.textSubtle} />
+                  <Ionicons name="chevron-forward-outline" size={16} color={c.textSubtle} />
                 </Card>
               </Pressable>
             );
@@ -367,6 +378,7 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   widePad:      { padding: 32 },
   wideTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 },
+  newBtn:       { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
   gridWrapper:    { borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
   dayHeaderRow:   { flexDirection: 'row', borderBottomWidth: 1 },
   dayHeaderCell:  { flex: 1, alignItems: 'center', paddingVertical: 10, borderRightWidth: 1 },
@@ -376,8 +388,6 @@ const styles = StyleSheet.create({
   pill:           { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2 },
   navHeader:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
   navBtn:         { width: 32, height: 32, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  viewToggle:     { flexDirection: 'row', borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
-  viewToggleBtn:  { paddingHorizontal: 14, paddingVertical: 8 },
   mobilePad:         { paddingHorizontal: 16 },
   mobileNavRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, marginBottom: 8 },
   mobileDayHeaderRow:{ flexDirection: 'row' },

@@ -143,7 +143,7 @@ function UserViewTool() {
         if (selectedRole === 'admin') {
           router.replace('/(admin)/dashboard' as any);
         } else if (selectedRole === 'officer') {
-          router.replace('/(officer)/events' as any);
+          router.replace('/(officer)/events-management' as any);
         } else {
           router.replace('/(member)' as any);
         }

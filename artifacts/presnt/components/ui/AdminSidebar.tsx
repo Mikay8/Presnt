@@ -29,7 +29,8 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const NAV_ITEMS: { label: string; path: string; icon: IconName }[] = [
   { label: 'Dashboard',  path: '/(admin)/dashboard',   icon: 'grid-outline'              },
-  { label: 'Events',     path: '/(admin)/events',       icon: 'calendar-outline'          },
+  { label: 'Events',     path: '/(admin)/events-management',       icon: 'list-outline'              },
+  { label: 'Calendar',   path: '/(admin)/calendar',     icon: 'calendar-outline'          },
   { label: 'Members',    path: '/(admin)/members',      icon: 'people-outline'            },
   { label: 'Roles',      path: '/(admin)/roles',        icon: 'shield-outline'            },
   { label: 'Committees', path: '/(admin)/committees',   icon: 'people-circle-outline'     },

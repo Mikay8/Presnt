@@ -144,7 +144,7 @@ function RootLayoutNav() {
       return <Redirect href="/(admin)/dashboard" />;
     }
     if (role === 'officer') {
-      return <Redirect href="/(officer)/events" />;
+      return <Redirect href="/(officer)/events-management" />;
     }
     return <Redirect href="/(member)" />;
   }

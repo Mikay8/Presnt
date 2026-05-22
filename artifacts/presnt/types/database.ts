@@ -274,61 +274,103 @@ export type Database = {
       }
       events: {
         Row: {
-          created_at: string | null
-          created_by: string | null
-          description: string | null
-          end_time: string | null
-          id: string
-          is_cancelled:      boolean | null
-          is_deleted:        boolean | null
-          is_mandatory:      boolean | null
-          location:          string | null
-          location_id:       string | null
-          max_capacity:      number | null
-          org_id:            string
-          points:            number | null
-          qr_checkin:        boolean | null
-          geofence_required: boolean | null
-          allow_excuses:     boolean | null
-          rsvp_required:     boolean | null
-          start_time:        string
-          title:             string
-          type:              string
-          updated_at:        string | null
+          allow_excuses:         boolean | null
+          checkin_grace_minutes: number | null
+          checkin_open_minutes:  number | null
+          created_at:            string | null
+          created_by:            string | null
+          description:           string | null
+          end_time:              string | null
+          geofence_required:     boolean | null
+          id:                    string
+          is_cancelled:          boolean | null
+          is_deleted:            boolean | null
+          is_mandatory:          boolean | null
+          is_occurrence:         boolean
+          location:              string | null
+          location_id:           string | null
+          location_lat:          number | null
+          location_lng:          number | null
+          max_capacity:          number | null
+          meeting_url:           string | null
+          occurrence_index:      number | null
+          occurrences_horizon:   string | null
+          org_id:                string
+          parent_event_id:       string | null
+          points:                number | null
+          qr_checkin:            boolean | null
+          recurrence_rule:       string | null
+          rsvp_required:         boolean | null
+          start_time:            string
+          title:                 string
+          type:                  string
+          updated_at:            string | null
         }
         Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          end_time?: string | null
-          id?: string
-          is_cancelled?: boolean | null
-          is_deleted?: boolean | null
-          location?: string | null
-          max_capacity?: number | null
-          org_id: string
-          rsvp_required?: boolean | null
-          start_time: string
-          title: string
-          type?: string
-          updated_at?: string | null
+          allow_excuses?:         boolean | null
+          checkin_grace_minutes?: number | null
+          checkin_open_minutes?:  number | null
+          created_at?:            string | null
+          created_by?:            string | null
+          description?:           string | null
+          end_time?:              string | null
+          geofence_required?:     boolean | null
+          id?:                    string
+          is_cancelled?:          boolean | null
+          is_deleted?:            boolean | null
+          is_mandatory?:          boolean | null
+          is_occurrence?:         boolean
+          location?:              string | null
+          location_id?:           string | null
+          location_lat?:          number | null
+          location_lng?:          number | null
+          max_capacity?:          number | null
+          meeting_url?:           string | null
+          occurrence_index?:      number | null
+          occurrences_horizon?:   string | null
+          org_id:                 string
+          parent_event_id?:       string | null
+          points?:                number | null
+          qr_checkin?:            boolean | null
+          recurrence_rule?:       string | null
+          rsvp_required?:         boolean | null
+          start_time:             string
+          title:                  string
+          type?:                  string
+          updated_at?:            string | null
         }
         Update: {
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          end_time?: string | null
-          id?: string
-          is_cancelled?: boolean | null
-          is_deleted?: boolean | null
-          location?: string | null
-          max_capacity?: number | null
-          org_id?: string
-          rsvp_required?: boolean | null
-          start_time?: string
-          title?: string
-          type?: string
-          updated_at?: string | null
+          allow_excuses?:         boolean | null
+          checkin_grace_minutes?: number | null
+          checkin_open_minutes?:  number | null
+          created_at?:            string | null
+          created_by?:            string | null
+          description?:           string | null
+          end_time?:              string | null
+          geofence_required?:     boolean | null
+          id?:                    string
+          is_cancelled?:          boolean | null
+          is_deleted?:            boolean | null
+          is_mandatory?:          boolean | null
+          is_occurrence?:         boolean
+          location?:              string | null
+          location_id?:           string | null
+          location_lat?:          number | null
+          location_lng?:          number | null
+          max_capacity?:          number | null
+          meeting_url?:           string | null
+          occurrence_index?:      number | null
+          occurrences_horizon?:   string | null
+          org_id?:                string
+          parent_event_id?:       string | null
+          points?:                number | null
+          qr_checkin?:            boolean | null
+          recurrence_rule?:       string | null
+          rsvp_required?:         boolean | null
+          start_time?:            string
+          title?:                 string
+          type?:                  string
+          updated_at?:            string | null
         }
         Relationships: [
           {
@@ -339,10 +381,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "org_locations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "events_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_parent_event_id_fkey"
+            columns: ["parent_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -1015,8 +1071,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      expand_recurring_event: {
+        Args: { p_event_id: string; batch_size?: number }
+        Returns: number
+      }
       is_org_member: { Args: { check_org_id: string }; Returns: boolean }
       is_superuser: { Args: never; Returns: boolean }
+      topup_recurring_events: {
+        Args: { p_org_id: string; lookahead_days?: number }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never

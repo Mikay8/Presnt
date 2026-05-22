@@ -11,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Modal,
   Pressable,
@@ -410,12 +409,14 @@ function FilterBar({
 // ─── Clear sheet ──────────────────────────────────────────────────────────────
 
 const CLEAR_OPTIONS = [
-  { label: 'Last hour',  hours: 1,    desc: 'Delete entries from the past hour' },
-  { label: 'Last 24 h',  hours: 24,   desc: 'Delete entries from the past day' },
-  { label: 'Last 7 days', hours: 168,  desc: 'Delete entries from the past week' },
-  { label: 'Last 30 days', hours: 720, desc: 'Delete entries from the past month' },
-  { label: 'All logs',   hours: null,  desc: 'Permanently delete every API log entry' },
+  { label: 'Last hour',    hours: 1,    desc: 'Delete entries from the past hour' },
+  { label: 'Last 24 h',   hours: 24,   desc: 'Delete entries from the past day' },
+  { label: 'Last 7 days',  hours: 168,  desc: 'Delete entries from the past week' },
+  { label: 'Last 30 days', hours: 720,  desc: 'Delete entries from the past month' },
+  { label: 'All logs',     hours: null, desc: 'Permanently delete every API log entry' },
 ] as const;
+
+type ClearOption = typeof CLEAR_OPTIONS[number];
 
 function ClearSheet({
   visible,
@@ -426,36 +427,29 @@ function ClearSheet({
   onClose:   () => void;
   onCleared: (count: number) => void;
 }) {
+  const [pending,  setPending]  = useState<ClearOption | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  async function confirm(hours: number | null, label: string) {
-    Alert.alert(
-      'Clear logs',
-      hours === null
-        ? 'This will permanently delete all API log entries. Cannot be undone.'
-        : `Delete all API log entries older than ${label.toLowerCase()}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            setClearing(true);
-            try {
-              const { data, error } = await supabase
-                .rpc('clear_api_request_log', { older_than_hours: hours });
-              if (error) throw error;
-              onCleared(data as number ?? 0);
-            } catch (e: any) {
-              Alert.alert('Error', e.message ?? 'Could not clear logs.');
-            } finally {
-              setClearing(false);
-              onClose();
-            }
-          },
-        },
-      ],
-    );
+  // Reset state when sheet reopens
+  React.useEffect(() => {
+    if (!visible) { setPending(null); setErrorMsg(null); }
+  }, [visible]);
+
+  async function executeClear(opt: ClearOption) {
+    setClearing(true);
+    setErrorMsg(null);
+    try {
+      const { data, error } = await supabase
+        .rpc('clear_api_request_log', { older_than_hours: opt.hours });
+      if (error) throw error;
+      onCleared((data as number) ?? 0);
+      onClose();
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? 'Could not clear logs.');
+      setClearing(false);
+      setPending(null);
+    }
   }
 
   return (
@@ -470,7 +464,8 @@ function ClearSheet({
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
         onPress={onClose}
       >
-        <Pressable onPress={() => {}}>
+        {/* Stop backdrop tap-through */}
+        <Pressable onPress={(e) => e.stopPropagation()}>
           <View style={{
             backgroundColor: su.surface,
             borderTopLeftRadius: 20,
@@ -494,15 +489,58 @@ function ClearSheet({
               Entries are auto-cleared after 7 days. You can also manually remove them below.
             </Text>
 
-            {clearing ? (
-              <ActivityIndicator color={su.primary} style={{ paddingVertical: 32 }} />
+            {/* Error banner */}
+            {errorMsg && (
+              <View style={{ marginHorizontal: 20, marginBottom: 12, backgroundColor: '#FEE2E2', borderRadius: 8, padding: 10 }}>
+                <Text style={{ color: '#B91C1C', fontSize: 13 }}>{errorMsg}</Text>
+              </View>
+            )}
+
+            {/* Inline confirm step */}
+            {pending ? (
+              <View style={{ paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: su.border }}>
+                <Text style={{ color: su.text, fontSize: 15, fontWeight: '600', marginBottom: 6 }}>
+                  {pending.hours === null
+                    ? 'Delete ALL log entries?'
+                    : `Delete logs older than ${pending.label.toLowerCase()}?`}
+                </Text>
+                <Text style={{ color: su.textMuted, fontSize: 13, marginBottom: 20 }}>
+                  This cannot be undone.
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Pressable
+                    onPress={() => setPending(null)}
+                    style={({ pressed }) => ({
+                      flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center',
+                      backgroundColor: pressed ? su.surfaceAlt : su.surfaceAlt,
+                      borderWidth: 1, borderColor: su.border,
+                    })}
+                  >
+                    <Text style={{ color: su.text, fontWeight: '600', fontSize: 14 }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => executeClear(pending)}
+                    disabled={clearing}
+                    style={({ pressed }) => ({
+                      flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center',
+                      backgroundColor: pressed || clearing ? '#DC2626' : su.danger,
+                      opacity: clearing ? 0.7 : 1,
+                    })}
+                  >
+                    {clearing
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Clear</Text>
+                    }
+                  </Pressable>
+                </View>
+              </View>
             ) : (
               CLEAR_OPTIONS.map((opt, i) => {
                 const isLast = i === CLEAR_OPTIONS.length - 1;
                 return (
                   <Pressable
                     key={String(opt.hours)}
-                    onPress={() => confirm(opt.hours as number | null, opt.label)}
+                    onPress={() => setPending(opt)}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',
