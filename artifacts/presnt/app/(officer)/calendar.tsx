@@ -172,8 +172,8 @@ export default function OfficerCalendarScreen() {
 
   function onRefresh() { setRefreshing(true); load(); }
 
-  function openEvent(_ev: CalEvent) {
-    router.push('/(officer)/events-management' as any);
+  function openEvent(ev: CalEvent) {
+    router.push(`/(officer)/events-management/${ev.id}` as any);
   }
 
   // ── Desktop grid ──

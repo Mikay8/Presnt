@@ -167,8 +167,8 @@ export default function AdminCalendarScreen() {
 
   function onRefresh() { setRefreshing(true); load(); }
 
-  function openEvent(_ev: CalEvent) {
-    router.push('/(admin)/events-management' as any);
+  function openEvent(ev: CalEvent) {
+    router.push(`/(admin)/events-management/${ev.id}` as any);
   }
 
   // ── Desktop grid ──

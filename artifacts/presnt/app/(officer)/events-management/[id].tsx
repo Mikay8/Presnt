@@ -44,7 +44,9 @@ type EventDetail = {
   description:   string | null;
   is_cancelled:  boolean | null;
   rsvp_required: boolean | null;
-  points:        number | null;
+  points:                 number | null;
+  checkin_open_minutes:  number | null;
+  checkin_grace_minutes: number | null;
 };
 
 type RsvpRow = {
@@ -229,7 +231,7 @@ export default function OfficerEventDetailScreen() {
     const [evRes, rsvpRes, attendRes, membRes] = await Promise.all([
       supabase
         .from('events')
-        .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points')
+        .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes')
         .eq('id', id)
         .single(),
 
@@ -425,9 +427,32 @@ export default function OfficerEventDetailScreen() {
   const TYPE_COLORS: Record<string, string> = {
     mandatory: '#E26B4A', social: '#A855F7', optional: '#22C55E', meeting: '#3B82F6',
   };
-  const typeColor   = TYPE_COLORS[event.type] ?? c.primary;
-  const statusColor = event.is_cancelled ? '#EF4444' : new Date(event.start_time) > new Date() ? '#22C55E' : c.textSubtle;
-  const statusLabel = event.is_cancelled ? 'Cancelled' : new Date(event.start_time) > new Date() ? 'Upcoming' : 'Past';
+  const typeColor = TYPE_COLORS[event.type] ?? c.primary;
+
+  const _now        = new Date();
+  const _start      = new Date(event.start_time);
+  const _end        = event.end_time ? new Date(event.end_time) : null;
+  const _openMins   = event.checkin_open_minutes  ?? 15;
+  const _graceMins  = event.checkin_grace_minutes ?? 15;
+  const _winOpen    = new Date(_start.getTime() - _openMins  * 60_000);
+  const _winClose   = _end
+    ? new Date(_end.getTime()   + _graceMins * 60_000)
+    : new Date(_start.getTime() + _graceMins * 60_000);
+  const detailStatus: 'cancelled' | 'ongoing' | 'upcoming' | 'past' =
+    event.is_cancelled          ? 'cancelled'
+    : (_now >= _winOpen && _now <= _winClose) ? 'ongoing'
+    : _now < _start             ? 'upcoming'
+    : 'past';
+  const statusColor =
+    detailStatus === 'cancelled' ? '#EF4444'
+    : detailStatus === 'ongoing' ? '#F59E0B'
+    : detailStatus === 'upcoming'? '#22C55E'
+    : c.textSubtle;
+  const statusLabel =
+    detailStatus === 'cancelled' ? 'Cancelled'
+    : detailStatus === 'ongoing' ? 'Ongoing'
+    : detailStatus === 'upcoming'? 'Upcoming'
+    : 'Past';
 
   const infoPanel = (
     <View style={[ip.panel, { backgroundColor: c.surface, borderColor: c.border }]}>

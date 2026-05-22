@@ -118,6 +118,7 @@ type EventFormState = {
   points:               string;
   checkin_open_minutes: string;   // minutes before start; '' = disabled
   checkin_grace_minutes:string;   // minutes grace after start/end; '' = disabled
+  event_code:           string;
 };
 
 const now = new Date();
@@ -138,6 +139,7 @@ const BLANK_FORM: EventFormState = {
   points: '2',
   checkin_open_minutes:  '15',
   checkin_grace_minutes: '15',
+  event_code:            '',
 };
 
 const DESKTOP = 768;
@@ -236,6 +238,36 @@ function isUpcoming(event: Event): boolean {
   return new Date(event.start_time) > now;
 }
 
+/** Returns 'ongoing' if now is within the check-in window, else 'upcoming' | 'past' | 'cancelled' */
+function eventStatus(event: Event): 'cancelled' | 'ongoing' | 'upcoming' | 'past' {
+  if (event.is_cancelled) return 'cancelled';
+  const now      = new Date();
+  const start    = new Date(event.start_time);
+  const end      = event.end_time ? new Date(event.end_time) : null;
+  const openMins  = (event as any).checkin_open_minutes  as number | null ?? 15;
+  const graceMins = (event as any).checkin_grace_minutes as number | null ?? 15;
+  const windowOpen  = new Date(start.getTime() - openMins  * 60_000);
+  const windowClose = end
+    ? new Date(end.getTime()   + graceMins * 60_000)
+    : new Date(start.getTime() + graceMins * 60_000);
+  if (now >= windowOpen && now <= windowClose) return 'ongoing';
+  if (now < start) return 'upcoming';
+  return 'past';
+}
+
+const STATUS_COLOR: Record<ReturnType<typeof eventStatus>, string> = {
+  cancelled: '#EF4444',
+  ongoing:   '#F59E0B',
+  upcoming:  '#22C55E',
+  past:      '',
+};
+const STATUS_LABEL: Record<ReturnType<typeof eventStatus>, string> = {
+  cancelled: 'Cancelled',
+  ongoing:   'Ongoing',
+  upcoming:  'Upcoming',
+  past:      'Past',
+};
+
 /** Display date: for recurring events show next occurrence, else base start. */
 function displayDate(event: Event): string {
   const rrule = (event as any).recurrence_rule as string | null;
@@ -276,6 +308,7 @@ function formFromEvent(e: Event): EventFormState {
     points:                String((e as any).points ?? 2),
     checkin_open_minutes:  (e as any).checkin_open_minutes  != null ? String((e as any).checkin_open_minutes)  : '',
     checkin_grace_minutes: (e as any).checkin_grace_minutes != null ? String((e as any).checkin_grace_minutes) : '',
+    event_code:            (e as any).event_code ?? '',
   };
 }
 
@@ -482,18 +515,24 @@ function EventForm({
   visible,
   initial,
   orgId,
+  orgSlug,
   onClose,
   onSave,
   onDelete,
   saving,
+  codeErrorMsg,
+  onClearCodeError,
 }: {
   visible:   boolean;
   initial:   Event | null;
   orgId:     string;
+  orgSlug:   string;
   onClose:   () => void;
   onSave:    (form: EventFormState) => void;
   onDelete:  (event: Event, mode: 'this' | 'series') => void;
   saving:    boolean;
+  codeErrorMsg?: string | null;
+  onClearCodeError?: () => void;
 }) {
   const { theme } = useThemeStore();
   const { width } = useWindowDimensions();
@@ -513,14 +552,38 @@ function EventForm({
   const [showTypeMenu,   setShowTypeMenu]   = useState(false);
   const [savedLoc,       setSavedLoc]       = useState<OrgLocation | null>(null);
   const [confirmDelete,  setConfirmDelete]  = useState<'single' | 'recurring' | null>(null);
+  const [codeGenerating, setCodeGenerating] = useState(false);
+  const codeError    = codeErrorMsg ?? null;
+  const setCodeError = onClearCodeError ? (_: null) => onClearCodeError() : (_: null) => {};
 
   useEffect(() => {
     if (visible) {
       const f = initial ? formFromEvent(initial) : { ...BLANK_FORM, dateObj: new Date(), startTimeObj: (() => { const d = new Date(); d.setHours(18,0,0,0); return d; })(), endTimeObj: (() => { const d = new Date(); d.setHours(20,0,0,0); return d; })() };
       setForm(f);
       setSavedLoc(null);
+      onClearCodeError?.();
+      if (!initial) generateCode(f.type, f.dateObj);
     }
   }, [visible, initial]);
+
+  async function generateCode(type: string, date: Date) {
+    if (!orgId) return;
+    setCodeGenerating(true);
+    try {
+      const { data } = await supabase.rpc('generate_event_code', {
+        p_org_id: orgId,
+        p_type:   type,
+        p_start:  date.toISOString(),
+      });
+      if (data) setForm(f => ({ ...f, event_code: data as string }));
+    } finally {
+      setCodeGenerating(false);
+    }
+  }
+
+  function sanitiseCode(raw: string) {
+    return raw.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-{2,}/g, '-');
+  }
 
   const set = <K extends keyof EventFormState>(k: K) =>
     (v: EventFormState[K]) => setForm(f => ({ ...f, [k]: v }));
@@ -625,12 +688,54 @@ function EventForm({
         <Text size="xs" weight="medium" color={c.textMuted} style={ef.sectionLabel}>BASICS</Text>
         <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>TITLE</Text>
         <TextInput
-          style={[inputStyle, { marginBottom: 12 }]}
+          style={[inputStyle, { marginBottom: 12, paddingVertical: 14, fontSize: 16 }]}
           value={form.title}
           onChangeText={set('title')}
           placeholder="e.g. Chapter meeting · week 6"
           placeholderTextColor={c.textSubtle}
         />
+
+        {/* ── EVENT CODE ── */}
+        <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>EVENT CODE</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <TextInput
+            style={[inputStyle, { flex: 1, marginBottom: 0, fontFamily: 'monospace', paddingVertical: 13,
+              borderColor: codeError ? '#EF4444' : c.border }]}
+            value={form.event_code}
+            onChangeText={(v) => { setCodeError(null); set('event_code')(sanitiseCode(v)); }}
+            placeholder="e.g. meeting-0522"
+            placeholderTextColor={c.textSubtle}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Pressable
+            onPress={() => { setCodeError(null); generateCode(form.type, form.isMultiDay ? form.dateRange.start : form.dateObj); }}
+            disabled={codeGenerating}
+            style={({ pressed }) => ({
+              borderWidth: 1, borderColor: c.border, borderRadius: 10,
+              paddingHorizontal: 12, paddingVertical: 13,
+              backgroundColor: pressed ? c.surfaceAlt : c.surface,
+              opacity: codeGenerating ? 0.5 : 1,
+            })}
+          >
+            {codeGenerating
+              ? <ActivityIndicator size="small" color={c.primary} />
+              : <Ionicons name="refresh-outline" size={16} color={c.textSubtle} />
+            }
+          </Pressable>
+        </View>
+        {codeError ? (
+          <Text size="xs" color="#EF4444" style={{ marginBottom: 8 }}>{codeError}</Text>
+        ) : null}
+        {form.event_code ? (
+          <Text size="xs" color={c.textSubtle} style={{ marginBottom: 14, fontFamily: 'monospace' }}>
+            presnt.app/c/{orgSlug}/events/{form.event_code}
+          </Text>
+        ) : (
+          <Text size="xs" color={c.textSubtle} style={{ marginBottom: 14 }}>
+            Leave blank to keep this event private (no public link).
+          </Text>
+        )}
 
         {/* Type + Mandatory row */}
         <View style={{ flexDirection: 'row', gap: 10, zIndex: showTypeMenu ? 100 : 1 }}>
@@ -1180,10 +1285,9 @@ function EventTableRow({
   const c = theme.colors;
   const [menuOpen, setMenuOpen] = useState(false);
   const d = fmtDate(displayDate(event));
-  const upcoming   = isUpcoming(event);
-  const cancelled  = !!event.is_cancelled;
-  const statusLabel = cancelled ? 'Cancelled' : upcoming ? 'Upcoming' : 'Past';
-  const statusColor = cancelled ? '#EF4444' : upcoming ? '#22C55E' : c.textSubtle;
+  const status      = eventStatus(event);
+  const statusLabel = STATUS_LABEL[status];
+  const statusColor = status === 'past' ? c.textSubtle : STATUS_COLOR[status];
 
   return (
     <Pressable
@@ -1230,7 +1334,7 @@ function EventTableRow({
               style={[dt.menuItem, { borderBottomColor: c.border }]}>
               <Text size="sm">Edit</Text>
             </Pressable>
-            {!cancelled && upcoming && (
+            {status !== 'cancelled' && status !== 'past' && (
               <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onCancel(event); }} style={dt.menuItem}>
                 <Text size="sm" color="#EF4444">Cancel</Text>
               </Pressable>
@@ -1258,9 +1362,8 @@ function EventCard({ event, onEdit }: { event: Event; onEdit: (e: Event) => void
   const { theme } = useThemeStore();
   const c = theme.colors;
   const d = fmtDate(displayDate(event));
-  const upcoming  = isUpcoming(event);
-  const cancelled = !!event.is_cancelled;
-  const statusColor = cancelled ? '#EF4444' : upcoming ? c.primary : c.textSubtle;
+  const status      = eventStatus(event);
+  const statusColor = status === 'past' ? c.textSubtle : STATUS_COLOR[status];
 
   return (
     <Pressable
@@ -1299,7 +1402,7 @@ function EventCard({ event, onEdit }: { event: Event; onEdit: (e: Event) => void
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <View style={[mc.statusChip, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
             <Text size="xs" weight="medium" color={statusColor}>
-              {cancelled ? 'Cancelled' : upcoming ? 'Upcoming' : 'Past'}
+              {STATUS_LABEL[status]}
             </Text>
           </View>
           <Pressable
@@ -1338,6 +1441,7 @@ export default function OfficerEventsScreen() {
   const { edit: editId } = useLocalSearchParams<{ edit?: string }>();
 
   const orgId     = userView?.org.id ?? organization?.id ?? '';
+  const orgSlug   = (userView?.org as any)?.slug ?? (organization as any)?.slug ?? '';
   const canManage = userView
     ? userView.role === 'admin' || userView.permissions.includes('manage_events')
     : true;
@@ -1346,8 +1450,9 @@ export default function OfficerEventsScreen() {
   const [loading,   setLoading]   = useState(true);
   const [refreshing,setRefresh]   = useState(false);
   const [tab,       setTab]       = useState<Tab>('Upcoming');
-  const [editTarget,setEdit]      = useState<Event | null | false>(false);
-  const [saving,    setSaving]    = useState(false);
+  const [editTarget,    setEdit]         = useState<Event | null | false>(false);
+  const [saving,        setSaving]       = useState(false);
+  const [codeErrorMsg,  setCodeErrorMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
@@ -1379,12 +1484,13 @@ export default function OfficerEventsScreen() {
     }
   }, [editId, loading, events]);
 
-  const upcomingCount = events.filter(e => isUpcoming(e) && !e.is_cancelled).length;
-  const pastCount     = events.filter(e => !isUpcoming(e)).length;
+  const upcomingCount = events.filter(e => { const s = eventStatus(e); return s === 'upcoming' || s === 'ongoing'; }).length;
+  const pastCount     = events.filter(e => eventStatus(e) === 'past').length;
 
   const displayed = events.filter(e => {
-    if (tab === 'Upcoming') return isUpcoming(e) && !e.is_cancelled;
-    if (tab === 'Past')     return !isUpcoming(e);
+    const s = eventStatus(e);
+    if (tab === 'Upcoming') return s === 'upcoming' || s === 'ongoing';
+    if (tab === 'Past')     return s === 'past';
     if (tab === 'Drafts')   return false;
     return true;
   });
@@ -1422,26 +1528,32 @@ export default function OfficerEventsScreen() {
         recurrence_rule:      rrule,
         checkin_open_minutes:  form.checkin_open_minutes.trim()  !== '' ? parseInt(form.checkin_open_minutes)  || null : null,
         checkin_grace_minutes: form.checkin_grace_minutes.trim() !== '' ? parseInt(form.checkin_grace_minutes) || null : null,
+        event_code:            form.event_code.trim() || null,
       };
 
       const editingEvent: Event | null = editTarget === false || editTarget === null ? null : editTarget;
       if (editingEvent?.id) {
-        await loggedQuery({
+        const { error } = await loggedQuery({
           domain: DOMAIN.EVENTS, method: 'PATCH', endpoint: 'events',
           orgId, userId: profile?.id,
           requestBody: { id: editingEvent.id, ...payload },
           query: supabase.from('events').update(payload).eq('id', editingEvent.id),
         });
+        if (error?.code === '23505') { setCodeErrorMsg('That event code is already in use. Choose a different one or tap ↺ to generate a new one.'); setSaving(false); return; }
+        if (error) throw error;
       } else {
-        await loggedQuery({
+        const { error } = await loggedQuery({
           domain: DOMAIN.EVENTS, method: 'POST', endpoint: 'events',
           orgId, userId: profile?.id,
           requestBody: payload,
           query: supabase.from('events').insert({ ...payload, org_id: orgId, created_by: profile?.id ?? null }),
         });
+        if (error?.code === '23505') { setCodeErrorMsg('That event code is already in use. Choose a different one or tap ↺ to generate a new one.'); setSaving(false); return; }
+        if (error) throw error;
       }
 
       await load();
+      setCodeErrorMsg(null);
       setEdit(false);
     } catch {
       Alert.alert('Error', 'Failed to save event.');
@@ -1614,10 +1726,13 @@ export default function OfficerEventsScreen() {
         visible={editTarget !== false}
         initial={editTarget || null}
         orgId={orgId}
-        onClose={() => setEdit(false)}
+        orgSlug={orgSlug}
+        onClose={() => { setCodeErrorMsg(null); setEdit(false); }}
         onSave={handleSave}
         onDelete={handleDelete}
         saving={saving}
+        codeErrorMsg={codeErrorMsg}
+        onClearCodeError={() => setCodeErrorMsg(null)}
       />
     </View>
   );

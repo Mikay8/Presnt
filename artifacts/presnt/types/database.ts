@@ -281,6 +281,7 @@ export type Database = {
           created_by:            string | null
           description:           string | null
           end_time:              string | null
+          event_code:            string | null
           geofence_required:     boolean | null
           id:                    string
           is_cancelled:          boolean | null
@@ -314,6 +315,7 @@ export type Database = {
           created_by?:            string | null
           description?:           string | null
           end_time?:              string | null
+          event_code?:            string | null
           geofence_required?:     boolean | null
           id?:                    string
           is_cancelled?:          boolean | null
@@ -347,6 +349,7 @@ export type Database = {
           created_by?:            string | null
           description?:           string | null
           end_time?:              string | null
+          event_code?:            string | null
           geofence_required?:     boolean | null
           id?:                    string
           is_cancelled?:          boolean | null
@@ -1071,9 +1074,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      clear_api_request_log: {
+        Args: { older_than_hours?: number | null }
+        Returns: number
+      }
       expand_recurring_event: {
         Args: { p_event_id: string; batch_size?: number }
         Returns: number
+      }
+      generate_event_code: {
+        Args: { p_org_id: string; p_type: string; p_start: string }
+        Returns: string
       }
       is_org_member: { Args: { check_org_id: string }; Returns: boolean }
       is_superuser: { Args: never; Returns: boolean }
