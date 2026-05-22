@@ -5,7 +5,7 @@
  * Mobile:  card list with date badge, Upcoming/Past segmented tabs
  *
  * Create / Edit form:
- *   BASICS    — title, type dropdown, mandatory toggle
+ *   BASICS    — title, category picker, mandatory toggle
  *   WHEN      — calendar date picker, start/end time pickers, repeat (recurrence)
  *   WHERE     — saved location picker + map-based location picker
  *   DESCRIPTION — multiline
@@ -83,18 +83,8 @@ type OrgLocation = {
   radius_meters: number | null;
 };
 
-const EVENT_TYPES = [
-  { value: 'meeting',    label: 'Chapter mtg' },
-  { value: 'social',     label: 'Social' },
-  { value: 'service',    label: 'Service' },
-  { value: 'fundraiser', label: 'Fundraiser' },
-  { value: 'workshop',   label: 'Workshop' },
-  { value: 'other',      label: 'Other' },
-] as const;
-
 type EventFormState = {
   title:               string;
-  type:                string;
   is_mandatory:        boolean;
   // Date & time
   isMultiDay:          boolean;
@@ -130,7 +120,7 @@ type EventFormState = {
 
 const now = new Date();
 const BLANK_FORM: EventFormState = {
-  title: '', type: 'meeting', is_mandatory: false,
+  title: '', is_mandatory: false,
   isMultiDay:   false,
   dateObj:      now,
   dateRange:    { start: now, end: now },
@@ -334,7 +324,6 @@ function formFromEvent(e: Event): EventFormState {
   const meetingUrl = (e as any).meeting_url ?? '';
   return {
     title:          e.title,
-    type:           e.type,
     is_mandatory:   !!(e as any).is_mandatory,
     isMultiDay:     false,
     dateObj:        start,
@@ -602,7 +591,6 @@ function EventForm({
   const [showRecurrence, setShowRecurrence] = useState(false);
   const [showLocPicker,  setShowLocPicker]  = useState(false);
   const [showMapPicker,  setShowMapPicker]  = useState(false);
-  const [showTypeMenu,   setShowTypeMenu]   = useState(false);
   const [savedLoc,       setSavedLoc]       = useState<OrgLocation | null>(null);
   const [confirmDelete,  setConfirmDelete]  = useState<'single' | 'recurring' | null>(null);
   const [codeGenerating, setCodeGenerating] = useState(false);
@@ -630,17 +618,17 @@ function EventForm({
       setForm(f);
       setSavedLoc(null);
       onClearCodeError?.();
-      if (!initial && !f.event_code) generateCode(f.type, f.dateObj);
+      if (!initial && !f.event_code) generateCode(f.dateObj);
     }
   }, [visible, initial]);
 
-  async function generateCode(type: string, date: Date) {
+  async function generateCode(date: Date) {
     if (!orgId) return;
     setCodeGenerating(true);
     try {
       const { data } = await supabase.rpc('generate_event_code', {
         p_org_id: orgId,
-        p_type:   type,
+        p_type:   'event',
         p_start:  date.toISOString(),
       });
       if (data) setForm(f => ({ ...f, event_code: data as string }));
@@ -657,8 +645,7 @@ function EventForm({
     (v: EventFormState[K]) => setForm(f => ({ ...f, [k]: v }));
 
   const inputStyle = [ef.input, { backgroundColor: c.surfaceAlt, borderColor: c.border, color: c.text }];
-  const isEdit     = !!initial;
-  const typeLabel  = EVENT_TYPES.find(t => t.value === form.type)?.label ?? form.type;
+  const isEdit       = !!initial;
   const rruleSummary = describeRule(form.recurrence);
 
   // ── Settings panel (shared desktop/mobile) ──
@@ -794,7 +781,7 @@ function EventForm({
               autoCorrect={false}
             />
             <Pressable
-              onPress={() => { setCodeError(null); generateCode(form.type, form.isMultiDay ? form.dateRange.start : form.dateObj); }}
+              onPress={() => { setCodeError(null); generateCode(form.isMultiDay ? form.dateRange.start : form.dateObj); }}
               disabled={codeGenerating}
               style={({ pressed }) => ({
                 borderWidth: 1, borderColor: c.border, borderRadius: 10,
@@ -827,31 +814,65 @@ function EventForm({
           )}
         </View>
 
-        {/* Type + Mandatory row */}
-        <View style={{ flexDirection: 'row', gap: 10, zIndex: showTypeMenu ? 100 : 1 }}>
+        {/* Category + Mandatory row */}
+        <View style={{ flexDirection: 'row', gap: 10, zIndex: showCatMenu ? 100 : 1 }}>
           <View style={{ flex: 1, zIndex: 100 }}>
-            <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>TYPE</Text>
+            <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>CATEGORY</Text>
             <Pressable
-              onPress={() => setShowTypeMenu(!showTypeMenu)}
+              onPress={() => setShowCatMenu(!showCatMenu)}
               style={[inputStyle, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, marginBottom: 0 }]}
             >
-              <Text size="sm" color={c.text}>{typeLabel}</Text>
-              <Ionicons name={showTypeMenu ? 'chevron-up' : 'chevron-down'} size={14} color={c.textSubtle} />
+              {form.category_id && categories.find(cat => cat.id === form.category_id) ? (() => {
+                const cat = categories.find(c2 => c2.id === form.category_id)!;
+                return (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
+                    <Text size="sm" color={c.text}>{cat.name}</Text>
+                  </View>
+                );
+              })() : (
+                <Text size="sm" color={c.textSubtle}>None</Text>
+              )}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {form.category_id && (
+                  <Pressable onPress={(e) => { e.stopPropagation?.(); set('category_id')(null); setShowCatMenu(false); }} hitSlop={8}>
+                    <Ionicons name="close-circle" size={16} color={c.textSubtle} />
+                  </Pressable>
+                )}
+                <Ionicons name={showCatMenu ? 'chevron-up' : 'chevron-down'} size={14} color={c.textSubtle} />
+              </View>
             </Pressable>
-            {showTypeMenu && (
+            {showCatMenu && (
               <View style={[ef.dropdown, { backgroundColor: c.surface, borderColor: c.border }]}>
-                {EVENT_TYPES.map((t) => (
+                <Pressable
+                  onPress={() => { set('category_id')(null); setShowCatMenu(false); }}
+                  style={[ef.dropdownItem, { borderBottomColor: c.border }]}
+                >
+                  <Text size="sm" color={c.textMuted}>None</Text>
+                </Pressable>
+                {categories.map(cat => (
                   <Pressable
-                    key={t.value}
-                    onPress={() => { set('type')(t.value); setShowTypeMenu(false); }}
+                    key={cat.id}
+                    onPress={() => { set('category_id')(cat.id); setShowCatMenu(false); }}
                     style={[ef.dropdownItem, { borderBottomColor: c.border }]}
                   >
-                    <Text size="sm" color={form.type === t.value ? c.primary : c.text}
-                      weight={form.type === t.value ? 'medium' : 'regular'}>
-                      {t.label}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
+                      <Text size="sm" color={form.category_id === cat.id ? c.primary : c.text}
+                        weight={form.category_id === cat.id ? 'medium' : 'regular'}>
+                        {cat.name}
+                      </Text>
+                    </View>
                   </Pressable>
                 ))}
+                {categories.length === 0 && (
+                  <Pressable
+                    onPress={() => { setShowCatMenu(false); router.push('/(officer)/categories' as any); }}
+                    style={[ef.dropdownItem, { borderBottomColor: c.border }]}
+                  >
+                    <Text size="sm" color={c.primary}>+ Create categories</Text>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
@@ -866,68 +887,6 @@ function EventForm({
               />
             </View>
           </View>
-        </View>
-
-        {/* ── CATEGORY ── */}
-        <View style={{ marginTop: 14, zIndex: showCatMenu ? 200 : 1 }}>
-          <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>CATEGORY</Text>
-          <Pressable
-            onPress={() => setShowCatMenu(!showCatMenu)}
-            style={[inputStyle, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, marginBottom: 0 }]}
-          >
-            {form.category_id && categories.find(cat => cat.id === form.category_id) ? (() => {
-              const cat = categories.find(c2 => c2.id === form.category_id)!;
-              return (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
-                  <Text size="sm" color={c.text}>{cat.name}</Text>
-                </View>
-              );
-            })() : (
-              <Text size="sm" color={c.textSubtle}>None</Text>
-            )}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {form.category_id && (
-                <Pressable onPress={(e) => { e.stopPropagation?.(); set('category_id')(null); setShowCatMenu(false); }} hitSlop={8}>
-                  <Ionicons name="close-circle" size={16} color={c.textSubtle} />
-                </Pressable>
-              )}
-              <Ionicons name={showCatMenu ? 'chevron-up' : 'chevron-down'} size={14} color={c.textSubtle} />
-            </View>
-          </Pressable>
-          {showCatMenu && (
-            <View style={[ef.dropdown, { backgroundColor: c.surface, borderColor: c.border }]}>
-              <Pressable
-                onPress={() => { set('category_id')(null); setShowCatMenu(false); }}
-                style={[ef.dropdownItem, { borderBottomColor: c.border }]}
-              >
-                <Text size="sm" color={c.textMuted}>None</Text>
-              </Pressable>
-              {categories.map(cat => (
-                <Pressable
-                  key={cat.id}
-                  onPress={() => { set('category_id')(cat.id); setShowCatMenu(false); }}
-                  style={[ef.dropdownItem, { borderBottomColor: c.border }]}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
-                    <Text size="sm" color={form.category_id === cat.id ? c.primary : c.text}
-                      weight={form.category_id === cat.id ? 'medium' : 'regular'}>
-                      {cat.name}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-              {categories.length === 0 && (
-                <Pressable
-                  onPress={() => { setShowCatMenu(false); router.push('/(officer)/categories' as any); }}
-                  style={[ef.dropdownItem, { borderBottomColor: c.border }]}
-                >
-                  <Text size="sm" color={c.primary}>+ Create categories</Text>
-                </Pressable>
-              )}
-            </View>
-          )}
         </View>
 
         <View style={[ef.divider, { backgroundColor: c.border, marginTop: 20 }]} />
@@ -1426,12 +1385,14 @@ const ef = StyleSheet.create({
 
 function EventTableRow({
   event,
+  catMap,
   onEdit,
   onCancel,
   onScan,
   canManage,
 }: {
   event:      Event;
+  catMap:     Record<string, EventCategory>;
   onEdit:     (e: Event) => void;
   onCancel:   (e: Event) => void;
   onScan:     (e: Event) => void;
@@ -1456,8 +1417,18 @@ function EventTableRow({
       </View>
       <View style={{ flex: 2, gap: 2 }}>
         <Text size="sm" weight="medium">{event.title}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text size="xs" color={c.textSubtle} style={{ textTransform: 'capitalize' }}>{event.type}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {(() => {
+            const cat = (event as any).category_id ? catMap[(event as any).category_id] : null;
+            return cat ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4,
+                backgroundColor: cat.color + '20', borderWidth: 1, borderColor: cat.color + '60',
+                borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: cat.color }} />
+                <Text size="xs" color={cat.color} weight="medium">{cat.name}</Text>
+              </View>
+            ) : null;
+          })()}
           {(event as any).recurrence_rule && (
             <View style={[dt.recurBadge, { backgroundColor: c.primary + '18', borderColor: c.primary + '50' }]}>
               <Ionicons name="repeat" size={9} color={c.primary} />
@@ -1529,12 +1500,13 @@ const dt = StyleSheet.create({
 
 // ─── Mobile Event Card ────────────────────────────────────────────────────────
 
-function EventCard({ event, onEdit, onScan, canManage }: { event: Event; onEdit: (e: Event) => void; onScan: (e: Event) => void; canManage: boolean }) {
+function EventCard({ event, catMap, onEdit, onScan, canManage }: { event: Event; catMap: Record<string, EventCategory>; onEdit: (e: Event) => void; onScan: (e: Event) => void; canManage: boolean }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
   const d = fmtDate(displayDate(event));
   const status      = eventStatus(event);
   const statusColor = status === 'past' ? c.textSubtle : STATUS_COLOR[status];
+  const cat         = (event as any).category_id ? catMap[(event as any).category_id] : null;
 
   return (
     <Pressable
@@ -1548,6 +1520,14 @@ function EventCard({ event, onEdit, onScan, canManage }: { event: Event; onEdit:
         </View>
         <View style={{ flex: 1, gap: 3 }}>
           <Text size="sm" weight="medium">{event.title}</Text>
+          {cat && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4,
+              backgroundColor: cat.color + '20', borderWidth: 1, borderColor: cat.color + '60',
+              borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start' }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: cat.color }} />
+              <Text size="xs" color={cat.color} weight="medium">{cat.name}</Text>
+            </View>
+          )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text size="xs" color={c.textSubtle}>{d.time}</Text>
               {(event as any).meeting_url ? (
@@ -1629,10 +1609,11 @@ export default function OfficerEventsScreen() {
     ? userView.role === 'admin' || userView.permissions.includes(PERMISSIONS.MANAGE_EVENTS)
     : can(PERMISSIONS.MANAGE_EVENTS);
 
-  const [events,    setEvents]    = useState<Event[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [refreshing,setRefresh]   = useState(false);
-  const [tab,       setTab]       = useState<Tab>('Upcoming');
+  const [events,     setEvents]     = useState<Event[]>([]);
+  const [catMap,     setCatMap]     = useState<Record<string, EventCategory>>({});
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefresh]    = useState(false);
+  const [tab,        setTab]        = useState<Tab>('Upcoming');
   const [editTarget,    setEdit]         = useState<Event | null | false>(false);
   const [saving,        setSaving]       = useState(false);
   const [codeErrorMsg,  setCodeErrorMsg] = useState<string | null>(null);
@@ -1640,18 +1621,28 @@ export default function OfficerEventsScreen() {
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const { data } = await loggedQuery({
-      domain: DOMAIN.EVENTS, method: 'GET', endpoint: 'events',
-      orgId, userId: profile?.id,
-      query: supabase
-        .from('events')
-        .select('*')
+    const [evRes, catRes] = await Promise.all([
+      loggedQuery({
+        domain: DOMAIN.EVENTS, method: 'GET', endpoint: 'events',
+        orgId, userId: profile?.id,
+        query: supabase
+          .from('events')
+          .select('*')
+          .eq('org_id', orgId)
+          .eq('is_deleted', false)
+          .eq('is_occurrence', false)
+          .order('start_time', { ascending: false }),
+      }),
+      supabase
+        .from('event_categories')
+        .select('id, name, color')
         .eq('org_id', orgId)
-        .eq('is_deleted', false)
-        .eq('is_occurrence', false)
-        .order('start_time', { ascending: false }),
-    });
-    setEvents((data ?? []) as Event[]);
+        .eq('is_deleted', false),
+    ]);
+    setEvents((evRes.data ?? []) as Event[]);
+    const map: Record<string, EventCategory> = {};
+    for (const cat of (catRes.data ?? []) as EventCategory[]) map[cat.id] = cat;
+    setCatMap(map);
     setLoading(false);
     setRefresh(false);
   }, [orgId]);
@@ -1701,7 +1692,7 @@ export default function OfficerEventsScreen() {
       const isRemote = form.location_type === 'remote';
       const payload: any = {
         title:             form.title.trim(),
-        type:              form.type,
+        type:              'event',
         description:       form.description.trim() || null,
         location:          isRemote ? null : (form.location_text.trim() || null),
         location_id:       isRemote ? null : (form.location_id ?? null),
@@ -1917,12 +1908,12 @@ export default function OfficerEventsScreen() {
           </View>
         ) : isWide ? (
           displayed.map(e => (
-            <EventTableRow key={e.id} event={e} onEdit={setEdit} onCancel={handleCancel} onScan={(ev) => setScanTarget(ev)} canManage={canManage} />
+            <EventTableRow key={e.id} event={e} catMap={catMap} onEdit={setEdit} onCancel={handleCancel} onScan={(ev) => setScanTarget(ev)} canManage={canManage} />
           ))
         ) : (
           <View style={{ gap: 10 }}>
             {displayed.map(e => (
-              <EventCard key={e.id} event={e} onEdit={(ev) => setEdit(ev)} onScan={(ev) => setScanTarget(ev)} canManage={canManage} />
+              <EventCard key={e.id} event={e} catMap={catMap} onEdit={(ev) => setEdit(ev)} onScan={(ev) => setScanTarget(ev)} canManage={canManage} />
             ))}
           </View>
         )}

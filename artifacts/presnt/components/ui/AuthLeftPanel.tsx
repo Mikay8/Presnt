@@ -8,7 +8,7 @@ const DARK_BG = '#272018';
 const BULLETS = [
   'QR + geofence check-in',
   'Excuses, dues, status in one place',
-  'Built for chapters & student orgs',
+  'Attendance management for all organizations',
 ];
 
 const MEMBER_COLORS = ['#CA8A04', '#22C55E', '#A855F7', '#E26B4A'];

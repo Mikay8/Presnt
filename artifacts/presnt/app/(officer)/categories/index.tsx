@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -430,12 +431,63 @@ export default function CategoriesScreen() {
   }
 
   async function handleDelete(cat: Category) {
-    await supabase
-      .from('event_categories')
-      .update({ is_deleted: true, updated_at: new Date().toISOString() })
-      .eq('id', cat.id);
-    await load();
-    setEditing(false);
+    // If this category has events, ask where to move them first
+    const eventCount = usageMap[cat.id] ?? 0;
+    const otherCats  = categories.filter(c => c.id !== cat.id);
+
+    const doDelete = async (replacementId: string | null) => {
+      setSaving(true);
+      try {
+        // Reassign events to chosen category (or null = uncategorised)
+        if (eventCount > 0) {
+          await supabase
+            .from('events')
+            .update({ category_id: replacementId })
+            .eq('category_id', cat.id)
+            .eq('is_deleted', false);
+        }
+        // Soft-delete the category
+        await supabase
+          .from('event_categories')
+          .update({ is_deleted: true, updated_at: new Date().toISOString() })
+          .eq('id', cat.id);
+        await load();
+        setEditing(false);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    if (eventCount === 0 || otherCats.length === 0) {
+      // No events to migrate, or no other categories to migrate to — just delete
+      Alert.alert(
+        'Delete category',
+        eventCount > 0
+          ? `"${cat.name}" has ${eventCount} event${eventCount !== 1 ? 's' : ''} — they will become uncategorised.`
+          : `Delete "${cat.name}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => doDelete(null) },
+        ]
+      );
+      return;
+    }
+
+    // Has events AND other categories exist — show reassignment picker
+    const options = [
+      ...otherCats.map(c => ({
+        text: c.name,
+        onPress: () => doDelete(c.id),
+      })),
+      { text: 'Leave uncategorised', onPress: () => doDelete(null) },
+      { text: 'Cancel', style: 'cancel' as const, onPress: () => {} },
+    ];
+
+    Alert.alert(
+      'Move events before deleting',
+      `"${cat.name}" has ${eventCount} event${eventCount !== 1 ? 's' : ''}. Move them to:`,
+      options
+    );
   }
 
   if (loading) {
