@@ -12,8 +12,10 @@ import {
   ActivityIndicator,
   Alert,
   Clipboard,
+  Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   TextInput,
   useWindowDimensions,
@@ -94,6 +96,7 @@ export default function AdminSettingsScreen() {
   const [dirty,       setDirty]       = useState(false);
   const [codeCopied,  setCodeCopied]  = useState(false);
   const [codeSaving,  setCodeSaving]  = useState(false);
+  const [linkShared,  setLinkShared]  = useState(false);
 
   useEffect(() => {
     setDisplayName(organization?.app_display_name ?? organization?.name ?? '');
@@ -153,9 +156,45 @@ export default function AdminSettingsScreen() {
     setTimeout(() => setCodeCopied(false), 2000);
   }
 
-  function handleRegenerateCode() {
-    const base = organization?.name ?? 'CHAPTER';
-    setJoinCode(generateJoinCode(base));
+  async function handleRegenerateCode() {
+    const base    = organization?.name ?? 'CHAPTER';
+    const newCode = generateJoinCode(base);
+    setJoinCode(newCode);
+    // Auto-save immediately
+    if (!organization?.id) return;
+    setCodeSaving(true);
+    const { error } = await supabase
+      .from('organizations')
+      .update({ join_code: newCode, updated_at: new Date().toISOString() })
+      .eq('id', organization.id);
+    setCodeSaving(false);
+    if (error) {
+      Alert.alert('Error', 'Failed to save new join code.');
+    } else {
+      setMembership(membership, { ...organization, join_code: newCode });
+    }
+  }
+
+  async function handleShareLink() {
+    const code = organization?.join_code ?? joinCode;
+    if (!code) return;
+    const appLink = `presnt://invite?code=${encodeURIComponent(code)}`;
+    const webLink = `https://presnt.app/invite?code=${encodeURIComponent(code)}`;
+    const orgName = organization?.name ?? 'our chapter';
+    const message = `Join ${orgName} on Presnt!\n\nTap the link to create your account and join instantly:\n${webLink}\n\nOr enter code ${code} manually in the app.`;
+    try {
+      if (Platform.OS === 'web') {
+        Clipboard.setString(webLink);
+        setLinkShared(true);
+        setTimeout(() => setLinkShared(false), 2000);
+      } else {
+        await Share.share({ message, url: appLink });
+        setLinkShared(true);
+        setTimeout(() => setLinkShared(false), 2000);
+      }
+    } catch (_) {
+      // user cancelled or share not available — silently ignore
+    }
   }
 
   return (
@@ -265,10 +304,21 @@ export default function AdminSettingsScreen() {
               <Pressable onPress={handleCopyCode} style={[styles.codeAction, { borderColor: c.border }]}>
                 <Ionicons name={codeCopied ? 'checkmark' : 'copy-outline'} size={15} color={codeCopied ? '#22C55E' : c.textMuted} />
               </Pressable>
-              {/* Regenerate button — admins only */}
+              {/* Share invite link */}
+              <Pressable onPress={handleShareLink} style={[styles.codeAction, { borderColor: linkShared ? '#22C55E' : c.border }]}>
+                <Ionicons name={linkShared ? 'checkmark' : 'share-outline'} size={15} color={linkShared ? '#22C55E' : c.textMuted} />
+              </Pressable>
+              {/* Regenerate button — admins only (auto-saves) */}
               {isAdmin && (
-                <Pressable onPress={handleRegenerateCode} style={[styles.codeAction, { borderColor: c.border }]}>
-                  <Ionicons name="refresh-outline" size={15} color={c.textMuted} />
+                <Pressable
+                  onPress={handleRegenerateCode}
+                  disabled={codeSaving}
+                  style={[styles.codeAction, { borderColor: c.border, opacity: codeSaving ? 0.5 : 1 }]}
+                >
+                  {codeSaving
+                    ? <ActivityIndicator size="small" color={c.textMuted} />
+                    : <Ionicons name="refresh-outline" size={15} color={c.textMuted} />
+                  }
                 </Pressable>
               )}
             </View>

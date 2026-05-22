@@ -11,8 +11,10 @@ import React, { useState } from 'react';
 import {
   Alert,
   Clipboard,
+  Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -77,6 +79,7 @@ export default function OfficerSettingsScreen() {
   const isWide                           = width >= 800;
   const { organization, membership, profile } = useAuthStore();
   const [codeCopied, setCodeCopied]      = useState(false);
+  const [linkShared, setLinkShared]      = useState(false);
   const c = theme.colors;
 
   async function handleSignOut() {
@@ -98,6 +101,27 @@ export default function OfficerSettingsScreen() {
     Clipboard.setString(code);
     setCodeCopied(true);
     setTimeout(() => setCodeCopied(false), 2000);
+  }
+
+  async function handleShareLink() {
+    const code = organization?.join_code;
+    if (!code) return;
+    const webLink = `https://presnt.app/invite?code=${encodeURIComponent(code)}`;
+    const orgName = organization?.name ?? 'our chapter';
+    const message = `Join ${orgName} on Presnt!\n\nTap the link to create your account and join instantly:\n${webLink}\n\nOr enter code ${code} manually in the app.`;
+    try {
+      if (Platform.OS === 'web') {
+        Clipboard.setString(webLink);
+        setLinkShared(true);
+        setTimeout(() => setLinkShared(false), 2000);
+      } else {
+        await Share.share({ message, url: `presnt://invite?code=${encodeURIComponent(code)}` });
+        setLinkShared(true);
+        setTimeout(() => setLinkShared(false), 2000);
+      }
+    } catch (_) {
+      // user cancelled — ignore
+    }
   }
 
   const roleLabel = membership?.role
@@ -171,6 +195,9 @@ export default function OfficerSettingsScreen() {
                     size={15}
                     color={codeCopied ? '#22C55E' : c.textMuted}
                   />
+                </Pressable>
+                <Pressable onPress={handleShareLink} style={[styles.codeAction, { borderColor: linkShared ? '#22C55E' : c.border }]}>
+                  <Ionicons name={linkShared ? 'checkmark' : 'share-outline'} size={15} color={linkShared ? '#22C55E' : c.textMuted} />
                 </Pressable>
               </View>
               <View style={[styles.codeDisplay, { backgroundColor: c.background, borderColor: c.border }]}>

@@ -114,8 +114,11 @@ function RootLayoutNav() {
   const userView = useUserViewStore((s) => s.session);
   const pathname = usePathname();
 
-  // Pathname-based route group detection — reliable on every render
-  const inAuth      = pathname.startsWith('/(auth)') || pathname === '/';
+  // Pathname-based route group detection — reliable on every render.
+  // On web, Expo Router strips route groups from the URL, so /(auth)/invite
+  // appears as /invite. Include it explicitly so the auth guard doesn't
+  // redirect unauthenticated users away before they can see the invite screen.
+  const inAuth      = pathname.startsWith('/(auth)') || pathname === '/' || pathname.startsWith('/invite');
   const inSuperuser = pathname === '/super-user' || pathname.startsWith('/(superuser)');
 
   // ── Still loading user data — don't redirect yet ────────────────────────────
@@ -141,17 +144,21 @@ function RootLayoutNav() {
 
   // Session but no membership → onboarding.
   // Fires whether on an auth screen or not, EXCEPT when already mid-flow on
-  // onboarding/create-org/join-chapter/create-chapter so we don't interrupt them.
+  // onboarding/create-org/join-chapter/create-chapter/invite so we don't interrupt them.
   const onboardingFlow = pathname.startsWith('/(auth)/onboarding')
     || pathname.startsWith('/(auth)/create-org')
     || pathname.startsWith('/(auth)/create-chapter')
-    || pathname.startsWith('/(auth)/join-chapter');
+    || pathname.startsWith('/(auth)/join-chapter')
+    || pathname.startsWith('/(auth)/invite')
+    || pathname.startsWith('/invite');   // web: route group stripped
   if (session && !membership && !onboardingFlow) {
     return <Redirect href="/(auth)/onboarding" />;
   }
 
-  // Authenticated + membership on an auth screen → route to the correct portal
-  if (session && membership && inAuth) {
+  // Authenticated + membership on an auth screen → route to the correct portal.
+  // Exception: invite screen — it handles the "already a member" case itself.
+  const onInvite = pathname.startsWith('/(auth)/invite') || pathname.startsWith('/invite');
+  if (session && membership && inAuth && !onInvite) {
     const role = membership.role;
     if (role === 'org_admin' || role === 'admin') {
       return <Redirect href="/(admin)/dashboard" />;
