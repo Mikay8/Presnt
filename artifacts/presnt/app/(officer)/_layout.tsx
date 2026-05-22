@@ -113,9 +113,19 @@ export default function OfficerLayout() {
               ),
             } : { href: null }}
           />
+          <Tabs.Screen
+            name="settings"
+            options={{
+              title: 'Settings',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="settings-outline" size={size} color={color} />
+              ),
+            }}
+          />
           {/* Hidden sub-routes */}
           <Tabs.Screen name="events-management/[id]" options={{ href: null }} />
-          <Tabs.Screen name="locations" options={{ href: null }} />
+          <Tabs.Screen name="locations"   options={{ href: null }} />
+          <Tabs.Screen name="categories"  options={{ href: null }} />
         </Tabs>
       </View>
     </View>

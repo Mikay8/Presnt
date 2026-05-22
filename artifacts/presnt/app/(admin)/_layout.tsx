@@ -114,6 +114,7 @@ export default function AdminLayout() {
           <Tabs.Screen name="events-management/index" options={{ href: null }} />
           <Tabs.Screen name="events-management/[id]" options={{ href: null }} />
           <Tabs.Screen name="locations/index"        options={{ href: null }} />
+          <Tabs.Screen name="categories/index"       options={{ href: null }} />
 
           <Tabs.Screen name="roles"              options={{ href: null }} />
           <Tabs.Screen name="dues"               options={{ href: null }} />
@@ -122,6 +123,7 @@ export default function AdminLayout() {
           <Tabs.Screen name="organization"       options={{ href: null }} />
           <Tabs.Screen name="events-management"  options={{ href: null }} />
           <Tabs.Screen name="locations"          options={{ href: null }} />
+          <Tabs.Screen name="categories"         options={{ href: null }} />
         </Tabs>
       </View>
     </View>

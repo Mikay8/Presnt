@@ -106,22 +106,22 @@ function UserViewBanner() {
 }
 
 // ─── Auth guard ────────────────────────────────────────────────────────────────
-// Runs after isLoading:false. Uses pathname (always resolves to the real URL)
-// rather than segments (which can be empty on initial render).
+// Uses pathname exclusively (segments can be [] on first render).
+// Only runs after isLoading:false so user data is always settled before any redirect.
 
 function RootLayoutNav() {
-  const { session, profile, membership } = useAuthStore();
+  const { session, profile, membership, isLoading } = useAuthStore();
   const userView = useUserViewStore((s) => s.session);
-  const segments = useSegments();
   const pathname = usePathname();
 
-  const inAuth      = segments[0] === '(auth)';
+  // Pathname-based route group detection — reliable on every render
+  const inAuth      = pathname.startsWith('/(auth)') || pathname === '/';
   const inSuperuser = pathname === '/super-user' || pathname.startsWith('/(superuser)');
 
+  // ── Still loading user data — don't redirect yet ────────────────────────────
+  if (isLoading) return null;
+
   // ── User View mode ──────────────────────────────────────────────────────────
-  // Navigation is handled imperatively in the support screen (launch) and banner
-  // (exit). Here we just suppress all redirects while a session is active so the
-  // normal auth guards don't fight the simulated portal.
   if (userView) return null;
 
   // ── Normal auth flow ────────────────────────────────────────────────────────
@@ -139,8 +139,14 @@ function RootLayoutNav() {
     return <Redirect href="/(superuser)/" />;
   }
 
-  // Session but no membership → needs onboarding
-  if (session && !membership && !inAuth) {
+  // Session but no membership → onboarding.
+  // Fires whether on an auth screen or not, EXCEPT when already mid-flow on
+  // onboarding/create-org/join-chapter/create-chapter so we don't interrupt them.
+  const onboardingFlow = pathname.startsWith('/(auth)/onboarding')
+    || pathname.startsWith('/(auth)/create-org')
+    || pathname.startsWith('/(auth)/create-chapter')
+    || pathname.startsWith('/(auth)/join-chapter');
+  if (session && !membership && !onboardingFlow) {
     return <Redirect href="/(auth)/onboarding" />;
   }
 
@@ -175,12 +181,14 @@ export default function RootLayout() {
     SpaceGrotesk_600SemiBold,
   });
 
-  // Hide splash only after fonts + initial auth are both done
+  // Hide splash once (cold start only) — after fonts + first auth check settle.
+  const [splashHidden, setSplashHidden] = React.useState(false);
   useEffect(() => {
-    if ((fontsLoaded || fontError) && !isLoading) {
+    if (!splashHidden && (fontsLoaded || fontError) && !isLoading) {
       SplashScreen.hideAsync();
+      setSplashHidden(true);
     }
-  }, [fontsLoaded, fontError, isLoading]);
+  }, [fontsLoaded, fontError, isLoading, splashHidden]);
 
   // ── Auth listener ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -188,26 +196,25 @@ export default function RootLayout() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
-        loadUserData(session, true);
+        loadUserData(session);
       } else {
         setLoading(false);
       }
     });
 
-    // React to auth events — but don't re-block the UI for token refreshes
+    // React to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session) {
-        // TOKEN_REFRESHED fires on every window focus in dev and periodically
-        // in prod. Silently update session but skip the full data reload +
-        // loading spinner so the screen doesn't flash white.
+        // TOKEN_REFRESHED fires frequently — skip the data reload to avoid
+        // white flashes. The session object is already updated via setSession above.
         if (event === 'TOKEN_REFRESHED') return;
 
-        // Log sign-in / sign-out events
+        // Log sign-in events
         if (event === 'SIGNED_IN') {
           logEvent({ domain: DOMAIN.AUTH, method: 'POST', endpoint: 'auth/session', userId: session.user.id, statusCode: 200, responseMeta: { event } });
         }
-        loadUserData(session, false); // silent refresh — no spinner
+        loadUserData(session);
       } else {
         logEvent({ domain: DOMAIN.AUTH, method: 'POST', endpoint: 'auth/signout', statusCode: 200, responseMeta: { event } });
         clear();
@@ -217,9 +224,10 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // showSpinner = true only for the very first load on cold start
-  async function loadUserData(session: Session, showSpinner: boolean) {
-    if (showSpinner) setLoading(true);
+  // Always sets isLoading=true while fetching so RootLayoutNav never redirects
+  // on stale/partial data. TOKEN_REFRESHED events skip this entirely (see above).
+  async function loadUserData(session: Session) {
+    setLoading(true);
 
     const t0 = Date.now();
     const [profileResult, membershipResult] = await Promise.all([
@@ -301,13 +309,14 @@ export default function RootLayout() {
       setCustomRole(null);
     }
 
-    if (showSpinner) setLoading(false);
+    setLoading(false);
   }
 
-  // Block render on cold start until fonts + first auth check are done.
-  // TOKEN_REFRESHED events no longer trigger isLoading so this only fires once.
+  // Block render until fonts are ready AND the first auth check has completed.
+  // After that (splashHidden=true), isLoading is handled inside RootLayoutNav
+  // which suppresses redirects without blanking the whole app.
   if (!fontsLoaded && !fontError) return null;
-  if (isLoading) return null;
+  if (!splashHidden && isLoading) return null;
 
   return (
     <SafeAreaProvider>

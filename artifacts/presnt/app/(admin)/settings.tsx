@@ -251,28 +251,30 @@ export default function AdminSettingsScreen() {
             last={!isAdmin}
           />
 
-          {/* Join code — editable for admins */}
-          {isAdmin && (
-            <View style={[styles.codeSection, { borderTopColor: c.border }]}>
-              <View style={styles.codeLabelRow}>
-                <Ionicons name="key-outline" size={18} color={c.textMuted} />
-                <View style={{ flex: 1 }}>
-                  <Text size="sm" weight="medium">Join Code</Text>
-                  <Text size="xs" color={c.textSubtle} style={{ marginTop: 1 }}>
-                    Members enter this to join your chapter
-                  </Text>
-                </View>
-                {/* Copy button */}
-                <Pressable onPress={handleCopyCode} style={[styles.codeAction, { borderColor: c.border }]}>
-                  <Ionicons name={codeCopied ? 'checkmark' : 'copy-outline'} size={15} color={codeCopied ? '#22C55E' : c.textMuted} />
-                </Pressable>
-                {/* Regenerate button */}
+          {/* Join code — always visible; editable for admins */}
+          <View style={[styles.codeSection, { borderTopColor: c.border }]}>
+            <View style={styles.codeLabelRow}>
+              <Ionicons name="key-outline" size={18} color={c.textMuted} />
+              <View style={{ flex: 1 }}>
+                <Text size="sm" weight="medium">Join Code</Text>
+                <Text size="xs" color={c.textSubtle} style={{ marginTop: 1 }}>
+                  Members enter this to join your chapter
+                </Text>
+              </View>
+              {/* Copy button */}
+              <Pressable onPress={handleCopyCode} style={[styles.codeAction, { borderColor: c.border }]}>
+                <Ionicons name={codeCopied ? 'checkmark' : 'copy-outline'} size={15} color={codeCopied ? '#22C55E' : c.textMuted} />
+              </Pressable>
+              {/* Regenerate button — admins only */}
+              {isAdmin && (
                 <Pressable onPress={handleRegenerateCode} style={[styles.codeAction, { borderColor: c.border }]}>
                   <Ionicons name="refresh-outline" size={15} color={c.textMuted} />
                 </Pressable>
-              </View>
+              )}
+            </View>
 
-              {/* Editable input */}
+            {/* Editable input for admins, read-only display otherwise */}
+            {isAdmin ? (
               <View style={styles.codeInputRow}>
                 <TextInput
                   value={joinCode}
@@ -303,8 +305,14 @@ export default function AdminSettingsScreen() {
                   }
                 </Pressable>
               </View>
-            </View>
-          )}
+            ) : (
+              <View style={[styles.codeDisplay, { backgroundColor: c.background, borderColor: c.border }]}>
+                <Text size="md" weight="medium" style={{ letterSpacing: 2, fontFamily: theme.typography.fontFamily.medium }}>
+                  {organization?.join_code ?? '—'}
+                </Text>
+              </View>
+            )}
+          </View>
         </Card>
 
         {/* Roles */}
@@ -348,6 +356,7 @@ const styles = StyleSheet.create({
   codeInputRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   codeInput:    { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, letterSpacing: 1 },
   codeSaveBtn:  { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  codeDisplay:  { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
 
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 4 },
 

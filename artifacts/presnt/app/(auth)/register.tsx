@@ -234,7 +234,7 @@ export default function RegisterScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.iconRow}>
-          <Image source={require('@/assets/images/wordmark-dark.png')}
+          <Image source={require('@/assets/images/wordmark-light.png')}
             style={styles.appIcon} resizeMode="contain" />
         </View>
         {formContent}
