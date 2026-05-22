@@ -118,7 +118,8 @@ type EventFormState = {
   points:               string;
   checkin_open_minutes: string;   // minutes before start; '' = disabled
   checkin_grace_minutes:string;   // minutes grace after start/end; '' = disabled
-  event_code:           string;
+  is_public:            boolean;  // whether to generate a public shareable URL
+  event_code:           string;   // human-readable slug, e.g. 'meeting-0522'
 };
 
 const now = new Date();
@@ -139,6 +140,7 @@ const BLANK_FORM: EventFormState = {
   points: '2',
   checkin_open_minutes:  '15',
   checkin_grace_minutes: '15',
+  is_public:             false,
   event_code:            '',
 };
 
@@ -308,6 +310,7 @@ function formFromEvent(e: Event): EventFormState {
     points:                String((e as any).points ?? 2),
     checkin_open_minutes:  (e as any).checkin_open_minutes  != null ? String((e as any).checkin_open_minutes)  : '',
     checkin_grace_minutes: (e as any).checkin_grace_minutes != null ? String((e as any).checkin_grace_minutes) : '',
+    is_public:             !!(e as any).is_public,
     event_code:            (e as any).event_code ?? '',
   };
 }
@@ -562,7 +565,7 @@ function EventForm({
       setForm(f);
       setSavedLoc(null);
       onClearCodeError?.();
-      if (!initial) generateCode(f.type, f.dateObj);
+      if (!initial && f.is_public && !f.event_code) generateCode(f.type, f.dateObj);
     }
   }, [visible, initial]);
 
@@ -695,46 +698,72 @@ function EventForm({
           placeholderTextColor={c.textSubtle}
         />
 
-        {/* ── EVENT CODE ── */}
-        <Text size="xs" weight="medium" color={c.textSubtle} style={ef.fieldLabel}>EVENT CODE</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <TextInput
-            style={[inputStyle, { flex: 1, marginBottom: 0, fontFamily: 'monospace', paddingVertical: 13,
-              borderColor: codeError ? '#EF4444' : c.border }]}
-            value={form.event_code}
-            onChangeText={(v) => { setCodeError(null); set('event_code')(sanitiseCode(v)); }}
-            placeholder="e.g. meeting-0522"
-            placeholderTextColor={c.textSubtle}
-            autoCapitalize="none"
-            autoCorrect={false}
+        {/* ── PUBLIC EVENT toggle ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <View style={{ flex: 1 }}>
+            <Text size="sm" weight="medium" color={c.text}>Public event</Text>
+            <Text size="xs" color={c.textSubtle} style={{ marginTop: 2 }}>
+              {form.is_public ? 'Shareable link · visible to non-members' : 'Members only · no public link'}
+            </Text>
+          </View>
+          <Switch
+            value={form.is_public}
+            onValueChange={(v) => {
+              set('is_public')(v);
+              onClearCodeError?.();
+              if (v && !form.event_code) {
+                generateCode(form.type, form.isMultiDay ? form.dateRange.start : form.dateObj);
+              }
+            }}
+            trackColor={{ false: c.border, true: c.primary }}
+            thumbColor="#fff"
           />
-          <Pressable
-            onPress={() => { setCodeError(null); generateCode(form.type, form.isMultiDay ? form.dateRange.start : form.dateObj); }}
-            disabled={codeGenerating}
-            style={({ pressed }) => ({
-              borderWidth: 1, borderColor: c.border, borderRadius: 10,
-              paddingHorizontal: 12, paddingVertical: 13,
-              backgroundColor: pressed ? c.surfaceAlt : c.surface,
-              opacity: codeGenerating ? 0.5 : 1,
-            })}
-          >
-            {codeGenerating
-              ? <ActivityIndicator size="small" color={c.primary} />
-              : <Ionicons name="refresh-outline" size={16} color={c.textSubtle} />
-            }
-          </Pressable>
         </View>
-        {codeError ? (
-          <Text size="xs" color="#EF4444" style={{ marginBottom: 8 }}>{codeError}</Text>
-        ) : null}
-        {form.event_code ? (
-          <Text size="xs" color={c.textSubtle} style={{ marginBottom: 14, fontFamily: 'monospace' }}>
-            presnt.app/c/{orgSlug}/events/{form.event_code}
-          </Text>
-        ) : (
-          <Text size="xs" color={c.textSubtle} style={{ marginBottom: 14 }}>
-            Leave blank to keep this event private (no public link).
-          </Text>
+
+        {/* ── EVENT CODE (only shown when public) ── */}
+        {form.is_public && (
+          <View style={{ marginBottom: 14 }}>
+            <Text size="xs" weight="medium" color={c.textSubtle} style={[ef.fieldLabel, { marginTop: 10 }]}>EVENT CODE</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <TextInput
+                style={[inputStyle, { flex: 1, marginBottom: 0, fontFamily: 'monospace', paddingVertical: 13,
+                  borderColor: codeError ? '#EF4444' : c.border }]}
+                value={form.event_code}
+                onChangeText={(v) => { setCodeError(null); set('event_code')(sanitiseCode(v)); }}
+                placeholder="e.g. meeting-0522"
+                placeholderTextColor={c.textSubtle}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Pressable
+                onPress={() => { setCodeError(null); generateCode(form.type, form.isMultiDay ? form.dateRange.start : form.dateObj); }}
+                disabled={codeGenerating}
+                style={({ pressed }) => ({
+                  borderWidth: 1, borderColor: c.border, borderRadius: 10,
+                  paddingHorizontal: 12, paddingVertical: 13,
+                  backgroundColor: pressed ? c.surfaceAlt : c.surface,
+                  opacity: codeGenerating ? 0.5 : 1,
+                })}
+              >
+                {codeGenerating
+                  ? <ActivityIndicator size="small" color={c.primary} />
+                  : <Ionicons name="refresh-outline" size={16} color={c.textSubtle} />
+                }
+              </Pressable>
+            </View>
+            {codeError ? (
+              <Text size="xs" color="#EF4444" style={{ marginBottom: 4 }}>{codeError}</Text>
+            ) : null}
+            {form.event_code ? (
+              <Text size="xs" color={c.textSubtle} style={{ fontFamily: 'monospace' }}>
+                presnt.app/c/{orgSlug}/events/{form.event_code}
+              </Text>
+            ) : (
+              <Text size="xs" color={c.textSubtle}>
+                A code is required for public events. Tap ↺ to generate one.
+              </Text>
+            )}
+          </View>
         )}
 
         {/* Type + Mandatory row */}
@@ -1528,7 +1557,8 @@ export default function OfficerEventsScreen() {
         recurrence_rule:      rrule,
         checkin_open_minutes:  form.checkin_open_minutes.trim()  !== '' ? parseInt(form.checkin_open_minutes)  || null : null,
         checkin_grace_minutes: form.checkin_grace_minutes.trim() !== '' ? parseInt(form.checkin_grace_minutes) || null : null,
-        event_code:            form.event_code.trim() || null,
+        is_public:             form.is_public,
+        event_code:            form.is_public ? (form.event_code.trim() || null) : null,
       };
 
       const editingEvent: Event | null = editTarget === false || editTarget === null ? null : editTarget;

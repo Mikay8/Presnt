@@ -288,6 +288,7 @@ export type Database = {
           is_deleted:            boolean | null
           is_mandatory:          boolean | null
           is_occurrence:         boolean
+          is_public:             boolean
           location:              string | null
           location_id:           string | null
           location_lat:          number | null
@@ -322,6 +323,7 @@ export type Database = {
           is_deleted?:            boolean | null
           is_mandatory?:          boolean | null
           is_occurrence?:         boolean
+          is_public?:             boolean
           location?:              string | null
           location_id?:           string | null
           location_lat?:          number | null
@@ -356,6 +358,7 @@ export type Database = {
           is_deleted?:            boolean | null
           is_mandatory?:          boolean | null
           is_occurrence?:         boolean
+          is_public?:             boolean
           location?:              string | null
           location_id?:           string | null
           location_lat?:          number | null

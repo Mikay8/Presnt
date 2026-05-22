@@ -36,6 +36,7 @@ type PublicEvent = {
   meeting_url:  string | null;
   description:  string | null;
   is_cancelled: boolean | null;
+  is_public:    boolean;
   points:       number | null;
   rsvp_required:boolean | null;
   checkin_open_minutes:  number | null;
@@ -112,13 +113,14 @@ export default function PublicEventPage() {
       // 2. Look up event by org_id + event_code (uses anon RLS policy)
       const { data: evData } = await supabase
         .from('events')
-        .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, points, rsvp_required, checkin_open_minutes, checkin_grace_minutes')
+        .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, is_public, points, rsvp_required, checkin_open_minutes, checkin_grace_minutes')
         .eq('org_id', orgData.id)
         .eq('event_code', event_code)
         .eq('is_deleted', false)
         .single();
 
-      if (!evData) { setNotFound(true); setLoading(false); return; }
+      // Treat not found OR not public as a 404 — don't leak private event details
+      if (!evData || !evData.is_public) { setNotFound(true); setLoading(false); return; }
       setEvent(evData as PublicEvent);
       setLoading(false);
     })();

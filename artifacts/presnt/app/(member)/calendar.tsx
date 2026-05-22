@@ -27,11 +27,15 @@ type CalEvent = {
   type:             EventType;
   start_time:       string;
   location:         string | null;
+  event_code:       string | null;
   is_occurrence:    boolean | null;
   parent_event_id:  string | null;
   recurrence_rule:  string | null;
   occurrences_horizon: string | null;
 };
+
+/** Navigate to a member event using event_code slug when available, UUID otherwise. */
+function eventSlug(ev: CalEvent) { return ev.event_code ?? ev.id; }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -103,7 +107,7 @@ export default function CalendarScreen() {
 
     const { data } = await supabase
       .from('events')
-      .select('id, title, type, start_time, location, is_occurrence, parent_event_id, recurrence_rule, occurrences_horizon')
+      .select('id, title, type, start_time, location, event_code, is_occurrence, parent_event_id, recurrence_rule, occurrences_horizon')
       .eq('org_id', orgId)
       .eq('is_deleted', false)
       .eq('is_cancelled', false)
@@ -195,7 +199,7 @@ export default function CalendarScreen() {
                     {date.getDate()}
                   </Text>
                   {evs.map((ev) => (
-                    <EventPill key={ev.id} event={ev} onPress={() => router.push(`/(member)/event/${ev.id}` as any)} />
+                    <EventPill key={ev.id} event={ev} onPress={() => router.push(`/(member)/event/${eventSlug(ev)}` as any)} />
                   ))}
                 </View>
               );
@@ -237,7 +241,7 @@ export default function CalendarScreen() {
                   isT && { backgroundColor: theme.colors.primary + '20', borderRadius: 8 },
                 ]}
                 onPress={() => {
-                  if (evs.length === 1) router.push(`/(member)/event/${evs[0].id}` as any);
+                  if (evs.length === 1) router.push(`/(member)/event/${eventSlug(evs[0])}` as any);
                 }}
               >
                 <Text size="sm" weight={isT ? 'bold' : 'regular'}
@@ -339,7 +343,7 @@ export default function CalendarScreen() {
           {upcomingEvents.map((ev) => {
             const d = new Date(ev.start_time);
             return (
-              <Pressable key={ev.id} onPress={() => router.push(`/(member)/event/${ev.id}` as any)}>
+              <Pressable key={ev.id} onPress={() => router.push(`/(member)/event/${eventSlug(ev)}` as any)}>
                 <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                   <View style={[styles.upcomingIcon, { backgroundColor: theme.colors.primary + '20' }]}>
                     <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />

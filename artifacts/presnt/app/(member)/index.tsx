@@ -34,7 +34,10 @@ type UpcomingEvent = {
   type: string;
   start_time: string;
   location: string | null;
+  event_code: string | null;
 };
+
+function eventSlug(ev: UpcomingEvent) { return ev.event_code ?? ev.id; }
 
 type AttendanceSummary = { attended: number; total: number };
 
@@ -130,7 +133,7 @@ export default function MemberHomeScreen() {
       // Upcoming events
       supabase
         .from('events')
-        .select('id, title, type, start_time, location')
+        .select('id, title, type, start_time, location, event_code')
         .eq('org_id', orgId)
         .eq('is_deleted', false)
         .eq('is_cancelled', false)
@@ -269,7 +272,7 @@ export default function MemberHomeScreen() {
                     styles.upcomingRow,
                     i < upcomingEvents.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
                   ]}
-                  onPress={() => router.push(`/(member)/event/${ev.id}` as any)}
+                  onPress={() => router.push(`/(member)/event/${eventSlug(ev)}` as any)}
                 >
                   <View style={[styles.upcomingDateChip, { backgroundColor: theme.colors.surfaceAlt }]}>
                     <Text size="xs" weight="bold" color={theme.colors.textMuted}

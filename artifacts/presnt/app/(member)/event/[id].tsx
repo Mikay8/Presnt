@@ -29,7 +29,14 @@ type EventDetail = {
   end_time:     string | null;
   rsvp_required: boolean;
   is_cancelled:  boolean;
+  event_code:    string | null;
+  is_public:     boolean;
 };
+
+/** Returns true if the string looks like a UUID v4. */
+function isUuid(s: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 
 type RsvpRow = {
   id:     string;
@@ -78,12 +85,23 @@ export default function EventDetailScreen() {
   const load = useCallback(async () => {
     if (!id || !userId || !orgId) { setLoading(false); return; }
 
+    // Support both UUID and event_code slugs as the [id] param
+    const evQuery = isUuid(id)
+      ? supabase
+          .from('events')
+          .select('id, title, description, type, location, start_time, end_time, rsvp_required, is_cancelled, event_code, is_public')
+          .eq('id', id)
+          .single()
+      : supabase
+          .from('events')
+          .select('id, title, description, type, location, start_time, end_time, rsvp_required, is_cancelled, event_code, is_public')
+          .eq('org_id', orgId)
+          .eq('event_code', id)
+          .eq('is_deleted', false)
+          .single();
+
     const [evResult, rsvpCountResult, userRsvpResult, attendeesResult] = await Promise.all([
-      supabase
-        .from('events')
-        .select('id, title, description, type, location, start_time, end_time, rsvp_required, is_cancelled')
-        .eq('id', id)
-        .single(),
+      evQuery,
 
       supabase
         .from('rsvps')
