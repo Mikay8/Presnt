@@ -29,6 +29,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui';
+import { registerGeofenceForEvent, unregisterGeofenceForEvent } from '@/lib/geofence';
 import { QRCheckinModal } from '@/lib/QRCheckin';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -52,6 +53,10 @@ type EventDetail = {
   checkin_grace_minutes: number | null;
   is_org_wide:   boolean | null;
   org_id:        string;
+  location_lat:  number | null;
+  location_lng:  number | null;
+  geofence_radius_m: number | null;
+  geofence_required: boolean | null;
 };
 
 type RsvpRow = {
@@ -274,7 +279,7 @@ export default function OrgAdminEventDetailScreen() {
     // Load event first so we know which org owns it
     const evRes = await supabase
       .from('events')
-      .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide, org_id')
+      .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide, org_id, location_lat, location_lng, geofence_radius_m, geofence_required')
       .eq('id', id)
       .single();
 
@@ -315,6 +320,35 @@ export default function OrgAdminEventDetailScreen() {
   }, [id, parentOrgId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Geofence lifecycle ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!event || !id) return;
+    if (event.location_lat == null || event.location_lng == null) return;
+
+    const now       = new Date();
+    const startTime = new Date(event.start_time);
+    const endTime   = event.end_time ? new Date(event.end_time) : null;
+    const openMins  = event.checkin_open_minutes  ?? 15;
+    const graceMins = event.checkin_grace_minutes ?? 15;
+    const winOpen   = new Date(startTime.getTime() - openMins  * 60_000);
+    const winClose  = endTime
+      ? new Date(endTime.getTime() + graceMins * 60_000)
+      : new Date(startTime.getTime() + (120 + graceMins) * 60_000);
+
+    const isOngoing = now >= winOpen && now <= winClose && !event.is_cancelled;
+
+    if (isOngoing) {
+      registerGeofenceForEvent({
+        eventId:  id,
+        lat:      event.location_lat,
+        lng:      event.location_lng,
+        radiusM:  event.geofence_radius_m ?? 100,
+      }).catch(() => {});
+    } else if (now > winClose) {
+      unregisterGeofenceForEvent(id).catch(() => {});
+    }
+  }, [event, id]);
 
   // ── Write actions (org-wide events only) ──────────────────────────────────
 

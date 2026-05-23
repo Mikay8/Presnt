@@ -16,6 +16,16 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DOMAIN, logEvent } from '@/lib/apiLogger';
+import {
+  clearPushToken,
+  handleLastNotification,
+  registerForPushNotifications,
+  setupNotificationHandlers,
+} from '@/lib/notifications';
+// Phase 8: import geofence module at top level so the background task is
+// registered with TaskManager before the React tree renders.
+import '@/lib/geofence';
+import { requestGeofencePermissions, stopAllGeofences } from '@/lib/geofence';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -243,12 +253,25 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError, isLoading, splashHidden]);
 
+  // ── Push notification handlers ─────────────────────────────────────────────
+  useEffect(() => {
+    // Set up foreground + tap listeners. Returns cleanup fn.
+    const cleanup = setupNotificationHandlers();
+    // Handle cold-start: app opened via notification tap while it was killed
+    handleLastNotification().catch(() => {});
+    return cleanup;
+  }, []);
+
   // ── Auth listener ─────────────────────────────────────────────────────────
   useEffect(() => {
     // Resolve the initial session once on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
+        // Register / refresh push token on cold start (existing session)
+        registerForPushNotifications(session.user.id).catch(() => {});
+        // Re-request geofence permission silently on cold start (no-op if already granted)
+        requestGeofencePermissions().catch(() => {});
         loadUserData(session);
       } else {
         setLoading(false);
@@ -268,10 +291,25 @@ export default function RootLayout() {
         // Log sign-in events
         if (event === 'SIGNED_IN') {
           logEvent({ domain: DOMAIN.AUTH, method: 'POST', endpoint: 'auth/session', userId: session.user.id, statusCode: 200, responseMeta: { event } });
+          // Register device for push notifications after a fresh sign-in
+          registerForPushNotifications(session.user.id).catch(() => {});
+          // Request background location permission for passive geofence check-in.
+          // We request after sign-in (not onboarding) so the user has already
+          // accepted push notifications and understands the app before we ask
+          // for a more sensitive permission. Non-blocking — a denial just means
+          // geofence check-in won't work, QR check-in still functions normally.
+          requestGeofencePermissions().catch(() => {});
         }
         loadUserData(session);
       } else {
         logEvent({ domain: DOMAIN.AUTH, method: 'POST', endpoint: 'auth/signout', statusCode: 200, responseMeta: { event } });
+        // Clear the stored push token so stale devices don't receive notifications
+        if (event === 'SIGNED_OUT') {
+          const userId = useAuthStore.getState().user?.id;
+          if (userId) clearPushToken(userId).catch(() => {});
+          // Stop any active geofence monitoring on sign-out
+          stopAllGeofences().catch(() => {});
+        }
         clear();
       }
     });

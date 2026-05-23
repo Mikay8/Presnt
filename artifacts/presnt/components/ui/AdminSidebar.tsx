@@ -29,16 +29,17 @@ const DIVIDER     = '#3D2B22';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const NAV_ITEMS: { label: string; path: string; icon: IconName }[] = [
-  { label: 'Dashboard',  path: '/(admin)/dashboard',   icon: 'grid-outline'              },
-  { label: 'Events',     path: '/(admin)/events-management',       icon: 'list-outline'              },
-  { label: 'Calendar',   path: '/(admin)/calendar',     icon: 'calendar-outline'          },
-  { label: 'Members',    path: '/(admin)/members',      icon: 'people-outline'            },
-  { label: 'Roles',      path: '/(admin)/roles',        icon: 'shield-outline'            },
-  { label: 'Committees', path: '/(admin)/committees',   icon: 'people-circle-outline'     },
-  { label: 'Dues',       path: '/(admin)/dues',         icon: 'cash-outline'              },
-  { label: 'Excuses',    path: '/(admin)/excuses',      icon: 'document-text-outline'     },
-  { label: 'Status',     path: '/(admin)/status',       icon: 'checkmark-circle-outline'  },
-  { label: 'Settings',   path: '/(admin)/settings',     icon: 'settings-outline'          },
+  { label: 'Dashboard',     path: '/(admin)/dashboard',       icon: 'grid-outline'              },
+  { label: 'Events',        path: '/(admin)/events-management', icon: 'list-outline'            },
+  { label: 'Calendar',      path: '/(admin)/calendar',         icon: 'calendar-outline'         },
+  { label: 'Members',       path: '/(admin)/members',          icon: 'people-outline'           },
+  { label: 'Announcements', path: '/(admin)/announcements',    icon: 'megaphone-outline'        },
+  { label: 'Roles',         path: '/(admin)/roles',            icon: 'shield-outline'           },
+  { label: 'Committees',    path: '/(admin)/committees',       icon: 'people-circle-outline'    },
+  { label: 'Dues',          path: '/(admin)/dues',             icon: 'cash-outline'             },
+  { label: 'Excuses',       path: '/(admin)/excuses',          icon: 'document-text-outline'    },
+  { label: 'Status',        path: '/(admin)/status',           icon: 'checkmark-circle-outline' },
+  { label: 'Settings',      path: '/(admin)/settings',         icon: 'settings-outline'         },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────

@@ -127,6 +127,9 @@ export default function OfficerLayout() {
           <Tabs.Screen name="members/[id]/restrict"    options={HIDDEN} />
           <Tabs.Screen name="dues/index"               options={HIDDEN} />
           <Tabs.Screen name="dues/[membershipId]"      options={HIDDEN} />
+          {/* Phase 7 — Announcements */}
+          <Tabs.Screen name="announcements"            options={HIDDEN} />
+          <Tabs.Screen name="announcements/index"      options={HIDDEN} />
         </Tabs>
       </View>
     </View>

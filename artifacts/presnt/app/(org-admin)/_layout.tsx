@@ -122,6 +122,15 @@ export default function OrgAdminLayout() {
             }}
           />
           <Tabs.Screen
+            name="more"
+            options={{
+              title: 'More',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="apps-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
             name="settings"
             options={{
               title: 'Settings',
@@ -144,6 +153,9 @@ export default function OrgAdminLayout() {
           {/* Roles — desktop sidebar only */}
           <Tabs.Screen name="roles"             options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="roles/index"       options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          {/* Phase 7 — Announcements (sidebar on desktop, More on mobile) */}
+          <Tabs.Screen name="announcements"       options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="announcements/index" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
         </Tabs>
       </View>
     </View>

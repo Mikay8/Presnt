@@ -17,7 +17,11 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.presnt.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Presnt uses your camera to scan member QR codes for event check-in."
+        "NSCameraUsageDescription": "Presnt uses your camera to scan member QR codes for event check-in.",
+        "NSLocationWhenInUseUsageDescription": "Presnt uses your location to automatically check you in when you arrive at events.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Presnt uses your location in the background to check you in automatically when you arrive at events — even when the app is closed.",
+        "NSLocationAlwaysUsageDescription": "Presnt uses your location in the background to check you in automatically when you arrive at events — even when the app is closed.",
+        "UIBackgroundModes": ["location", "fetch"]
       },
       "icon": "./assets/images/icon-1024-dark.png",
       "splash": {
@@ -32,7 +36,13 @@
     },
     "android": {
       "package": "com.presnt.app",
-      "permissions": ["android.permission.CAMERA"],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon-1024-square-dark.png",
         "backgroundColor": "#1A1411"
@@ -58,7 +68,26 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon":            "./assets/images/icon-1024-dark.png",
+          "color":           "#6366f1",
+          "defaultChannel":  "default",
+          "sounds":          []
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Presnt uses your location in the background to automatically check you in when you arrive at events — even when the app is closed.",
+          "locationAlwaysPermission": "Presnt uses your location in the background to automatically check you in when you arrive at events — even when the app is closed.",
+          "locationWhenInUsePermission": "Presnt uses your location to automatically check you in when you arrive at events.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

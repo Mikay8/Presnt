@@ -116,6 +116,7 @@ export default function AdminLayout() {
           {/* ── Hidden routes ───────────────────────────────────────── */}
           {/* Cover both Expo Router 6 naming conventions            */}
           <Tabs.Screen name="excuses/index"       options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="excuses/[id]"        options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="date-terms"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="status/requirements" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="roles/index"        options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
@@ -129,6 +130,8 @@ export default function AdminLayout() {
           <Tabs.Screen name="events-management/member/[id]" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="locations/index"         options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="categories/index"        options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="members/[id]"            options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="dues/[membershipId]"    options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
 
           <Tabs.Screen name="roles"              options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="dues"               options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
@@ -138,6 +141,8 @@ export default function AdminLayout() {
           <Tabs.Screen name="events-management"  options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="locations"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="categories"         options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="announcements"      options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="announcements/index" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
         </Tabs>
       </View>
     </View>

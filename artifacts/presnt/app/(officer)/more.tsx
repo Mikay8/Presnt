@@ -57,6 +57,13 @@ export default function OfficerMoreScreen() {
       route:       '/(officer)/excuses',
       show:        hasPerm(PERMISSIONS.MANAGE_ATTENDANCE) || hasPerm(PERMISSIONS.MANAGE_MEMBERS),
     },
+    {
+      icon:        'megaphone-outline' as const,
+      label:       'Announcements',
+      description: 'Send push notifications to chapter members',
+      route:       '/(officer)/announcements',
+      show:        hasPerm(PERMISSIONS.MANAGE_MEMBERS),
+    },
   ].filter(i => i.show);
 
   return (

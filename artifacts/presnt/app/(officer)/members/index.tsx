@@ -8,10 +8,10 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -23,8 +23,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, Text } from '@/components/ui';
-import { PERMISSIONS } from '@/lib/permissions';
-import { usePermissions } from '@/hooks/usePermissions';
 import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -58,9 +56,6 @@ type MemberRow = {
   org_roles: { id: string; name: string; color: string } | null;
 };
 
-const DUES_COLOR: Record<string, string> = {
-  paid: '#22C55E', unpaid: '#EF4444', partial: '#EAB308', waived: '#6B7280',
-};
 const STATUS_COLOR: Record<string, string> = {
   active: '#22C55E', inactive: '#6B7280', probation: '#EF4444',
 };
@@ -72,133 +67,6 @@ function initials(p: { first_name: string; last_name: string } | null) {
   return `${p.first_name[0] ?? ''}${p.last_name[0] ?? ''}`;
 }
 
-// ─── Member Detail Modal ──────────────────────────────────────────────────────
-
-function MemberDetailModal({
-  member,
-  canManage,
-  onClose,
-  onRefresh,
-}: {
-  member:    MemberRow;
-  canManage: boolean;
-  onClose:   () => void;
-  onRefresh: () => void;
-}) {
-  const { theme } = useThemeStore();
-  const c = theme.colors;
-  const [saving, setSaving] = useState<string | null>(null);
-
-  const p         = member.profiles;
-  const name      = p ? `${p.first_name} ${p.last_name}` : 'Unknown';
-  const isBlocked = !!member.is_blocked;
-  const hasDuesHold = !!member.dues_hold;
-
-  async function toggle(field: 'block' | 'dues') {
-    setSaving(field);
-    if (field === 'block') {
-      await supabase.from('memberships')
-        .update(isBlocked ? { is_blocked: false, block_reason: null } : { is_blocked: true })
-        .eq('id', member.id);
-    } else {
-      await supabase.from('memberships').update({ dues_hold: !hasDuesHold }).eq('id', member.id);
-    }
-    setSaving(null);
-    onRefresh();
-    onClose();
-  }
-
-  return (
-    <Modal visible animationType="slide" transparent presentationStyle="overFullScreen">
-      <View style={md.overlay}>
-        <View style={[md.sheet, { backgroundColor: c.surface }]}>
-          <View style={[md.handle, { backgroundColor: c.border }]} />
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-            <View style={[md.avatarLg, { backgroundColor: c.surfaceAlt }]}>
-              <Text size="md" weight="bold" color={c.textMuted}>{initials(p)}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text size="lg" weight="bold">{name}</Text>
-              <Text size="sm" color={c.textMuted}>{p?.email}</Text>
-              {p?.phone && <Text size="xs" color={c.textSubtle}>{p.phone}</Text>}
-            </View>
-          </View>
-
-          {/* Info chips */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-            <View style={[md.chip, { backgroundColor: (DUES_COLOR[member.dues_status] ?? '#6B7280') + '18', borderColor: DUES_COLOR[member.dues_status] ?? '#6B7280' }]}>
-              <Text size="xs" weight="medium" color={DUES_COLOR[member.dues_status] ?? '#6B7280'}>
-                Dues: {member.dues_status.charAt(0).toUpperCase() + member.dues_status.slice(1)}
-                {member.dues_balance != null ? ` ($${member.dues_balance})` : ''}
-              </Text>
-            </View>
-            {member.org_roles && (
-              <View style={[md.chip, { backgroundColor: member.org_roles.color + '18', borderColor: member.org_roles.color }]}>
-                <Text size="xs" weight="medium" color={member.org_roles.color}>{member.org_roles.name}</Text>
-              </View>
-            )}
-            {isBlocked && (
-              <View style={[md.chip, { backgroundColor: '#EF444418', borderColor: '#EF4444' }]}>
-                <Text size="xs" weight="medium" color="#EF4444">Blocked</Text>
-              </View>
-            )}
-          </View>
-
-          {p?.major && <Text size="sm" color={c.textSubtle} style={{ marginBottom: 16 }}>📚 {p.major}</Text>}
-          {p?.graduation_year && <Text size="sm" color={c.textSubtle} style={{ marginBottom: 16 }}>🎓 Class of {p.graduation_year}</Text>}
-
-          {canManage && (
-            <View style={{ gap: 10, marginTop: 4 }}>
-              <Pressable
-                onPress={() => toggle('block')}
-                disabled={!!saving}
-                style={[md.actionBtn, { backgroundColor: isBlocked ? '#22C55E14' : '#EF444414', borderColor: isBlocked ? '#22C55E40' : '#EF444440' }]}
-              >
-                {saving === 'block' ? <ActivityIndicator size="small" color={isBlocked ? '#22C55E' : '#EF4444'} /> : (
-                  <>
-                    <Ionicons name={isBlocked ? 'lock-open-outline' : 'ban-outline'} size={16} color={isBlocked ? '#22C55E' : '#EF4444'} />
-                    <Text size="sm" weight="medium" color={isBlocked ? '#22C55E' : '#EF4444'}>
-                      {isBlocked ? 'Unblock Member' : 'Block Member'}
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-              <Pressable
-                onPress={() => toggle('dues')}
-                disabled={!!saving}
-                style={[md.actionBtn, { backgroundColor: hasDuesHold ? '#22C55E14' : '#EAB30814', borderColor: hasDuesHold ? '#22C55E40' : '#EAB30840' }]}
-              >
-                {saving === 'dues' ? <ActivityIndicator size="small" color="#EAB308" /> : (
-                  <>
-                    <Ionicons name={hasDuesHold ? 'checkmark-circle-outline' : 'alert-circle-outline'} size={16} color={hasDuesHold ? '#22C55E' : '#EAB308'} />
-                    <Text size="sm" weight="medium" color={hasDuesHold ? '#22C55E' : '#EAB308'}>
-                      {hasDuesHold ? 'Remove Dues Hold' : 'Place Dues Hold'}
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-          )}
-
-          <Pressable onPress={onClose} style={[md.closeBtn, { borderColor: c.border, marginTop: 16 }]}>
-            <Text size="sm" weight="medium">Done</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-const md = StyleSheet.create({
-  overlay:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet:    { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, maxHeight: '88%' },
-  handle:   { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  avatarLg: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  chip:     { borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
-  actionBtn:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingVertical: 13 },
-  closeBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
-});
 
 // ─── Desktop Table Row ────────────────────────────────────────────────────────
 
@@ -320,22 +188,17 @@ export default function OfficerMembersScreen() {
   const insets         = useSafeAreaInsets();
   const { membership } = useAuthStore();
   const userView       = useUserViewStore((s) => s.session);
-  const { can }        = usePermissions();
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c = theme.colors;
 
   const orgId = userView?.org.id ?? membership?.org_id ?? '';
-  const canManage = userView
-    ? userView.role === 'admin' || userView.permissions.includes(PERMISSIONS.MANAGE_MEMBERS)
-    : can(PERMISSIONS.MANAGE_MEMBERS);
 
   const [members,  setMembers]  = useState<MemberRow[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [refresh,  setRefresh]  = useState(false);
   const [tab,      setTab]      = useState<FilterTab>('All');
   const [search,   setSearch]   = useState('');
-  const [selected, setSelected] = useState<MemberRow | null>(null);
 
   const { profile } = useAuthStore();
 
@@ -481,27 +344,18 @@ export default function OfficerMembersScreen() {
           </View>
         ) : isWide ? (
           <View style={[ms.desktopCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-            {displayed.map((m, i) => (
-              <DesktopRow key={m.id} member={m} onOpen={() => setSelected(m)} />
+            {displayed.map((m) => (
+              <DesktopRow key={m.id} member={m} onOpen={() => router.push(`/(officer)/members/${m.id}` as any)} />
             ))}
           </View>
         ) : (
           <View style={{ gap: 10 }}>
             {displayed.map(m => (
-              <MobileCard key={m.id} member={m} onOpen={() => setSelected(m)} />
+              <MobileCard key={m.id} member={m} onOpen={() => router.push(`/(officer)/members/${m.id}` as any)} />
             ))}
           </View>
         )}
       </ScrollView>
-
-      {selected && (
-        <MemberDetailModal
-          member={selected}
-          canManage={canManage}
-          onClose={() => setSelected(null)}
-          onRefresh={load}
-        />
-      )}
     </View>
   );
 }

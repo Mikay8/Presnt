@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar, Button, Card, DonutChart, Text } from '@/components/ui';
+import { clearBadge } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -26,6 +27,16 @@ type Announcement = {
   created_at: string;
   author_id: string;
   profiles: { first_name: string; last_name: string } | null;
+};
+
+type AppNotification = {
+  id:         string;
+  type:       string;
+  title:      string;
+  body:       string;
+  is_read:    boolean;
+  created_at: string;
+  data:       Record<string, string> | null;
 };
 
 type UpcomingEvent = {
@@ -90,6 +101,69 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
+// Icon map for notification types
+const NOTIF_ICON: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
+  excuse_approved:    'checkmark-circle-outline',
+  excuse_denied:      'close-circle-outline',
+  excuse_submitted:   'document-text-outline',
+  compliance_warning: 'warning-outline',
+  event_reminder:     'calendar-outline',
+  event_open:         'qr-code-outline',
+  role_assigned:      'shield-outline',
+  dues_hold:          'card-outline',
+  announcement:       'megaphone-outline',
+  generic:            'notifications-outline',
+};
+const NOTIF_COLOR: Record<string, string> = {
+  excuse_approved:    '#22c55e',
+  excuse_denied:      '#ef4444',
+  compliance_warning: '#f59e0b',
+  dues_hold:          '#ef4444',
+  event_open:         '#6366f1',
+};
+
+function NotificationRow({
+  item,
+  onMarkRead,
+}: {
+  item:       AppNotification;
+  onMarkRead: (id: string) => void;
+}) {
+  const { theme } = useThemeStore();
+  const c = theme.colors;
+  const icon  = NOTIF_ICON[item.type]  ?? 'notifications-outline';
+  const color = NOTIF_COLOR[item.type] ?? c.primary;
+
+  return (
+    <Pressable
+      onPress={() => { if (!item.is_read) onMarkRead(item.id); }}
+      style={({ pressed }) => [
+        styles.notifRow,
+        { borderBottomColor: c.border, opacity: pressed ? 0.7 : 1 },
+        !item.is_read && { backgroundColor: c.primary + '08' },
+      ]}
+    >
+      <View style={[styles.notifIcon, { backgroundColor: color + '18' }]}>
+        <Ionicons name={icon} size={16} color={color} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text size="sm" weight={item.is_read ? 'regular' : 'medium'} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text size="xs" color={c.textMuted} numberOfLines={2} style={{ marginTop: 2 }}>
+          {item.body}
+        </Text>
+        <Text size="xs" color={c.textSubtle} style={{ marginTop: 3 }}>
+          {timeAgo(item.created_at)}
+        </Text>
+      </View>
+      {!item.is_read && (
+        <View style={[styles.unreadDot, { backgroundColor: c.primary }]} />
+      )}
+    </Pressable>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MemberHomeScreen() {
@@ -100,6 +174,9 @@ export default function MemberHomeScreen() {
   const { profile, membership, organization } = useAuthStore();
 
   const [announcements, setAnnouncements]   = useState<Announcement[]>([]);
+  const [notifications, setNotifications]   = useState<AppNotification[]>([]);
+  const [unreadCount,   setUnreadCount]     = useState(0);
+  const [showNotifs,    setShowNotifs]      = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
   const [attendance, setAttendance]         = useState<AttendanceSummary>({ attended: 0, total: 0 });
   const [termLabel, setTermLabel]           = useState('');
@@ -119,7 +196,7 @@ export default function MemberHomeScreen() {
 
     const now = new Date().toISOString();
 
-    const [annResult, evResult, termResult] = await Promise.all([
+    const [annResult, evResult, termResult, notifResult] = await Promise.all([
       // Announcements with author name
       supabase
         .from('announcements')
@@ -148,10 +225,26 @@ export default function MemberHomeScreen() {
         .eq('org_id', orgId)
         .eq('is_active', true)
         .single(),
+
+      // Personal notifications (most recent 30)
+      supabase
+        .from('notifications')
+        .select('id, type, title, body, is_read, created_at, data')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(30),
     ]);
 
-    if (annResult.data)    setAnnouncements(annResult.data as Announcement[]);
-    if (evResult.data)     setUpcomingEvents(evResult.data);
+    if (annResult.data)   setAnnouncements(annResult.data as Announcement[]);
+    if (evResult.data)    setUpcomingEvents(evResult.data);
+    if (notifResult.data) {
+      const notifs = notifResult.data as AppNotification[];
+      setNotifications(notifs);
+      const unread = notifs.filter(n => !n.is_read).length;
+      setUnreadCount(unread);
+      // Clear the OS badge now that the user opened the app
+      if (unread === 0) clearBadge().catch(() => {});
+    }
 
     const term = termResult.data;
     if (term) {
@@ -189,6 +282,29 @@ export default function MemberHomeScreen() {
   useEffect(() => { load(); }, [load]);
 
   function onRefresh() { setRefreshing(true); load(); }
+
+  async function markRead(notifId: string) {
+    setNotifications(prev =>
+      prev.map(n => n.id === notifId ? { ...n, is_read: true } : n)
+    );
+    setUnreadCount(prev => Math.max(0, prev - 1));
+    await supabase
+      .from('notifications')
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq('id', notifId);
+  }
+
+  async function markAllRead() {
+    if (unreadCount === 0) return;
+    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+    clearBadge().catch(() => {});
+    await supabase
+      .from('notifications')
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .in('id', unreadIds);
+  }
 
   const attendancePct = attendance.total > 0
     ? Math.round((attendance.attended / attendance.total) * 100)
@@ -234,8 +350,49 @@ export default function MemberHomeScreen() {
             <View style={styles.wideTitleActions}>
               <Button label="View calendar" variant="outline" size="sm" onPress={() => router.push('/(member)/calendar')} />
               <Button label="Submit excuse" size="sm" onPress={() => {}} />
+              <Pressable
+                onPress={() => setShowNotifs(v => !v)}
+                style={[styles.bellBtn, { borderColor: theme.colors.border }]}
+              >
+                <Ionicons name="notifications-outline" size={18} color={theme.colors.text} />
+                {unreadCount > 0 && (
+                  <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
+                    <Text size="xs" color="#fff" weight="bold" style={{ fontSize: 9, lineHeight: 13 }}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
             </View>
           </View>
+
+          {/* Notification panel — desktop */}
+          {showNotifs && (
+            <View style={{ marginBottom: 24 }}>
+              <View style={styles.notifHeader}>
+                <SectionLabel>Notifications</SectionLabel>
+                {unreadCount > 0 && (
+                  <Pressable onPress={markAllRead}>
+                    <Text size="xs" color={theme.colors.primary} weight="medium">Mark all read</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Card style={{ paddingVertical: 0 }}>
+                {notifications.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
+                    <Ionicons name="notifications-off-outline" size={28} color={theme.colors.textSubtle} />
+                    <Text size="sm" color={theme.colors.textMuted}>No notifications</Text>
+                  </View>
+                ) : (
+                  notifications.map((n, i) => (
+                    <View key={n.id} style={i < notifications.length - 1 ? undefined : { borderBottomWidth: 0 }}>
+                      <NotificationRow item={n} onMarkRead={markRead} />
+                    </View>
+                  ))
+                )}
+              </Card>
+            </View>
+          )}
 
           <SectionLabel>Announcements</SectionLabel>
           {announcementsList}
@@ -302,8 +459,18 @@ export default function MemberHomeScreen() {
             {organization?.name} · {membership?.role ?? 'Member'}
           </Text>
         </View>
-        <Pressable style={[styles.bellBtn, { borderColor: theme.colors.border }]}>
+        <Pressable
+          onPress={() => setShowNotifs(v => !v)}
+          style={[styles.bellBtn, { borderColor: theme.colors.border }]}
+        >
           <Ionicons name="notifications-outline" size={18} color={theme.colors.text} />
+          {unreadCount > 0 && (
+            <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
+              <Text size="xs" color="#fff" weight="bold" style={{ fontSize: 9, lineHeight: 13 }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -312,6 +479,39 @@ export default function MemberHomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
+        {/* ── Notifications panel (toggled by bell) ─────────────────── */}
+        {showNotifs && (
+          <View style={{ marginBottom: 20 }}>
+            <View style={[styles.notifHeader]}>
+              <SectionLabel>Notifications</SectionLabel>
+              {unreadCount > 0 && (
+                <Pressable onPress={markAllRead}>
+                  <Text size="xs" color={theme.colors.primary} weight="medium">
+                    Mark all read
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+            <Card style={{ paddingVertical: 0 }}>
+              {notifications.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
+                  <Ionicons name="notifications-off-outline" size={28} color={theme.colors.textSubtle} />
+                  <Text size="sm" color={theme.colors.textMuted}>No notifications</Text>
+                </View>
+              ) : (
+                notifications.map((n, i) => (
+                  <View
+                    key={n.id}
+                    style={i < notifications.length - 1 ? undefined : { borderBottomWidth: 0 }}
+                  >
+                    <NotificationRow item={n} onMarkRead={markRead} />
+                  </View>
+                ))
+              )}
+            </Card>
+          </View>
+        )}
+
         <SectionLabel>Announcements</SectionLabel>
         {announcementsList}
       </ScrollView>
@@ -333,6 +533,11 @@ const styles = StyleSheet.create({
   announcementLeft:   { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 },
   mobileRoot:   { flex: 1 },
   mobileHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
-  bellBtn:      { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  bellBtn:      { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  badge:        { position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   mobileScroll: { padding: 16, gap: 0 },
+  notifHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  notifRow:     { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 13, paddingHorizontal: 14, borderBottomWidth: 1 },
+  notifIcon:    { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  unreadDot:    { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
 });

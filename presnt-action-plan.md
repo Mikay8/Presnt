@@ -2285,13 +2285,10 @@ CREATE INDEX idx_notifications_user_unread ON notifications(user_id, is_read) WH
 
 | Event | Recipient | Type |
 |-------|-----------|------|
-| Event check-in opens | All eligible members | `check_in_open` |
 | Excuse approved | Member | `excuse_approved` |
 | Excuse denied | Member | `excuse_denied` |
 | Excuse submitted | Approving officer | `excuse_submitted` |
 | Compliance at risk | Member | `compliance_warning` |
-| Dues hold applied | Member | `dues_hold_applied` |
-| Walk-in pending | Check-in officer | `walkin_pending` |
 | Event reminder | Registered members | `event_reminder` |
 | Role assigned | Member | `role_assigned` |
 
@@ -2319,32 +2316,23 @@ GET    /orgs/{org_id}/announcements
 
 ## 8.1 Mobile Setup
 
-- [ ] Install `expo-location`, `expo-task-manager`
-- [ ] Request `BACKGROUND` location permission on onboarding with clear explanation
-- [ ] Define background task:
-
-```typescript
-import * as TaskManager from 'expo-task-manager';
-import * as Location from 'expo-location';
-
-const GEOFENCE_TASK = 'PRESNT_GEOFENCE';
-
-TaskManager.defineTask(GEOFENCE_TASK, ({ data: { eventType, region }, error }) => {
-  if (error) return;
-  if (eventType === Location.GeofencingEventType.Enter) {
-    // POST /attendance/geofence-checkin { event_id: region.identifier }
-  }
-});
-```
-
-- [ ] When event opens: register geofence region using event `location_lat/lng` + `geofence_radius_m`
-- [ ] When event closes: unregister geofence region
-- [ ] Geofence enter → raw `geofence_events` row → Celery task processes into `attendance_records`
+- [x] Install `expo-location`, `expo-task-manager`
+- [x] Request `BACKGROUND` location permission on sign-in with clear explanation
+- [x] Define background task — `lib/geofence.ts` (`PRESNT_GEOFENCE`), imported at top-level in `app/_layout.tsx`
+- [x] When event opens: register geofence region using event `location_lat/lng` + `geofence_radius_m` (in officer/admin/org-admin event detail via `useEffect`)
+- [x] When event closes: unregister geofence region (same `useEffect`, cleans up past-window events)
+- [x] Geofence enter → `POST /attendance/geofence-checkin` → inserts `geofence_events` row + upserts `event_attendance` in-process (no separate Celery; Node API handles it inline)
+- [x] `stopAllGeofences()` called on sign-out to clear monitoring
+- [x] `app.json` — `expo-location` plugin with iOS `UIBackgroundModes: [location]` and Android `ACCESS_BACKGROUND_LOCATION`
 
 ## 8.2 Database Migration
 
-### Migration 011 — Geofence Events
+### Migration 011 — Geofence Events ✅
 ```sql
+-- Applied 2026-05-23
+ALTER TABLE events ADD COLUMN geofence_radius_m integer DEFAULT 100;
+ALTER TABLE event_attendance ADD COLUMN membership_id uuid, ADD COLUMN distance_m integer;
+
 CREATE TABLE geofence_events (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id      uuid REFERENCES events(id) NOT NULL,
@@ -2353,25 +2341,25 @@ CREATE TABLE geofence_events (
   lat           numeric(10,7),
   lng           numeric(10,7),
   accuracy_m    numeric(8,2),
-  triggered_at  timestamptz DEFAULT now()
+  processed     boolean DEFAULT false,
+  processed_at  timestamptz,
+  triggered_at  timestamptz DEFAULT now(),
+  created_at    timestamptz DEFAULT now()
 );
 
 CREATE INDEX idx_geofence_event_member ON geofence_events(event_id, membership_id);
+CREATE INDEX idx_geofence_unprocessed ON geofence_events(processed, triggered_at) WHERE processed = false;
 ```
 
-## 8.3 Celery Task — Process Geofence
+## 8.3 API Route — Process Geofence ✅
 
-```python
-@celery.task
-def process_geofence_event(geofence_event_id: str):
-    # 1. Fetch geofence_event
-    # 2. Validate event is still open
-    # 3. Run can_member_checkin() — if restricted, log and return
-    # 4. Calculate distance_from_event
-    # 5. Upsert attendance_records (do not overwrite existing 'present' or 'manual' records)
-    # 6. Award points
-    # 7. Enqueue compliance recalculation
-```
+`POST /attendance/geofence-checkin` in `api-server/src/routes/geofence.ts`:
+- Validates event timing (checkin window open/close)
+- Checks membership + restriction flags (`can_attend_events`, `dues_hold`, `is_blocked`)
+- Haversine distance calculation + radius enforcement (with 1.5× GPS slop factor)
+- Inserts `geofence_events` raw log row
+- Upserts `event_attendance` — never overwrites existing `present` or `manual` records
+- Marks `geofence_events` row as processed
 
 ---
 

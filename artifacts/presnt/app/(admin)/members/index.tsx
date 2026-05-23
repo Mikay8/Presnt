@@ -6,11 +6,10 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -45,13 +44,6 @@ type MemberRow = {
   org_roles: OrgRole | null;
 };
 
-// Role hierarchy: admins can only assign roles strictly below their own
-const ASSIGNABLE_ROLES = [
-  { value: 'admin',      label: 'Admin',      description: 'Full chapter management' },
-  { value: 'officer',    label: 'Officer',    description: 'Custom permissions' },
-  { value: 'member',     label: 'Member',     description: 'Standard member access' },
-  { value: 'new_member', label: 'New Member', description: 'Probationary access' },
-] as const;
 
 const ROLE_BADGE_COLOR: Record<string, string> = {
   org_admin:  '#E26B4A',
@@ -66,11 +58,9 @@ const ROLE_BADGE_COLOR: Record<string, string> = {
 function MemberItem({
   member,
   isSelf,
-  onManage,
 }: {
   member:   MemberRow;
   isSelf:   boolean;
-  onManage: (m: MemberRow) => void;
 }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
@@ -88,7 +78,7 @@ function MemberItem({
 
   return (
     <Pressable
-      onPress={() => !isSelf && onManage(member)}
+      onPress={() => !isSelf && router.push(`/(admin)/members/${member.id}` as any)}
       style={({ pressed }) => [
         styles.memberRow,
         { borderBottomColor: c.border, opacity: pressed ? 0.7 : 1 },
@@ -129,178 +119,6 @@ function MemberItem({
 
 // ─── Role management modal ────────────────────────────────────────────────────
 
-function ManageRoleModal({
-  visible,
-  member,
-  orgRoles,
-  myRole,
-  onClose,
-  onSave,
-  saving,
-}: {
-  visible:  boolean;
-  member:   MemberRow | null;
-  orgRoles: OrgRole[];
-  myRole:   string;
-  onClose:  () => void;
-  onSave:   (memberId: string, role: string, customRoleId: string | null) => void;
-  saving:   boolean;
-}) {
-  const { theme } = useThemeStore();
-  const c = theme.colors;
-
-  const [selectedRole, setSelectedRole]     = useState('member');
-  const [selectedOrgRole, setSelectedOrgRole] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (member) {
-      setSelectedRole(member.role);
-      setSelectedOrgRole(member.custom_role_id);
-    }
-  }, [member]);
-
-  if (!member) return null;
-
-  const profile   = member.profiles;
-  const firstName = profile?.first_name ?? '';
-  const lastName  = profile?.last_name  ?? '';
-  const initials  = firstName && lastName ? `${firstName[0]}${lastName[0]}` : '?';
-  const fullName  = `${firstName} ${lastName}`.trim() || 'Unknown';
-
-  // org_admin can assign admin; chapter admin cannot promote to admin
-  const canAssignAdmin = myRole === 'org_admin';
-  const filteredRoles  = ASSIGNABLE_ROLES.filter(
-    (r) => r.value !== 'admin' || canAssignAdmin,
-  );
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalSheet, { backgroundColor: c.surface }]}>
-          <View style={[styles.handle, { backgroundColor: c.border }]} />
-
-          {/* Member header */}
-          <View style={styles.modalMemberRow}>
-            <View style={[styles.avatarLg, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
-              <Text size="md" weight="bold" color={c.textMuted}>{initials}</Text>
-            </View>
-            <View>
-              <Text size="lg" weight="bold">{fullName}</Text>
-              <Text size="sm" color={c.textMuted}>{profile?.email}</Text>
-            </View>
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: c.border }]} />
-
-          {/* Base role selector */}
-          <Text size="xs" weight="medium" color={c.textMuted}
-            style={{ textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-            Base Role
-          </Text>
-          <View style={[styles.roleList, { borderColor: c.border }]}>
-            {filteredRoles.map((r, i) => {
-              const active = selectedRole === r.value;
-              return (
-                <Pressable
-                  key={r.value}
-                  onPress={() => {
-                    setSelectedRole(r.value);
-                    if (r.value !== 'officer') setSelectedOrgRole(null);
-                  }}
-                  style={[
-                    styles.roleOption,
-                    i < filteredRoles.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
-                    active && { backgroundColor: c.primary + '12' },
-                  ]}
-                >
-                  <View style={[styles.radioOuter, { borderColor: active ? c.primary : c.border }]}>
-                    {active && <View style={[styles.radioInner, { backgroundColor: c.primary }]} />}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text size="sm" weight={active ? 'medium' : 'regular'}
-                      color={active ? c.primary : c.text}>
-                      {r.label}
-                    </Text>
-                    <Text size="xs" color={c.textSubtle}>{r.description}</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Officer role picker — only when base role = officer */}
-          {selectedRole === 'officer' && orgRoles.length > 0 && (
-            <>
-              <Text size="xs" weight="medium" color={c.textMuted}
-                style={{ textTransform: 'uppercase', letterSpacing: 1, marginTop: 20, marginBottom: 10 }}>
-                Officer Role
-              </Text>
-              <View style={[styles.roleList, { borderColor: c.border }]}>
-                {/* None option */}
-                <Pressable
-                  onPress={() => setSelectedOrgRole(null)}
-                  style={[
-                    styles.roleOption,
-                    { borderBottomWidth: 1, borderBottomColor: c.border },
-                    !selectedOrgRole && { backgroundColor: c.primary + '12' },
-                  ]}
-                >
-                  <View style={[styles.radioOuter, { borderColor: !selectedOrgRole ? c.primary : c.border }]}>
-                    {!selectedOrgRole && <View style={[styles.radioInner, { backgroundColor: c.primary }]} />}
-                  </View>
-                  <Text size="sm" color={!selectedOrgRole ? c.primary : c.text}>No specific role</Text>
-                </Pressable>
-
-                {orgRoles.map((or, i) => {
-                  const active = selectedOrgRole === or.id;
-                  return (
-                    <Pressable
-                      key={or.id}
-                      onPress={() => setSelectedOrgRole(or.id)}
-                      style={[
-                        styles.roleOption,
-                        i < orgRoles.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
-                        active && { backgroundColor: c.primary + '12' },
-                      ]}
-                    >
-                      <View style={[styles.radioOuter, { borderColor: active ? c.primary : c.border }]}>
-                        {active && <View style={[styles.radioInner, { backgroundColor: c.primary }]} />}
-                      </View>
-                      <View style={[styles.roleColorDot, { backgroundColor: or.color }]} />
-                      <Text size="sm" weight={active ? 'medium' : 'regular'}
-                        color={active ? c.primary : c.text}>
-                        {or.name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </>
-          )}
-
-          {/* Actions */}
-          <View style={[styles.modalActions, { marginTop: 24 }]}>
-            <Pressable
-              onPress={onClose}
-              style={[styles.cancelBtn, { borderColor: c.border }]}
-            >
-              <Text size="sm" weight="medium">Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onSave(member.id, selectedRole, selectedOrgRole)}
-              style={[styles.saveBtn, { backgroundColor: c.primary }]}
-            >
-              {saving
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text size="sm" weight="bold" style={{ color: '#fff' }}>Save</Text>}
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const FILTERS = ['All', 'Admins', 'Officers', 'Members'] as const;
@@ -311,48 +129,33 @@ export default function AdminMembersScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
-  const { organization, membership, profile } = useAuthStore();
+  const { membership, profile } = useAuthStore();
 
   const [members, setMembers]     = useState<MemberRow[]>([]);
-  const [orgRoles, setOrgRoles]   = useState<OrgRole[]>([]);
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefresh]  = useState(false);
   const [filter, setFilter]       = useState<Filter>('All');
-  const [managing, setManaging]   = useState<MemberRow | null>(null);
-  const [saving, setSaving]       = useState(false);
 
-  const orgId  = membership?.org_id;
-  const myId   = profile?.id;
-  const myRole = membership?.role ?? 'member';
+  const orgId = membership?.org_id;
+  const myId  = profile?.id;
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
 
-    const [membersRes, rolesRes] = await Promise.all([
-      loggedQuery({
-        domain: DOMAIN.MEMBERS, method: 'GET', endpoint: 'memberships',
-        orgId, userId: profile?.id,
-        query: supabase
-          .from('memberships')
-          .select(`
-            id, role, status, custom_role_id,
-            profiles!user_id(id, first_name, last_name, email),
-            org_roles!custom_role_id(id, name, color)
-          `)
-          .eq('org_id', orgId)
-          .eq('is_deleted', false)
-          .order('role'),
-      }),
-      loggedQuery({
-        domain: DOMAIN.ROLES, method: 'GET', endpoint: 'org_roles',
-        orgId, userId: profile?.id,
-        query: supabase
-          .from('org_roles')
-          .select('id, name, color')
-          .eq('org_id', orgId)
-          .order('name'),
-      }),
-    ]);
+    const membersRes = await loggedQuery({
+      domain: DOMAIN.MEMBERS, method: 'GET', endpoint: 'memberships',
+      orgId, userId: profile?.id,
+      query: supabase
+        .from('memberships')
+        .select(`
+          id, role, status, custom_role_id,
+          profiles!user_id(id, first_name, last_name, email),
+          org_roles!custom_role_id(id, name, color)
+        `)
+        .eq('org_id', orgId)
+        .eq('is_deleted', false)
+        .order('role'),
+    });
 
     // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
     const normalized: MemberRow[] = ((membersRes.data ?? []) as any[]).map((m) => ({
@@ -361,7 +164,6 @@ export default function AdminMembersScreen() {
       org_roles: Array.isArray(m.org_roles) ? (m.org_roles[0] ?? null) : m.org_roles,
     }));
     setMembers(normalized);
-    setOrgRoles((rolesRes.data ?? []) as OrgRole[]);
     setLoading(false);
     setRefresh(false);
   }, [orgId]);
@@ -375,17 +177,6 @@ export default function AdminMembersScreen() {
     if (filter === 'Members') return m.role === 'member' || m.role === 'new_member';
     return true;
   });
-
-  async function handleSaveRole(memberId: string, role: string, customRoleId: string | null) {
-    setSaving(true);
-    await supabase
-      .from('memberships')
-      .update({ role, custom_role_id: customRoleId })
-      .eq('id', memberId);
-    await load();
-    setSaving(false);
-    setManaging(null);
-  }
 
   const c = theme.colors;
 
@@ -466,7 +257,6 @@ export default function AdminMembersScreen() {
                 <MemberItem
                   member={m}
                   isSelf={m.profiles?.id === myId}
-                  onManage={setManaging}
                 />
               </View>
             ))}
@@ -474,15 +264,6 @@ export default function AdminMembersScreen() {
         )}
       </ScrollView>
 
-      <ManageRoleModal
-        visible={!!managing}
-        member={managing}
-        orgRoles={orgRoles}
-        myRole={myRole}
-        onClose={() => setManaging(null)}
-        onSave={handleSaveRole}
-        saving={saving}
-      />
     </View>
   );
 }

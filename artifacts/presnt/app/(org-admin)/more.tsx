@@ -1,8 +1,9 @@
 /**
- * Admin — More Hub
+ * Org Admin — More Hub
  *
- * Entry point for secondary admin sections: Roles, Committees, Dues, Status.
- * Displayed as the "More" tab on mobile.
+ * Entry point for secondary org-admin sections on mobile.
+ * Desktop navigation uses the sidebar; this screen appears only in the
+ * bottom tab bar on narrow screens.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -19,48 +20,45 @@ const MENU_ITEMS = [
   {
     icon:        'megaphone-outline' as const,
     label:       'Announcements',
-    description: 'Send push notifications to chapter members',
-    route:       '/(admin)/announcements',
+    description: 'Send push notifications to chapters or the entire org',
+    route:       '/(org-admin)/announcements',
   },
   {
     icon:        'shield-outline' as const,
     label:       'Roles',
-    description: 'Manage officer roles & permissions',
-    route:       '/(admin)/roles',
+    description: 'Manage org-level roles & permissions',
+    route:       '/(org-admin)/roles',
   },
   {
-    icon:        'people-circle-outline' as const,
-    label:       'Committees',
-    description: 'Organize members into committees',
-    route:       '/(admin)/committees',
-  },
-  {
-    icon:        'cash-outline' as const,
-    label:       'Dues',
-    description: 'Track payments and balances',
-    route:       '/(admin)/dues',
-  },
-  {
-    icon:        'document-text-outline' as const,
-    label:       'Excuses',
-    description: 'Review and approve member absence excuses',
-    route:       '/(admin)/excuses',
-  },
-  {
-    icon:        'checkmark-circle-outline' as const,
+    icon:        'shield-checkmark-outline' as const,
     label:       'Status',
-    description: 'Chapter compliance and at-risk members',
-    route:       '/(admin)/status',
+    description: 'Org-wide compliance overview',
+    route:       '/(org-admin)/status',
+  },
+  {
+    icon:        'calendar-number-outline' as const,
+    label:       'Calendar',
+    description: 'Org-wide event calendar',
+    route:       '/(org-admin)/calendar',
+  },
+  {
+    icon:        'settings-outline' as const,
+    label:       'Settings',
+    description: 'Organization settings and branding',
+    route:       '/(org-admin)/settings',
   },
 ] as const;
 
-export default function MoreScreen() {
-  const { theme }       = useThemeStore();
-  const insets          = useSafeAreaInsets();
-  const { width }       = useWindowDimensions();
-  const isWide          = width >= 768;
+export default function OrgAdminMoreScreen() {
+  const { theme }        = useThemeStore();
+  const insets           = useSafeAreaInsets();
+  const { width }        = useWindowDimensions();
+  const isWide           = width >= 768;
   const { organization } = useAuthStore();
-  const c = theme.colors;
+  const c                = theme.colors;
+
+  // org-admin accent blue
+  const accent = '#3B82F6';
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
@@ -92,8 +90,8 @@ export default function MoreScreen() {
                 i < MENU_ITEMS.length - 1 && { borderBottomWidth: 1 },
               ]}
             >
-              <View style={[styles.iconWrap, { backgroundColor: c.primary + '18' }]}>
-                <Ionicons name={item.icon} size={20} color={c.primary} />
+              <View style={[styles.iconWrap, { backgroundColor: accent + '18' }]}>
+                <Ionicons name={item.icon} size={20} color={accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text size="md" weight="medium">{item.label}</Text>
@@ -111,8 +109,8 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
-  scroll: { padding: 20, paddingBottom: 48 },
-  row:    { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16 },
+  header:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
+  scroll:   { padding: 20, paddingBottom: 48 },
+  row:      { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16 },
   iconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });
