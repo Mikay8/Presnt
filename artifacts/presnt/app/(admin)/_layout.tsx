@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
-import { useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, useWindowDimensions, View } from 'react-native';
 
 import { AdminSidebar, TopBar } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
@@ -10,11 +10,21 @@ import { useUserViewStore } from '@/stores/userViewStore';
 const DESKTOP_BREAKPOINT = 768;
 
 export default function AdminLayout() {
-  const { theme }      = useThemeStore();
-  const { membership } = useAuthStore();
-  const { width }      = useWindowDimensions();
-  const isWide         = width >= DESKTOP_BREAKPOINT;
-  const userView       = useUserViewStore((s) => s.session);
+  const { theme }                 = useThemeStore();
+  const { membership, isLoading } = useAuthStore();
+  const { width }                 = useWindowDimensions();
+  const isWide                    = width >= DESKTOP_BREAKPOINT;
+  const userView                  = useUserViewStore((s) => s.session);
+
+  // Wait for auth to settle before making any redirect decisions.
+  // On refresh, membership is null until the async fetch completes.
+  if (isLoading && !userView) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   const role = membership?.role;
   // Allow entry if user-view is simulating admin, otherwise enforce real role

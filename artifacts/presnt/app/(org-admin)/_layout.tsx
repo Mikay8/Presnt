@@ -10,7 +10,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
-import { useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, useWindowDimensions, View } from 'react-native';
 
 import { OrgAdminSidebar, TopBar } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
@@ -20,11 +20,21 @@ import { useUserViewStore } from '@/stores/userViewStore';
 const DESKTOP_BREAKPOINT = 768;
 
 export default function OrgAdminLayout() {
-  const { theme }      = useThemeStore();
-  const { membership } = useAuthStore();
-  const { width }      = useWindowDimensions();
-  const isWide         = width >= DESKTOP_BREAKPOINT;
-  const userView       = useUserViewStore((s) => s.session);
+  const { theme }                   = useThemeStore();
+  const { membership, isLoading }   = useAuthStore();
+  const { width }                   = useWindowDimensions();
+  const isWide                      = width >= DESKTOP_BREAKPOINT;
+  const userView                    = useUserViewStore((s) => s.session);
+
+  // Wait for auth to settle before making any redirect decisions.
+  // On refresh, membership is null until the async fetch completes.
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   const role = membership?.role;
   // Allow entry for real org_admin, or a user-view session simulating org_admin

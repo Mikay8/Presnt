@@ -241,10 +241,13 @@ export default function OrgAdminCalendarScreen() {
   }), [month, year]);
 
   // ── Chapter filter bar ─────────────────────────────────────────────────────
+  // Wrap in a fixed-height View so the horizontal ScrollView doesn't expand
+  // to fill the screen on web (web ScrollView ignores flexShrink in a column).
   const filterBar = (
+    <View style={{ height: 40, borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: c.background }}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.filterRow}
-      style={{ backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
+      style={{ flex: 1, backgroundColor: c.background }}>
       <Pressable onPress={() => setChapterFilter(null)}
         style={[styles.filterChip, {
           backgroundColor: chapterFilter === null ? '#3B82F618' : c.surfaceAlt,
@@ -271,6 +274,7 @@ export default function OrgAdminCalendarScreen() {
         );
       })}
     </ScrollView>
+    </View>
   );
 
   // ── Desktop grid ──

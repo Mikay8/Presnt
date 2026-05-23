@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
-import { View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, View, useWindowDimensions } from 'react-native';
 
 import { OfficerSidebar, TopBar } from '@/components/ui';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -15,12 +15,21 @@ const DESKTOP_BREAKPOINT = 768;
 const HIDDEN: any = { href: null, tabBarItemStyle: { display: 'none' } };
 
 export default function OfficerLayout() {
-  const { theme }      = useThemeStore();
-  const { membership } = useAuthStore();
-  const { can }        = usePermissions();
-  const userView       = useUserViewStore((s) => s.session);
-  const { width }      = useWindowDimensions();
-  const isWide         = width >= DESKTOP_BREAKPOINT;
+  const { theme }                 = useThemeStore();
+  const { membership, isLoading } = useAuthStore();
+  const { can }                   = usePermissions();
+  const userView                  = useUserViewStore((s) => s.session);
+  const { width }                 = useWindowDimensions();
+  const isWide                    = width >= DESKTOP_BREAKPOINT;
+
+  // Wait for auth to settle before making any redirect decisions.
+  if (isLoading && !userView) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   // Guard: only officers may access this portal (or superuser in user-view)
   if (!userView && membership?.role !== 'officer') {
