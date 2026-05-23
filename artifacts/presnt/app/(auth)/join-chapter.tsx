@@ -65,7 +65,7 @@ export default function JoinChapterScreen() {
       .select('*')
       .ilike('name', `%${text.trim()}%`)
       .eq('is_deleted', false)
-      .eq('is_active', true)
+      .neq('is_active', false)   // include null (legacy rows) and true, exclude only explicit false
       .limit(10);
 
     setSearching(false);

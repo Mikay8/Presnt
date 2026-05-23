@@ -105,6 +105,8 @@ export default function CreateOrgScreen() {
         greek_letter_org: orgGreek.trim() || null,
         timezone:         'America/New_York',
         created_by:       userId,
+        is_active:        true,
+        is_deleted:       false,
       })
       .select()
       .single();
@@ -138,6 +140,8 @@ export default function CreateOrgScreen() {
         timezone:      'America/New_York',
         join_code:     joinCode,
         created_by:    userId,
+        is_active:     true,
+        is_deleted:    false,
       })
       .select()
       .single();

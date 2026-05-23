@@ -1603,7 +1603,7 @@ export default function OfficerEventsScreen() {
   const c              = theme.colors;
   const { edit: editId, new: openNew } = useLocalSearchParams<{ edit?: string; new?: string }>();
 
-  const orgId     = userView?.org.id ?? organization?.id ?? '';
+  const orgId     = userView?.org.id ?? membership?.org_id ?? '';
   const orgSlug   = (userView?.org as any)?.slug ?? (organization as any)?.slug ?? '';
   const canManage = userView
     ? userView.role === 'admin' || userView.permissions.includes(PERMISSIONS.MANAGE_EVENTS)
@@ -1852,7 +1852,7 @@ export default function OfficerEventsScreen() {
       <ScrollView
         horizontal showsHorizontalScrollIndicator={false}
         contentContainerStyle={sc.tabRow}
-        style={{ flexShrink: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{ flexShrink: 0, flexGrow: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
       >
         {TABS.map((t) => {
           const active = tab === t;

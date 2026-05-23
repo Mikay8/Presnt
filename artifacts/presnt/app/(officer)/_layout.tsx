@@ -118,9 +118,15 @@ export default function OfficerLayout() {
           <Tabs.Screen name="status/requirements"    options={HIDDEN} />
           <Tabs.Screen name="attendance/index"        options={HIDDEN} />
           <Tabs.Screen name="status/index"            options={HIDDEN} />
-          <Tabs.Screen name="excuses/index"           options={HIDDEN} />
-          <Tabs.Screen name="locations/index"         options={HIDDEN} />
-          <Tabs.Screen name="categories/index"        options={HIDDEN} />
+          <Tabs.Screen name="excuses/index"              options={HIDDEN} />
+          <Tabs.Screen name="excuses/[id]"             options={HIDDEN} />
+          <Tabs.Screen name="locations/index"          options={HIDDEN} />
+          <Tabs.Screen name="categories/index"         options={HIDDEN} />
+          {/* Phase 6 — Restrictions & Dues */}
+          <Tabs.Screen name="members/[id]"             options={HIDDEN} />
+          <Tabs.Screen name="members/[id]/restrict"    options={HIDDEN} />
+          <Tabs.Screen name="dues/index"               options={HIDDEN} />
+          <Tabs.Screen name="dues/[membershipId]"      options={HIDDEN} />
         </Tabs>
       </View>
     </View>

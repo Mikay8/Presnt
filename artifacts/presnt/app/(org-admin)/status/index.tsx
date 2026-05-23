@@ -261,7 +261,11 @@ export default function OrgAdminStatusScreen() {
       .eq('is_deleted', false)
       .eq('status', 'active');
 
-    const members = (memberships ?? []) as StatusMember[];
+    // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
+    const members: StatusMember[] = ((memberships ?? []) as any[]).map((m) => ({
+      ...m,
+      profiles: Array.isArray(m.profiles) ? (m.profiles[0] ?? null) : m.profiles,
+    }));
 
     // 3. Group by chapter
     const byChapter: Record<string, StatusMember[]> = {};

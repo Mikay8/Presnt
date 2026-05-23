@@ -196,13 +196,13 @@ const ei = StyleSheet.create({
 export default function ExcusesScreen() {
   const { theme }      = useThemeStore();
   const insets         = useSafeAreaInsets();
-  const { organization, profile } = useAuthStore();
+  const { membership, profile } = useAuthStore();
   const userView       = useUserViewStore((s) => s.session);
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c = theme.colors;
 
-  const orgId     = userView?.org.id ?? organization?.id ?? '';
+  const orgId     = userView?.org.id ?? membership?.org_id ?? '';
   const reviewerId = profile?.id ?? '';
 
   const [excuses, setExcuses]   = useState<Excuse[]>([]);
@@ -226,7 +226,13 @@ export default function ExcusesScreen() {
         .eq('org_id', orgId)
         .order('created_at', { ascending: false }),
     });
-    setExcuses((data ?? []) as Excuse[]);
+    // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
+    const normalized = ((data ?? []) as any[]).map((e) => ({
+      ...e,
+      profiles:  Array.isArray(e.profiles)  ? (e.profiles[0]  ?? null) : e.profiles,
+      memberships: Array.isArray(e.memberships) ? (e.memberships[0] ?? null) : e.memberships,
+    }));
+    setExcuses(normalized as Excuse[]);
     setLoading(false);
     setRefresh(false);
   }, [orgId]);

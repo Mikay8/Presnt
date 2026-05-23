@@ -266,8 +266,8 @@ export default function AdminEventDetailScreen() {
   const { width } = useWindowDimensions();
   const insets    = useSafeAreaInsets();
   const isWide    = width >= 800;
-  const { organization } = useAuthStore();
-  const orgId = organization?.id ?? '';
+  const { membership } = useAuthStore();
+  const orgId = membership?.org_id ?? '';
 
   const [event,     setEvent]     = useState<EventDetail | null>(null);
   const [rsvps,     setRsvps]     = useState<RsvpRow[]>([]);

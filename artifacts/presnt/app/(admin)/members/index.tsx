@@ -321,7 +321,7 @@ export default function AdminMembersScreen() {
   const [managing, setManaging]   = useState<MemberRow | null>(null);
   const [saving, setSaving]       = useState(false);
 
-  const orgId  = organization?.id;
+  const orgId  = membership?.org_id;
   const myId   = profile?.id;
   const myRole = membership?.role ?? 'member';
 
@@ -354,7 +354,13 @@ export default function AdminMembersScreen() {
       }),
     ]);
 
-    setMembers((membersRes.data ?? []) as MemberRow[]);
+    // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
+    const normalized: MemberRow[] = ((membersRes.data ?? []) as any[]).map((m) => ({
+      ...m,
+      profiles:  Array.isArray(m.profiles)  ? (m.profiles[0]  ?? null) : m.profiles,
+      org_roles: Array.isArray(m.org_roles) ? (m.org_roles[0] ?? null) : m.org_roles,
+    }));
+    setMembers(normalized);
     setOrgRoles((rolesRes.data ?? []) as OrgRole[]);
     setLoading(false);
     setRefresh(false);
@@ -411,7 +417,7 @@ export default function AdminMembersScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
-        style={{ flexShrink: 0, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{ flexShrink: 0, flexGrow: 0, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}
       >
         {FILTERS.map((f) => {
           const active = filter === f;
@@ -487,7 +493,7 @@ const styles = StyleSheet.create({
   header:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
   filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 6, gap: 8, alignItems: 'center' },
   filterChip:{ borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5 },
-  scroll:    { padding: 20, paddingBottom: 48 },
+  scroll:    { padding: 16, paddingBottom: 48 },
   scrollWide:{ paddingHorizontal: 48, maxWidth: 760, alignSelf: 'center', width: '100%' },
 
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1 },

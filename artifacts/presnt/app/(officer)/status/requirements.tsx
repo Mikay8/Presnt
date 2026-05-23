@@ -243,8 +243,8 @@ export default function OfficerRequirementsScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
-  const { organization } = useAuthStore();
-  const orgId        = organization?.id ?? '';
+  const { membership } = useAuthStore();
+  const orgId = membership?.org_id ?? '';
 
   const [term,         setTerm]         = useState<AcademicTerm | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);

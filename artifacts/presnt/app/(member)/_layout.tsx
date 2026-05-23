@@ -81,6 +81,10 @@ export default function MemberLayout() {
               name="excuses/history"
               options={{ href: null, tabBarItemStyle: { display: 'none' } }}
             />
+            <Tabs.Screen
+              name="account/standing"
+              options={{ href: null, tabBarItemStyle: { display: 'none' } }}
+            />
           </Tabs>
         </View>
       </View>
@@ -131,6 +135,10 @@ export default function MemberLayout() {
       />
       <Tabs.Screen
         name="excuses/history"
+        options={{ href: null, tabBarItemStyle: { display: 'none' } }}
+      />
+      <Tabs.Screen
+        name="account/standing"
         options={{ href: null, tabBarItemStyle: { display: 'none' } }}
       />
     </Tabs>

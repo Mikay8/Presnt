@@ -2225,11 +2225,19 @@ GET    /orgs/{org_id}/dues/overdue
 
 ## 6.3 Mobile Screens
 
-- [ ] `(officer)/members/[id].tsx`
-- [ ] `(officer)/members/[id]/restrict.tsx`
-- [ ] `(officer)/dues/index.tsx`
-- [ ] `(officer)/dues/[membership_id].tsx`
-- [ ] `(member)/account/standing.tsx`
+- [x] `(officer)/members/[id].tsx`
+- [x] `(officer)/members/[id]/restrict.tsx`
+- [x] `(officer)/dues/index.tsx`
+- [x] `(officer)/dues/[membershipId].tsx`
+- [x] `(member)/account/standing.tsx`
+
+> **Adaptation notes (vs original plan):**
+> - `memberships` already had `is_blocked`, `dues_hold`, `can_attend_events` etc. — skipped
+>   duplicating those onto `member_restrictions`; restriction writes sync back to the membership flags.
+> - Added `excuses/[id]` hidden route to officer layout (was missing from Phase 5 wiring).
+> - `(member)/profile.tsx` "Dues & payments" item now navigates to `account/standing`.
+> - Schema: omitted the computed `balance` column (Drizzle doesn't support `GENERATED ALWAYS AS`)
+>   — balance is computed in the API layer and on the client.
 
 ---
 
@@ -2538,6 +2546,9 @@ GET    /orgs/{org_id}/audit-log
 
 
 # Bulk upload for members and it would send out emails to members bulk uploaded for memeber
+
+# chapter to group 
+# we will no loanger be using terms remove any dependecy that uses terms
 
 # allow self checkin to meeting with button during time period
 

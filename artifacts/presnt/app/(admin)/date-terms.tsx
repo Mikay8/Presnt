@@ -136,8 +136,8 @@ export default function AdminDateTermsScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
-  const { organization } = useAuthStore();
-  const orgId        = organization?.id ?? '';
+  const { membership } = useAuthStore();
+  const orgId = membership?.org_id ?? '';
 
   const [terms,    setTerms]    = useState<Term[]>([]);
   const [loading,  setLoading]  = useState(true);

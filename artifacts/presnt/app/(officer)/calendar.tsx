@@ -99,7 +99,7 @@ export default function OfficerCalendarScreen() {
   const { width }        = useWindowDimensions();
   const insets           = useSafeAreaInsets();
   const isWide           = width >= 800;
-  const { organization } = useAuthStore();
+  const { membership } = useAuthStore();
   const { can }          = usePermissions();
   const c                = theme.colors;
 
@@ -113,7 +113,7 @@ export default function OfficerCalendarScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  const orgId = organization?.id;
+  const orgId = membership?.org_id;
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }

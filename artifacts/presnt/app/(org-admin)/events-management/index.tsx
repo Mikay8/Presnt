@@ -1471,7 +1471,7 @@ export default function OrgAdminEventsScreen() {
       {/* ── Chapter filter bar ── */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
         contentContainerStyle={sc.filterRow}
-        style={{ flexShrink: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
+        style={{ flexShrink: 0, flexGrow: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
         {/* All */}
         <Pressable onPress={() => setChapterFilter(null)}
           style={[sc.filterChip, {
@@ -1501,7 +1501,7 @@ export default function OrgAdminEventsScreen() {
 
       {/* ── Status tabs ── */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.tabRow}
-        style={{ flexShrink: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
+        style={{ flexShrink: 0, flexGrow: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
         {TABS.map(t => {
           const count  = t === 'Upcoming' ? upcomingCount : t === 'Past' ? pastCount : null;
           const active = tab === t;

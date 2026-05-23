@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
@@ -18,12 +19,13 @@ import { useThemeStore } from '@/stores/themeStore';
 
 const ACCOUNT_ITEMS: {
   label: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon:  React.ComponentProps<typeof Ionicons>['name'];
+  href?: string;
 }[] = [
-  { label: 'Personal info',   icon: 'person-outline' },
-  { label: 'Notifications',   icon: 'notifications-outline' },
-  { label: 'Dues & payments', icon: 'card-outline' },
-  { label: 'Committees',      icon: 'people-outline' },
+  { label: 'Personal info',      icon: 'person-outline' },
+  { label: 'Notifications',      icon: 'notifications-outline' },
+  { label: 'Dues & Standing',    icon: 'card-outline',      href: '/(member)/account/standing' },
+  { label: 'Committees',         icon: 'people-outline' },
 ];
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -273,10 +275,14 @@ export default function ProfileScreen() {
 
       <Card style={{ paddingVertical: 4, gap: 0 }}>
         {ACCOUNT_ITEMS.map((item, i) => (
-          <Pressable key={item.label} style={[
-            styles.accountRow,
-            i < ACCOUNT_ITEMS.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-          ]}>
+          <Pressable
+            key={item.label}
+            onPress={item.href ? () => router.push(item.href as any) : undefined}
+            style={[
+              styles.accountRow,
+              i < ACCOUNT_ITEMS.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+            ]}
+          >
             <Ionicons name={item.icon} size={18} color={theme.colors.textMuted} />
             <Text size="md" style={{ flex: 1 }}>{item.label}</Text>
             <Ionicons name="chevron-forward-outline" size={16} color={theme.colors.textSubtle} />

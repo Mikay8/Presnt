@@ -247,7 +247,7 @@ export default function AdminRolesScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
-  const { organization, profile } = useAuthStore();
+  const { membership, profile } = useAuthStore();
 
   const [roles, setRoles]         = useState<OrgRole[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -256,7 +256,7 @@ export default function AdminRolesScreen() {
   const [editing, setEditing]     = useState<OrgRole | null>(null);
   const [saving, setSaving]       = useState(false);
 
-  const orgId  = organization?.id;
+  const orgId = membership?.org_id;
   const userId = profile?.id;
 
   const load = useCallback(async () => {

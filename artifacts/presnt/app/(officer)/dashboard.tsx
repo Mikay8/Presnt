@@ -48,7 +48,7 @@ export default function OfficerDashboardScreen() {
   const insets         = useSafeAreaInsets();
   const { width }      = useWindowDimensions();
   const isWide         = width >= 800;
-  const { organization, profile } = useAuthStore();
+  const { membership, organization, profile } = useAuthStore();
   const { can }        = usePermissions();
   const userView       = useUserViewStore((s) => s.session);
   const c              = theme.colors;
@@ -61,7 +61,7 @@ export default function OfficerDashboardScreen() {
   const hasExcuses    = hasPerm(PERMISSIONS.MANAGE_ATTENDANCE) || hasPerm(PERMISSIONS.MANAGE_MEMBERS);
   const hasMembers    = hasPerm(PERMISSIONS.MANAGE_MEMBERS);
 
-  const orgId = userView?.org.id ?? organization?.id ?? '';
+  const orgId = userView?.org.id ?? membership?.org_id ?? '';
   const orgName = userView?.org.name ?? organization?.app_display_name ?? organization?.name ?? 'Chapter';
 
   const [events,     setEvents]    = useState<EventRow[]>([]);

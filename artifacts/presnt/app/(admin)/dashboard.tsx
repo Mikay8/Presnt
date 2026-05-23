@@ -80,14 +80,14 @@ export default function AdminDashboardScreen() {
   const insets          = useSafeAreaInsets();
   const { width }       = useWindowDimensions();
   const isWide          = width >= 800;
-  const { organization, profile } = useAuthStore();
+  const { membership, organization, profile } = useAuthStore();
 
   const [stats, setStats]           = useState<Stats | null>(null);
   const [activity, setActivity]     = useState<ActivityItem[]>([]);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const orgId = organization?.id;
+  const orgId = membership?.org_id;
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }

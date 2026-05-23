@@ -1360,11 +1360,11 @@ type Tab = typeof TABS[number];
 export default function AdminEventsScreen() {
   const { theme }      = useThemeStore();
   const insets         = useSafeAreaInsets();
-  const { organization, profile } = useAuthStore();
+  const { membership, organization, profile } = useAuthStore();
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c              = theme.colors;
-  const orgId          = organization?.id ?? '';
+  const orgId = membership?.org_id ?? '';
   const orgSlug        = (organization as any)?.slug ?? '';
   const { edit: editId, new: openNew } = useLocalSearchParams<{ edit?: string; new?: string }>();
 
@@ -1566,7 +1566,7 @@ export default function AdminEventsScreen() {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.tabRow}
-        style={{ height: 48, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
+        style={{ flexShrink: 0, flexGrow: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
         {TABS.map(t => {
           const count  = t === 'Upcoming' ? upcomingCount : t === 'Past' ? pastCount : null;
           const active = tab === t;

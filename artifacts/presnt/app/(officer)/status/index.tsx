@@ -174,8 +174,8 @@ export default function OfficerStatusScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
-  const { organization } = useAuthStore();
-  const orgId = organization?.id ?? '';
+  const { membership } = useAuthStore();
+  const orgId = membership?.org_id ?? '';
 
   const [term,         setTerm]         = useState<AcademicTerm | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -240,7 +240,7 @@ export default function OfficerStatusScreen() {
       const worstPct   = mySnaps.length === 0
         ? 100
         : Math.min(...mySnaps.map((s) => pct(s.points_earned, s.points_required)));
-      return { ...m, snapshots: mySnaps, isAtRisk, isCompliant, worstPct };
+      return { ...m, profiles: Array.isArray(m.profiles) ? (m.profiles[0] ?? null) : m.profiles, snapshots: mySnaps, isAtRisk, isCompliant, worstPct };
     });
 
     // Sort: at-risk first, then behind, then compliant — alphabetical within group

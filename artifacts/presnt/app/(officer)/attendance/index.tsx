@@ -113,7 +113,13 @@ function RosterModal({
       const map: Record<string, AttRow> = {};
       for (const r of (attRes.data ?? []) as AttRow[]) map[r.user_id] = r;
 
-      setMembers((membersRes.data ?? []) as MemberRow[]);
+      // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
+      const normalized: MemberRow[] = ((membersRes.data ?? []) as any[]).map((m) => ({
+        ...m,
+        profiles:  Array.isArray(m.profiles)  ? (m.profiles[0]  ?? null) : m.profiles,
+        org_roles: Array.isArray(m.org_roles) ? (m.org_roles[0] ?? null) : m.org_roles,
+      }));
+      setMembers(normalized);
       setAttendance(map);
       setLoading(false);
     }
@@ -386,14 +392,14 @@ const el = StyleSheet.create({
 export default function AttendanceScreen() {
   const { theme }      = useThemeStore();
   const insets         = useSafeAreaInsets();
-  const { organization } = useAuthStore();
+  const { membership, organization } = useAuthStore();
   const userView       = useUserViewStore((s) => s.session);
   const { can }        = usePermissions();
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c = theme.colors;
 
-  const orgId     = userView?.org.id ?? organization?.id ?? '';
+  const orgId     = userView?.org.id ?? membership?.org_id ?? '';
   const canMark   = userView
     ? userView.role === 'admin' || userView.permissions.includes(PERMISSIONS.MANAGE_ATTENDANCE)
     : can(PERMISSIONS.MANAGE_ATTENDANCE);

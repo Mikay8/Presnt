@@ -465,8 +465,16 @@ export default function OrgAdminMembersScreen() {
     const ROLE_RANK: Record<string, number> = {
       org_admin: 5, admin: 4, officer: 3, member: 2, new_member: 1,
     };
+    // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
+    const normalized: MemberRow[] = ((membersData ?? []) as any[]).map((m) => ({
+      ...m,
+      profiles:      Array.isArray(m.profiles)      ? (m.profiles[0]      ?? null) : m.profiles,
+      organizations: Array.isArray(m.organizations) ? (m.organizations[0] ?? null) : m.organizations,
+      org_roles:     Array.isArray(m.org_roles)     ? (m.org_roles[0]     ?? null) : m.org_roles,
+    }));
+
     const byProfile = new Map<string, MemberRow>();
-    for (const row of (membersData as MemberRow[]) ?? []) {
+    for (const row of normalized) {
       const pid = row.profiles?.id ?? row.id;
       const existing = byProfile.get(pid);
       if (!existing || (ROLE_RANK[row.role] ?? 0) > (ROLE_RANK[existing.role] ?? 0)) {
@@ -551,7 +559,7 @@ export default function OrgAdminMembersScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
-        style={{ flexShrink: 0, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{ flexShrink: 0, flexGrow: 0, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}
       >
         <Pressable
           onPress={() => setChFilter('all')}
@@ -593,7 +601,7 @@ export default function OrgAdminMembersScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
-        style={{ flexShrink: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{ flexShrink: 0, flexGrow: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
       >
         {ROLE_FILTERS.map((f) => {
           const active = roleFilter === f;

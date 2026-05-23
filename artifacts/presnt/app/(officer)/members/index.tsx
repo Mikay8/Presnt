@@ -318,14 +318,14 @@ const mc2 = StyleSheet.create({
 export default function OfficerMembersScreen() {
   const { theme }      = useThemeStore();
   const insets         = useSafeAreaInsets();
-  const { organization } = useAuthStore();
+  const { membership } = useAuthStore();
   const userView       = useUserViewStore((s) => s.session);
   const { can }        = usePermissions();
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c = theme.colors;
 
-  const orgId = userView?.org.id ?? organization?.id ?? '';
+  const orgId = userView?.org.id ?? membership?.org_id ?? '';
   const canManage = userView
     ? userView.role === 'admin' || userView.permissions.includes(PERMISSIONS.MANAGE_MEMBERS)
     : can(PERMISSIONS.MANAGE_MEMBERS);
@@ -355,7 +355,13 @@ export default function OfficerMembersScreen() {
         .eq('is_deleted', false)
         .order('role'),
     });
-    setMembers((data ?? []) as MemberRow[]);
+    // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
+    const normalized: MemberRow[] = ((data ?? []) as any[]).map((m) => ({
+      ...m,
+      profiles:  Array.isArray(m.profiles)  ? (m.profiles[0]  ?? null) : m.profiles,
+      org_roles: Array.isArray(m.org_roles) ? (m.org_roles[0] ?? null) : m.org_roles,
+    }));
+    setMembers(normalized);
     setLoading(false);
     setRefresh(false);
   }, [orgId]);

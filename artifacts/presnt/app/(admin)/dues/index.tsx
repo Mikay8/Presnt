@@ -137,7 +137,7 @@ export default function AdminDuesScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
-  const { organization } = useAuthStore();
+  const { membership } = useAuthStore();
 
   const [members, setMembers]       = useState<DuesMember[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -145,7 +145,7 @@ export default function AdminDuesScreen() {
   const [filter, setFilter]         = useState<Filter>('All');
   const [search, setSearch]         = useState('');
 
-  const orgId = organization?.id;
+  const orgId = membership?.org_id;
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
@@ -161,7 +161,12 @@ export default function AdminDuesScreen() {
       .eq('status', 'active')
       .order('dues_status');
 
-    setMembers((data ?? []) as DuesMember[]);
+    // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
+    const normalized: DuesMember[] = ((data ?? []) as any[]).map((m) => ({
+      ...m,
+      profiles:  Array.isArray(m.profiles)  ? (m.profiles[0]  ?? null) : m.profiles,
+    }));
+    setMembers(normalized);
     setLoading(false);
     setRefreshing(false);
   }, [orgId]);
@@ -265,7 +270,7 @@ export default function AdminDuesScreen() {
         </View>
 
         {/* Filter chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={{ flexShrink: 0, flexGrow: 0 }}>
           {FILTERS.map((f) => {
             const active = filter === f;
             const count  = f === 'All' ? members.length

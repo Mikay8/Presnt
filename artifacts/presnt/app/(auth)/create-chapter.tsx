@@ -203,6 +203,8 @@ export default function CreateChapterScreen() {
         timezone:         'America/New_York',
         join_code:        code,
         created_by:       userId,
+        is_active:        true,
+        is_deleted:       false,
       })
       .select()
       .single();

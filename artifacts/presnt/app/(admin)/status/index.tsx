@@ -108,8 +108,8 @@ export default function AdminStatusScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
-  const { organization } = useAuthStore();
-  const orgId = organization?.id ?? '';
+  const { membership } = useAuthStore();
+  const orgId = membership?.org_id ?? '';
 
   const [tab,          setTab]          = useState<TabKey>('attendance');
   const [term,         setTerm]         = useState<AcademicTerm | null>(null);
@@ -162,7 +162,7 @@ export default function AdminStatusScreen() {
       const mySnaps   = snaps.filter((s) => s.membership_id === m.id);
       const isAtRisk  = mySnaps.some((s) => s.is_at_risk);
       const isCompliant = mySnaps.length === 0 || mySnaps.every((s) => s.is_compliant);
-      return { id: m.id, dues_hold: m.dues_hold, profiles: m.profiles, snapshots: mySnaps, isAtRisk, isCompliant };
+      return { id: m.id, dues_hold: m.dues_hold, profiles: Array.isArray(m.profiles) ? (m.profiles[0] ?? null) : m.profiles, snapshots: mySnaps, isAtRisk, isCompliant };
     });
     attRows.sort((a, b) => {
       if (a.isAtRisk !== b.isAtRisk) return a.isAtRisk ? -1 : 1;

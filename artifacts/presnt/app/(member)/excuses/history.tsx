@@ -287,7 +287,7 @@ export default function ExcuseHistoryScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[xs.tabScroll, { backgroundColor: c.background, borderBottomColor: c.border }]}
+        style={[xs.tabScroll, { backgroundColor: c.background, borderBottomColor: c.border, flexGrow: 0 }]}
         contentContainerStyle={{ gap: 6, paddingHorizontal: 16, paddingVertical: 8 }}
       >
         {tabs.map((t) => {

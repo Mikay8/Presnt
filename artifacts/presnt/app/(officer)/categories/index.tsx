@@ -349,13 +349,13 @@ const cc = StyleSheet.create({
 export default function CategoriesScreen() {
   const { theme }       = useThemeStore();
   const insets          = useSafeAreaInsets();
-  const { organization, profile } = useAuthStore();
+  const { membership, profile } = useAuthStore();
   const userView        = useUserViewStore((s) => s.session);
   const { width }       = useWindowDimensions();
   const isWide          = width >= DESKTOP;
   const c               = theme.colors;
 
-  const orgId = userView?.org.id ?? organization?.id ?? '';
+  const orgId = userView?.org.id ?? membership?.org_id ?? '';
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [usageMap,   setUsageMap]   = useState<Record<string, number>>({});
