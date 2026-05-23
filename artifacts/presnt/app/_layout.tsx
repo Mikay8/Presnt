@@ -215,6 +215,8 @@ export default function RootLayout() {
       } else {
         setLoading(false);
       }
+    }).catch(() => {
+      setLoading(false);
     });
 
     // React to auth state changes
