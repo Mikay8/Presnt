@@ -10,9 +10,9 @@ import { su } from './_layout';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Stats {
-  totalOrgs: number;
-  totalUsers: number;
-  activeOrgs: number;
+  activeOrgs:      number;
+  activeChapters:  number;
+  totalUsers:      number;
 }
 
 interface HealthItem {
@@ -23,23 +23,35 @@ interface HealthItem {
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 function StatCard({
-  label, value, sub, accent = false,
-}: { label: string; value: string; sub?: string; accent?: boolean }) {
+  label, value, sub, accent = false, icon,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: boolean;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+}) {
   return (
     <View style={{
       flex: 1, minWidth: 140,
       backgroundColor: accent ? su.primary : su.surface,
       borderRadius: 12, padding: 18,
       borderWidth: 1, borderColor: accent ? su.primary : su.border,
+      gap: 4,
     }}>
-      <Text style={{ color: accent ? '#fff' : su.textMuted, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+      {icon && (
+        <View style={{ marginBottom: 6 }}>
+          <Ionicons name={icon} size={18} color={accent ? 'rgba(255,255,255,0.8)' : su.textMuted} />
+        </View>
+      )}
+      <Text style={{ color: accent ? 'rgba(255,255,255,0.75)' : su.textMuted, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase' }}>
         {label}
       </Text>
-      <Text style={{ color: accent ? '#fff' : su.text, fontSize: 22, fontWeight: '700', marginTop: 8 }}>
+      <Text style={{ color: accent ? '#fff' : su.text, fontSize: 28, fontWeight: '700', marginTop: 4 }}>
         {value}
       </Text>
       {sub && (
-        <Text style={{ color: accent ? 'rgba(255,255,255,0.7)' : su.textSubtle, fontSize: 12, marginTop: 4 }}>
+        <Text style={{ color: accent ? 'rgba(255,255,255,0.6)' : su.textSubtle, fontSize: 12, marginTop: 2 }}>
           {sub}
         </Text>
       )}
@@ -98,15 +110,34 @@ export default function SuperuserOverview() {
 
   async function loadStats() {
     setLoading(true);
-    const [{ count: orgsCount }, { count: usersCount }, { count: activeOrgsCount }] = await Promise.all([
-      supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('is_deleted', false),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }),
-      supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('is_deleted', false).eq('is_active', true),
+    const [
+      { count: activeOrgsCount },
+      { count: activeChaptersCount },
+      { count: usersCount },
+    ] = await Promise.all([
+      // Active parent organizations (national HQ, councils — not chapters)
+      supabase
+        .from('organizations')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_deleted', false)
+        .eq('is_active', true)
+        .neq('type', 'chapter'),
+      // Active chapters
+      supabase
+        .from('organizations')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_deleted', false)
+        .eq('is_active', true)
+        .eq('type', 'chapter'),
+      // All profiles
+      supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true }),
     ]);
     setStats({
-      totalOrgs: orgsCount ?? 0,
-      totalUsers: usersCount ?? 0,
-      activeOrgs: activeOrgsCount ?? 0,
+      activeOrgs:     activeOrgsCount ?? 0,
+      activeChapters: activeChaptersCount ?? 0,
+      totalUsers:     usersCount ?? 0,
     });
     setLoading(false);
   }
@@ -131,18 +162,34 @@ export default function SuperuserOverview() {
         {greeting}, {firstName}.
       </Text>
       <Text style={{ color: su.textMuted, fontSize: 13, marginTop: 4, marginBottom: 28 }}>
-        {dateStr} · {stats ? `${stats.totalOrgs} orgs · ${stats.totalUsers} members` : '...'}
+        {dateStr}
+        {stats ? ` · ${stats.activeOrgs} org${stats.activeOrgs !== 1 ? 's' : ''} · ${stats.activeChapters} chapter${stats.activeChapters !== 1 ? 's' : ''} · ${stats.totalUsers} users` : ' · …'}
       </Text>
 
-      {/* Stat cards */}
+      {/* Stat cards — 3 squares in a row */}
       {loading ? (
         <ActivityIndicator color={su.primary} style={{ marginBottom: 32 }} />
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
-          <StatCard label="Active orgs"  value={String(stats?.activeOrgs ?? 0)}  sub="on platform"  accent />
-          <StatCard label="Total orgs"   value={String(stats?.totalOrgs ?? 0)}   sub="incl. inactive" />
-          <StatCard label="Total users"  value={String(stats?.totalUsers ?? 0)}  sub="all time" />
-          <StatCard label="Error rate"   value="—"   sub="last 24h" />
+          <StatCard
+            label="Active organizations"
+            value={String(stats?.activeOrgs ?? 0)}
+            sub="parent orgs"
+            accent
+            icon="globe-outline"
+          />
+          <StatCard
+            label="Active chapters"
+            value={String(stats?.activeChapters ?? 0)}
+            sub="under orgs"
+            icon="business-outline"
+          />
+          <StatCard
+            label="Total users"
+            value={String(stats?.totalUsers ?? 0)}
+            sub="all time"
+            icon="people-outline"
+          />
         </View>
       )}
 
@@ -154,12 +201,12 @@ export default function SuperuserOverview() {
             QUICK ACCESS
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            <QuickCard icon="business-outline"      title="Org management"   sub={`${stats?.totalOrgs ?? '—'} orgs`}     href="/(superuser)/orgs/" />
-            <QuickCard icon="people-outline"        title="User management"  sub={`${stats?.totalUsers ?? '—'} profiles`} href="/(superuser)/users/" />
-            <QuickCard icon="flag-outline"          title="Feature flags"    sub="Toggles & overrides"                    href="/(superuser)/flags/" />
-            <QuickCard icon="document-text-outline" title="Logs & audit"     sub="Platform · per-org"                     href="/(superuser)/logs/" />
-            <QuickCard icon="build-outline"         title="Support tools"    sub="Overrides · QR · push"                  href="/(superuser)/support/" />
-            <QuickCard icon="settings-outline"      title="App config"       sub="Limits · defaults"                      href="/(superuser)/config/" />
+            <QuickCard icon="business-outline"      title="Org management"   sub={`${stats?.activeOrgs ?? '—'} orgs · ${stats?.activeChapters ?? '—'} chapters`} href="/(superuser)/orgs/" />
+            <QuickCard icon="people-outline"        title="User management"  sub={`${stats?.totalUsers ?? '—'} profiles`}                                         href="/(superuser)/users/" />
+            <QuickCard icon="flag-outline"          title="Feature flags"    sub="Toggles & overrides"                                                             href="/(superuser)/flags/" />
+            <QuickCard icon="document-text-outline" title="Logs & audit"     sub="Platform · per-org"                                                              href="/(superuser)/logs/" />
+            <QuickCard icon="build-outline"         title="Support tools"    sub="Overrides · QR · push"                                                           href="/(superuser)/support/" />
+            <QuickCard icon="settings-outline"      title="App config"       sub="Limits · defaults"                                                               href="/(superuser)/config/" />
           </View>
         </View>
 

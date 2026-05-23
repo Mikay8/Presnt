@@ -19,6 +19,7 @@ import { su } from '../_layout';
 import type { Tables } from '@/types/database';
 
 type Org = Pick<Tables<'organizations'>, 'id' | 'name' | 'institution' | 'slug' | 'type'>;
+type Chapter = Pick<Tables<'organizations'>, 'id' | 'name' | 'institution' | 'slug'>;
 
 // ─── Other tool stubs ─────────────────────────────────────────────────────────
 
@@ -98,19 +99,32 @@ const VIEW_ROLES: { role: ViewRole; label: string; description: string; icon: Re
 function UserViewTool() {
   const { session: activeSession, start, stop } = useUserViewStore();
 
+  // Step 1 — parent org
   const [orgs, setOrgs]               = useState<Org[]>([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
   const [selectedOrg, setSelectedOrg] = useState<Org | null>(null);
-  const [selectedRole, setSelectedRole] = useState<ViewRole>('member');
-  const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
   const [orgSearch, setOrgSearch]     = useState('');
 
+  // Step 2 — chapter under that org
+  const [chapters, setChapters]               = useState<Chapter[]>([]);
+  const [chaptersLoading, setChaptersLoading] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  const [chapterSearch, setChapterSearch]     = useState('');
+
+  // Step 3 — role
+  const [selectedRole, setSelectedRole] = useState<ViewRole>('member');
+
+  // Step 4 — permissions (officer only)
+  const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
+
+  // Load parent orgs (non-chapter types only)
   useEffect(() => {
     supabase
       .from('organizations')
       .select('id, name, institution, slug, type')
       .eq('is_deleted', false)
       .eq('is_active', true)
+      .neq('type', 'chapter')
       .order('name')
       .limit(100)
       .then(({ data }) => {
@@ -119,19 +133,46 @@ function UserViewTool() {
       });
   }, []);
 
+  // Load chapters when a parent org is picked
+  useEffect(() => {
+    if (!selectedOrg) {
+      setChapters([]);
+      setSelectedChapter(null);
+      return;
+    }
+    setChaptersLoading(true);
+    setSelectedChapter(null);
+    supabase
+      .from('organizations')
+      .select('id, name, institution, slug')
+      .eq('parent_org_id', selectedOrg.id)
+      .eq('is_deleted', false)
+      .eq('type', 'chapter')
+      .order('name')
+      .limit(200)
+      .then(({ data }) => {
+        setChapters((data as Chapter[]) ?? []);
+        setChaptersLoading(false);
+      });
+  }, [selectedOrg?.id]);
+
   function togglePerm(perm: string) {
     setSelectedPerms((prev) =>
       prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
     );
   }
 
+  // For org_admin role the target org is the parent org itself.
+  // For all other roles, the target is the selected chapter.
+  const targetOrgId = selectedRole === 'org_admin' ? selectedOrg?.id : selectedChapter?.id;
+  const canLaunch   = selectedRole === 'org_admin' ? !!selectedOrg : (!!selectedOrg && !!selectedChapter);
+
   function handleLaunch() {
-    if (!selectedOrg) return;
-    // Fetch the full org row then start the session + navigate imperatively
+    if (!canLaunch) return;
     supabase
       .from('organizations')
       .select('*')
-      .eq('id', selectedOrg.id)
+      .eq('id', targetOrgId as string)
       .single()
       .then(({ data: org }) => {
         if (!org) return;
@@ -140,7 +181,6 @@ function UserViewTool() {
           org,
           permissions: selectedRole === 'officer' ? selectedPerms : [],
         });
-        // Navigate immediately — don't rely on RootLayoutNav's declarative redirect
         if (selectedRole === 'org_admin') {
           router.replace('/(org-admin)/dashboard' as any);
         } else if (selectedRole === 'admin') {
@@ -153,10 +193,15 @@ function UserViewTool() {
       });
   }
 
-  const filteredOrgs = orgs.filter(
+  const filteredOrgs     = orgs.filter(
     (o) =>
       o.name.toLowerCase().includes(orgSearch.toLowerCase()) ||
       (o.institution ?? '').toLowerCase().includes(orgSearch.toLowerCase())
+  );
+  const filteredChapters = chapters.filter(
+    (c) =>
+      c.name.toLowerCase().includes(chapterSearch.toLowerCase()) ||
+      (c.institution ?? '').toLowerCase().includes(chapterSearch.toLowerCase())
   );
 
   // ── Active banner (in-tool) ─────────────────────────────────────────────
@@ -198,7 +243,7 @@ function UserViewTool() {
         </View>
 
         <Pressable
-          onPress={stop}  // navigation not needed — already on support screen
+          onPress={stop}
           style={({ pressed }) => ({
             borderRadius: 10,
             borderWidth: 1,
@@ -215,10 +260,12 @@ function UserViewTool() {
   }
 
   // ── Setup form ──────────────────────────────────────────────────────────
+  const stepCount = selectedRole === 'officer' ? 4 : 3;
+
   return (
     <View style={{ gap: 18 }}>
 
-      {/* Step 1 — Pick org */}
+      {/* Step 1 — Pick parent org */}
       <View style={{ gap: 8 }}>
         <Text style={{ color: su.textMuted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600' }}>
           1 · Select organization
@@ -228,7 +275,7 @@ function UserViewTool() {
           <TextInput
             value={orgSearch}
             onChangeText={setOrgSearch}
-            placeholder="Search orgs…"
+            placeholder="Search organizations…"
             placeholderTextColor={su.textSubtle}
             style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, color: su.text, fontSize: 13,
               // @ts-ignore
@@ -238,17 +285,17 @@ function UserViewTool() {
         {orgsLoading ? (
           <ActivityIndicator color={su.primary} />
         ) : (
-          <View style={{ gap: 4, maxHeight: 180 }}>
+          <View style={{ maxHeight: 180 }}>
             <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
               {filteredOrgs.length === 0 ? (
-                <Text style={{ color: su.textSubtle, fontSize: 13, textAlign: 'center', paddingVertical: 12 }}>No orgs found</Text>
+                <Text style={{ color: su.textSubtle, fontSize: 13, textAlign: 'center', paddingVertical: 12 }}>No organizations found</Text>
               ) : (
                 filteredOrgs.map((org) => {
                   const selected = selectedOrg?.id === org.id;
                   return (
                     <Pressable
                       key={org.id}
-                      onPress={() => setSelectedOrg(org)}
+                      onPress={() => { setSelectedOrg(org); setOrgSearch(''); }}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -262,26 +309,12 @@ function UserViewTool() {
                         marginBottom: 3,
                       }}
                     >
-                      <Ionicons name="business-outline" size={16} color={selected ? su.primary : su.textSubtle} />
+                      <Ionicons name="globe-outline" size={16} color={selected ? su.primary : su.textSubtle} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: selected ? su.primary : su.text, fontSize: 13, fontWeight: selected ? '600' : '400' }}>{org.name}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
-                          {org.institution && (
-                            <Text style={{ color: su.textSubtle, fontSize: 11 }}>{org.institution}</Text>
-                          )}
-                          {(org.type === 'national_hq' || org.type === 'council') && (
-                            <View style={{ backgroundColor: '#3B82F622', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                              <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '600' }}>
-                                {org.type === 'national_hq' ? 'NATIONAL' : 'COUNCIL'}
-                              </Text>
-                            </View>
-                          )}
-                          {org.type === 'chapter' && (
-                            <View style={{ backgroundColor: su.surfaceAlt, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                              <Text style={{ color: su.textSubtle, fontSize: 10, fontWeight: '600' }}>CHAPTER</Text>
-                            </View>
-                          )}
-                        </View>
+                        {org.institution && (
+                          <Text style={{ color: su.textSubtle, fontSize: 11, marginTop: 1 }}>{org.institution}</Text>
+                        )}
                       </View>
                       {selected && <Ionicons name="checkmark-circle" size={16} color={su.primary} />}
                     </Pressable>
@@ -296,10 +329,86 @@ function UserViewTool() {
       {/* Divider */}
       <View style={{ height: 1, backgroundColor: su.border }} />
 
-      {/* Step 2 — Pick role */}
+      {/* Step 2 — Pick chapter (skip for org_admin role) */}
+      {selectedRole !== 'org_admin' && (
+        <>
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: selectedOrg ? su.textMuted : su.textSubtle, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600' }}>
+              2 · Select chapter
+            </Text>
+            {!selectedOrg ? (
+              <Text style={{ color: su.textSubtle, fontSize: 12, paddingVertical: 8 }}>
+                Pick an organization above first.
+              </Text>
+            ) : chaptersLoading ? (
+              <ActivityIndicator color={su.primary} />
+            ) : chapters.length === 0 ? (
+              <View style={{ paddingVertical: 10, backgroundColor: su.surfaceAlt, borderRadius: 8, alignItems: 'center' }}>
+                <Text style={{ color: su.textSubtle, fontSize: 13 }}>No chapters found under this organization.</Text>
+              </View>
+            ) : (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: su.bg, borderRadius: 10, borderWidth: 1, borderColor: su.border, paddingHorizontal: 10 }}>
+                  <Ionicons name="search-outline" size={15} color={su.textSubtle} />
+                  <TextInput
+                    value={chapterSearch}
+                    onChangeText={setChapterSearch}
+                    placeholder="Search chapters…"
+                    placeholderTextColor={su.textSubtle}
+                    style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, color: su.text, fontSize: 13,
+                      // @ts-ignore
+                      outline: 'none' }}
+                  />
+                </View>
+                <View style={{ maxHeight: 180 }}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollEnabled={false}>
+                    {filteredChapters.length === 0 ? (
+                      <Text style={{ color: su.textSubtle, fontSize: 13, textAlign: 'center', paddingVertical: 12 }}>No chapters match</Text>
+                    ) : (
+                      filteredChapters.map((ch) => {
+                        const selected = selectedChapter?.id === ch.id;
+                        return (
+                          <Pressable
+                            key={ch.id}
+                            onPress={() => { setSelectedChapter(ch); setChapterSearch(''); }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 10,
+                              paddingHorizontal: 12,
+                              paddingVertical: 10,
+                              borderRadius: 8,
+                              backgroundColor: selected ? su.primary + '18' : 'transparent',
+                              borderWidth: 1,
+                              borderColor: selected ? su.primary : 'transparent',
+                              marginBottom: 3,
+                            }}
+                          >
+                            <Ionicons name="business-outline" size={16} color={selected ? su.primary : su.textSubtle} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: selected ? su.primary : su.text, fontSize: 13, fontWeight: selected ? '600' : '400' }}>{ch.name}</Text>
+                              {ch.institution && (
+                                <Text style={{ color: su.textSubtle, fontSize: 11, marginTop: 1 }}>{ch.institution}</Text>
+                              )}
+                            </View>
+                            {selected && <Ionicons name="checkmark-circle" size={16} color={su.primary} />}
+                          </Pressable>
+                        );
+                      })
+                    )}
+                  </ScrollView>
+                </View>
+              </>
+            )}
+          </View>
+          <View style={{ height: 1, backgroundColor: su.border }} />
+        </>
+      )}
+
+      {/* Step 3 — Pick role */}
       <View style={{ gap: 8 }}>
         <Text style={{ color: su.textMuted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600' }}>
-          2 · Simulate role
+          {selectedRole !== 'org_admin' ? '3' : '2'} · Simulate role
         </Text>
         <View style={{ gap: 6 }}>
           {VIEW_ROLES.map(({ role, label, description, icon }) => {
@@ -307,7 +416,7 @@ function UserViewTool() {
             return (
               <Pressable
                 key={role}
-                onPress={() => { setSelectedRole(role); setSelectedPerms([]); }}
+                onPress={() => { setSelectedRole(role); setSelectedPerms([]); setSelectedChapter(null); setChapterSearch(''); }}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -341,24 +450,24 @@ function UserViewTool() {
         </View>
       </View>
 
-      {/* Org Admin note — remind superuser to pick a parent org */}
+      {/* Org Admin note */}
       {selectedRole === 'org_admin' && (
         <View style={{ backgroundColor: '#3B82F612', borderWidth: 1, borderColor: '#3B82F640', borderRadius: 10, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
           <Ionicons name="information-circle-outline" size={15} color="#3B82F6" style={{ marginTop: 1 }} />
           <Text style={{ color: '#3B82F6', fontSize: 12, flex: 1, lineHeight: 18 }}>
-            Select a <Text style={{ fontWeight: '700' }}>parent organization</Text> (National / Council) above, not a chapter. The org admin portal shows chapters under that org.
+            The org admin portal is launched at the organization level — no chapter selection needed.
           </Text>
         </View>
       )}
 
-      {/* Step 3 — Officer permissions (only when officer selected) */}
+      {/* Step 4 — Officer permissions (only when officer selected) */}
       {selectedRole === 'officer' && (
         <>
           <View style={{ height: 1, backgroundColor: su.border }} />
           <View style={{ gap: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ color: su.textMuted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontWeight: '600' }}>
-                3 · Permissions
+                4 · Permissions
               </Text>
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable onPress={() => setSelectedPerms(ALL_PERMISSIONS.map((p) => p.key))}>
@@ -410,9 +519,9 @@ function UserViewTool() {
       {/* Launch button */}
       <Pressable
         onPress={handleLaunch}
-        disabled={!selectedOrg}
+        disabled={!canLaunch}
         style={({ pressed }) => ({
-          backgroundColor: selectedOrg ? su.primary : su.surfaceAlt,
+          backgroundColor: canLaunch ? su.primary : su.surfaceAlt,
           borderRadius: 10,
           paddingVertical: 14,
           alignItems: 'center',
@@ -422,15 +531,19 @@ function UserViewTool() {
           opacity: pressed ? 0.8 : 1,
         })}
       >
-        <Ionicons name="eye-outline" size={16} color={selectedOrg ? '#fff' : su.textSubtle} />
-        <Text style={{ color: selectedOrg ? '#fff' : su.textSubtle, fontSize: 14, fontWeight: '600' }}>
+        <Ionicons name="eye-outline" size={16} color={canLaunch ? '#fff' : su.textSubtle} />
+        <Text style={{ color: canLaunch ? '#fff' : su.textSubtle, fontSize: 14, fontWeight: '600' }}>
           Launch User View
         </Text>
       </Pressable>
 
-      {!selectedOrg && (
+      {!canLaunch && (
         <Text style={{ color: su.textSubtle, fontSize: 12, textAlign: 'center', marginTop: -8 }}>
-          Select an organization to continue
+          {!selectedOrg
+            ? 'Select an organization to continue'
+            : selectedRole !== 'org_admin' && !selectedChapter
+            ? 'Select a chapter to continue'
+            : 'Select a role to continue'}
         </Text>
       )}
     </View>

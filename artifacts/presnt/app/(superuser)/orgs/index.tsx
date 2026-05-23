@@ -26,7 +26,13 @@ export default function SuperuserOrgsScreen() {
 
   async function loadOrgs() {
     setLoading(true);
-    let q = supabase.from('organizations').select('*').eq('is_deleted', false).order('created_at', { ascending: false });
+    // Only fetch parent organizations — chapters are shown inside each org's detail screen
+    let q = supabase
+      .from('organizations')
+      .select('*')
+      .eq('is_deleted', false)
+      .neq('type', 'chapter')           // ← exclude chapters
+      .order('created_at', { ascending: false });
     if (filter === 'Active')   q = q.eq('is_active', true);
     if (filter === 'Inactive') q = q.eq('is_active', false);
     const { data } = await q.limit(100);
@@ -39,11 +45,20 @@ export default function SuperuserOrgsScreen() {
     (o.institution ?? '').toLowerCase().includes(query.toLowerCase())
   );
 
+  function typeLabel(type: string) {
+    if (type === 'national_hq') return 'NATIONAL';
+    if (type === 'council')     return 'COUNCIL';
+    return type.toUpperCase();
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: su.bg }}>
       {/* Header */}
       <View style={{ padding: isWide ? 32 : 16, paddingBottom: 0 }}>
-        <Text style={{ color: su.text, fontSize: 28, fontWeight: '700', marginBottom: 16 }}>Orgs</Text>
+        <Text style={{ color: su.text, fontSize: 28, fontWeight: '700', marginBottom: 4 }}>Organizations</Text>
+        <Text style={{ color: su.textMuted, fontSize: 13, marginBottom: 16 }}>
+          Parent organizations — tap an org to view its chapters.
+        </Text>
 
         {/* Search */}
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: su.surface, borderRadius: 10, borderWidth: 1, borderColor: su.border, paddingHorizontal: 12, marginBottom: 14 }}>
@@ -51,7 +66,7 @@ export default function SuperuserOrgsScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search orgs, institutions…"
+            placeholder="Search organizations…"
             placeholderTextColor={su.textSubtle}
             style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, color: su.text, fontSize: 14, // @ts-ignore
               outline: 'none' }}
@@ -78,7 +93,7 @@ export default function SuperuserOrgsScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: isWide ? 32 : 16, paddingBottom: 40 }}>
           {filtered.length === 0 ? (
-            <Text style={{ color: su.textMuted, textAlign: 'center', marginTop: 40 }}>No orgs found.</Text>
+            <Text style={{ color: su.textMuted, textAlign: 'center', marginTop: 40 }}>No organizations found.</Text>
           ) : (
             <View style={{ gap: 8 }}>
               {filtered.map((org) => (
@@ -91,15 +106,24 @@ export default function SuperuserOrgsScreen() {
                     padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12,
                   })}
                 >
+                  {/* Org icon */}
+                  <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: su.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="globe-outline" size={18} color={su.primary} />
+                  </View>
+
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: su.text, fontSize: 15, fontWeight: '600' }}>{org.name}</Text>
                     {org.institution && (
                       <Text style={{ color: su.textMuted, fontSize: 13, marginTop: 2 }}>{org.institution}</Text>
                     )}
-                    <Text style={{ color: su.textSubtle, fontSize: 11, marginTop: 4 }}>
-                      {org.type} · {org.slug}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <View style={{ backgroundColor: '#3B82F622', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '600' }}>{typeLabel(org.type)}</Text>
+                      </View>
+                      <Text style={{ color: su.textSubtle, fontSize: 11 }}>{org.slug}</Text>
+                    </View>
                   </View>
+
                   <View style={{ alignItems: 'flex-end', gap: 6 }}>
                     <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: org.is_active ? su.success + '22' : su.border }}>
                       <Text style={{ color: org.is_active ? su.success : su.textSubtle, fontSize: 11, fontWeight: '600' }}>

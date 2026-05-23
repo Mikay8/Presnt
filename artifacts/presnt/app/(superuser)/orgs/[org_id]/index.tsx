@@ -10,8 +10,9 @@ import type { Tables } from '@/types/database';
 
 type Org = Tables<'organizations'>;
 type Member = Tables<'memberships'> & { profiles: Tables<'profiles'> | null };
+type Chapter = Pick<Tables<'organizations'>, 'id' | 'name' | 'institution' | 'slug' | 'is_active' | 'join_code' | 'created_at'>;
 
-const TABS = ['Info', 'Members', 'Audit'] as const;
+const TABS = ['Info', 'Chapters', 'Members', 'Audit'] as const;
 type Tab = typeof TABS[number];
 
 function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
@@ -30,11 +31,20 @@ export default function OrgDetailScreen() {
 
   const [org, setOrg] = useState<Org | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('Info');
   const [loading, setLoading] = useState(true);
+  const [chaptersLoading, setChaptersLoading] = useState(false);
   const [toggling, setToggling] = useState(false);
 
   useEffect(() => { loadOrg(); }, [org_id]);
+
+  // Load chapters when the Chapters tab is first opened
+  useEffect(() => {
+    if (activeTab === 'Chapters' && chapters.length === 0 && !chaptersLoading) {
+      loadChapters();
+    }
+  }, [activeTab]);
 
   async function loadOrg() {
     setLoading(true);
@@ -45,6 +55,19 @@ export default function OrgDetailScreen() {
     setOrg(orgData);
     setMembers((memberData as Member[]) ?? []);
     setLoading(false);
+  }
+
+  async function loadChapters() {
+    if (!org_id) return;
+    setChaptersLoading(true);
+    const { data } = await supabase
+      .from('organizations')
+      .select('id, name, institution, slug, is_active, join_code, created_at')
+      .eq('parent_org_id', org_id as string)
+      .eq('is_deleted', false)
+      .order('name', { ascending: true });
+    setChapters((data as Chapter[]) ?? []);
+    setChaptersLoading(false);
   }
 
   async function toggleActive() {
@@ -84,13 +107,15 @@ export default function OrgDetailScreen() {
       <View style={{ padding: isWide ? 32 : 16, paddingBottom: 0 }}>
         <Pressable onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 }}>
           <Ionicons name="chevron-back" size={16} color={su.textMuted} />
-          <Text style={{ color: su.textMuted, fontSize: 13 }}>Orgs</Text>
+          <Text style={{ color: su.textMuted, fontSize: 13 }}>Organizations</Text>
         </Pressable>
 
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ color: su.text, fontSize: 24, fontWeight: '700' }}>{org.name}</Text>
-            <Text style={{ color: su.textMuted, fontSize: 13, marginTop: 4 }}>{org.institution} · {org.slug}</Text>
+            <Text style={{ color: su.textMuted, fontSize: 13, marginTop: 4 }}>
+              {org.institution ? `${org.institution} · ` : ''}{org.slug}
+            </Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable
@@ -128,6 +153,8 @@ export default function OrgDetailScreen() {
 
       {/* Tab content */}
       <ScrollView contentContainerStyle={{ paddingHorizontal: isWide ? 32 : 16, paddingBottom: 48 }}>
+
+        {/* ── Info ── */}
         {activeTab === 'Info' && (
           <View style={{ gap: 20 }}>
             {/* Identity */}
@@ -156,6 +183,71 @@ export default function OrgDetailScreen() {
           </View>
         )}
 
+        {/* ── Chapters ── */}
+        {activeTab === 'Chapters' && (
+          <View style={{ gap: 12 }}>
+            {chaptersLoading ? (
+              <ActivityIndicator color={su.primary} style={{ marginTop: 32 }} />
+            ) : chapters.length === 0 ? (
+              <View style={{ backgroundColor: su.surface, borderRadius: 12, borderWidth: 1, borderColor: su.border, padding: 32, alignItems: 'center', gap: 12 }}>
+                <Ionicons name="business-outline" size={32} color={su.textSubtle} />
+                <Text style={{ color: su.textMuted, fontSize: 14, textAlign: 'center' }}>No chapters under this organization.</Text>
+                <Text style={{ color: su.textSubtle, fontSize: 12, textAlign: 'center' }}>
+                  Chapter admins link chapters during setup using this org's join code.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={{ color: su.textSubtle, fontSize: 12, marginBottom: 4 }}>
+                  {chapters.length} chapter{chapters.length !== 1 ? 's' : ''}
+                </Text>
+                {chapters.map((ch) => (
+                  <Pressable
+                    key={ch.id}
+                    onPress={() => router.push(`/(superuser)/orgs/${ch.id}` as any)}
+                    style={({ pressed }) => ({
+                      backgroundColor: pressed ? su.surfaceAlt : su.surface,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: su.border,
+                      padding: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                    })}
+                  >
+                    <View style={{ width: 36, height: 36, borderRadius: 9, backgroundColor: su.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="business-outline" size={16} color={su.primary} />
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: su.text, fontSize: 14, fontWeight: '600' }}>{ch.name}</Text>
+                      {ch.institution && (
+                        <Text style={{ color: su.textMuted, fontSize: 12, marginTop: 2 }}>{ch.institution}</Text>
+                      )}
+                      {ch.join_code && (
+                        <Text style={{ color: su.textSubtle, fontSize: 11, marginTop: 3, letterSpacing: 0.5 }}>
+                          Code: {ch.join_code}
+                        </Text>
+                      )}
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <View style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, backgroundColor: ch.is_active ? su.success + '22' : su.border }}>
+                        <Text style={{ color: ch.is_active ? su.success : su.textSubtle, fontSize: 10, fontWeight: '600' }}>
+                          {ch.is_active ? '● Active' : '○ Inactive'}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={14} color={su.textSubtle} />
+                    </View>
+                  </Pressable>
+                ))}
+              </>
+            )}
+          </View>
+        )}
+
+        {/* ── Members ── */}
         {activeTab === 'Members' && (
           <View style={{ gap: 8 }}>
             {members.length === 0 ? (
@@ -181,6 +273,7 @@ export default function OrgDetailScreen() {
           </View>
         )}
 
+        {/* ── Audit ── */}
         {activeTab === 'Audit' && (
           <View style={{ backgroundColor: su.surface, borderRadius: 12, borderWidth: 1, borderColor: su.border, padding: 20, alignItems: 'center' }}>
             <Ionicons name="document-text-outline" size={32} color={su.textSubtle} />
