@@ -181,8 +181,8 @@ export default function LoginScreen() {
           <Image
             source={
               colorScheme === 'dark'
-                ? require('@/assets/images/wordmark-light.png')
-                : require('@/assets/images/wordmark-dark.png')
+                ? require('@/assets/images/wordmark-dark.png')
+                : require('@/assets/images/wordmark-light.png')
             }
             style={styles.appIcon}
             resizeMode="contain"
