@@ -1020,20 +1020,25 @@ const ef = StyleSheet.create({
 
 // ─── Desktop Table Row ────────────────────────────────────────────────────────
 
-function TableRow({ event, catMap, onEdit, onCancel, onScan }: {
-  event: Event; catMap: Record<string, EventCategory>; onEdit: () => void; onCancel: () => void; onScan: () => void;
+function TableRow({ event, catMap, chapters, onEdit, onCancel, onScan }: {
+  event: Event; catMap: Record<string, EventCategory>; chapters: Chapter[];
+  onEdit: () => void; onCancel: () => void; onScan: () => void;
 }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
   const [menuOpen, setMenuOpen] = useState(false);
-  const d      = fmtDate(displayDate(event));
-  const status = eventStatus(event);
+  const d          = fmtDate(displayDate(event));
+  const status     = eventStatus(event);
   const statusColor = status === 'past' ? c.textSubtle : STATUS_COLOR[status];
   const cat         = (event as any).category_id ? catMap[(event as any).category_id] : null;
   const isOrgWide   = !!(event as any).is_org_wide;
 
+  // Chapter events are read-only for org-admin — they can view but not edit/cancel
+  const isChapterEvent = !isOrgWide;
+  const chapter        = isChapterEvent ? chapters.find(ch => ch.id === event.org_id) : null;
+
   return (
-    <View style={[tr.row, { borderBottomColor: c.border }]}>
+    <View style={[tr.row, { borderBottomColor: c.border, opacity: isChapterEvent ? 0.85 : 1 }]}>
       <View style={[tr.dateBadge, { backgroundColor: c.surfaceAlt }]}>
         <Text size="xs" weight="medium" color={c.textSubtle}>{d.month}</Text>
         <Text size="md" weight="bold">{d.day}</Text>
@@ -1041,7 +1046,22 @@ function TableRow({ event, catMap, onEdit, onCancel, onScan }: {
       <View style={{ flex: 2, gap: 2 }}>
         <Text size="sm" weight="medium">{event.title}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {isOrgWide && <OrgWideBadge small />}
+          {/* Org-wide badge OR chapter source badge */}
+          {isOrgWide ? (
+            <OrgWideBadge small />
+          ) : chapter ? (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 3,
+              backgroundColor: (chapter.primary_color ?? '#6B7280') + '18',
+              borderWidth: 1, borderColor: (chapter.primary_color ?? '#6B7280') + '50',
+              borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1,
+            }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: chapter.primary_color ?? '#6B7280' }} />
+              <Text size="xs" color={chapter.primary_color ?? '#6B7280'} weight="medium" style={{ fontSize: 9 }}>
+                {chapter.name}
+              </Text>
+            </View>
+          ) : null}
           {cat && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4,
               backgroundColor: cat.color + '20', borderWidth: 1, borderColor: cat.color + '60',
@@ -1071,28 +1091,38 @@ function TableRow({ event, catMap, onEdit, onCancel, onScan }: {
       <View style={[tr.statusChip, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
         <Text size="xs" weight="medium" color={statusColor}>{STATUS_LABEL[status]}</Text>
       </View>
-      {status === 'ongoing' ? (
+      {status === 'ongoing' && isOrgWide ? (
         <Pressable onPress={onScan}
           style={[tr.scanBtn, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B' }]}>
           <Ionicons name="qr-code-outline" size={13} color="#F59E0B" />
           <Text size="xs" weight="medium" style={{ color: '#F59E0B' }}>Scan QR</Text>
         </Pressable>
       ) : <View style={{ width: 80 }} />}
+      {/* Actions menu — only for org-wide events that this org-admin owns */}
       <View style={{ width: 36, position: 'relative' }}>
-        <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }} style={{ padding: 8 }}>
-          <Text size="md" color={c.textSubtle}>···</Text>
-        </Pressable>
-        {menuOpen && (
-          <View style={[tr.menu, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onEdit(); }}
-              style={[tr.menuItem, { borderBottomColor: c.border }]}>
-              <Text size="sm">Edit</Text>
+        {isOrgWide ? (
+          <>
+            <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(!menuOpen); }} style={{ padding: 8 }}>
+              <Text size="md" color={c.textSubtle}>···</Text>
             </Pressable>
-            {status !== 'cancelled' && status !== 'past' && (
-              <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onCancel(); }} style={tr.menuItem}>
-                <Text size="sm" color="#EF4444">Cancel</Text>
-              </Pressable>
+            {menuOpen && (
+              <View style={[tr.menu, { backgroundColor: c.surface, borderColor: c.border }]}>
+                <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onEdit(); }}
+                  style={[tr.menuItem, { borderBottomColor: c.border }]}>
+                  <Text size="sm">Edit</Text>
+                </Pressable>
+                {status !== 'cancelled' && status !== 'past' && (
+                  <Pressable onPress={(e) => { e.stopPropagation?.(); setMenuOpen(false); onCancel(); }} style={tr.menuItem}>
+                    <Text size="sm" color="#EF4444">Cancel</Text>
+                  </Pressable>
+                )}
+              </View>
             )}
+          </>
+        ) : (
+          // Chapter event — read-only indicator
+          <View style={{ padding: 8, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="eye-outline" size={16} color={c.textSubtle} />
           </View>
         )}
       </View>
@@ -1112,19 +1142,24 @@ const tr = StyleSheet.create({
 
 // ─── Mobile Card ─────────────────────────────────────────────────────────────
 
-function MobileCard({ event, catMap, onEdit, onScan }: {
-  event: Event; catMap: Record<string, EventCategory>; onEdit: () => void; onScan: () => void;
+function MobileCard({ event, catMap, chapters, onEdit, onScan }: {
+  event: Event; catMap: Record<string, EventCategory>; chapters: Chapter[];
+  onEdit: () => void; onScan: () => void;
 }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
-  const d         = fmtDate(displayDate(event));
-  const status    = eventStatus(event);
+  const d           = fmtDate(displayDate(event));
+  const status      = eventStatus(event);
   const statusColor = status === 'past' ? c.textSubtle : STATUS_COLOR[status];
   const cat         = (event as any).category_id ? catMap[(event as any).category_id] : null;
   const isOrgWide   = !!(event as any).is_org_wide;
 
+  // Chapter events are read-only for org-admin
+  const isChapterEvent = !isOrgWide;
+  const chapter        = isChapterEvent ? chapters.find(ch => ch.id === event.org_id) : null;
+
   return (
-    <View style={[mc.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+    <View style={[mc.card, { backgroundColor: c.surface, borderColor: c.border, opacity: isChapterEvent ? 0.85 : 1 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
         <View style={[mc.dateBadge, { backgroundColor: c.surfaceAlt }]}>
           <Text size="xs" weight="medium" color={c.textSubtle}>{d.month}</Text>
@@ -1133,7 +1168,22 @@ function MobileCard({ event, catMap, onEdit, onScan }: {
         <View style={{ flex: 1, gap: 3 }}>
           <Text size="sm" weight="medium">{event.title}</Text>
           <View style={{ flexDirection: 'row', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-            {isOrgWide && <OrgWideBadge small />}
+            {/* Org-wide badge OR chapter source badge */}
+            {isOrgWide ? (
+              <OrgWideBadge small />
+            ) : chapter ? (
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 3,
+                backgroundColor: (chapter.primary_color ?? '#6B7280') + '18',
+                borderWidth: 1, borderColor: (chapter.primary_color ?? '#6B7280') + '50',
+                borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1,
+              }}>
+                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: chapter.primary_color ?? '#6B7280' }} />
+                <Text size="xs" color={chapter.primary_color ?? '#6B7280'} weight="medium" style={{ fontSize: 9 }}>
+                  {chapter.name}
+                </Text>
+              </View>
+            ) : null}
             {cat && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4,
                 backgroundColor: cat.color + '20', borderWidth: 1, borderColor: cat.color + '60',
@@ -1159,7 +1209,13 @@ function MobileCard({ event, catMap, onEdit, onScan }: {
           <View style={[mc.statusChip, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
             <Text size="xs" weight="medium" color={statusColor}>{STATUS_LABEL[status]}</Text>
           </View>
-          {status === 'ongoing' ? (
+          {/* Chapter events: no edit/scan actions — show read-only eye icon */}
+          {isChapterEvent ? (
+            <View style={[mc.editBtn, { borderColor: c.border, opacity: 0.5 }]}>
+              <Ionicons name="eye-outline" size={13} color={c.textSubtle} />
+              <Text size="xs" color={c.textSubtle}>View only</Text>
+            </View>
+          ) : status === 'ongoing' ? (
             <Pressable onPress={(e) => { e.stopPropagation?.(); onScan(); }}
               style={[mc.editBtn, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B' }]}>
               <Ionicons name="qr-code-outline" size={13} color="#F59E0B" />
@@ -1239,8 +1295,13 @@ export default function OrgAdminEventsScreen() {
         .in('org_id', allOrgIds).eq('is_deleted', false)
         .eq('is_occurrence', false)
         .order('start_time', { ascending: false }),
+      // Load categories from ALL orgs (parent + all chapters) so that chapter
+      // events display their category badges correctly in the list view.
+      // RLS ensures we only get categories we're allowed to see.
+      // The org-admin can only CREATE categories for their own org (parentOrgId) —
+      // see the EventForm which scopes its category fetch to orgId (parentOrgId).
       supabase.from('event_categories').select('id, name, color')
-        .eq('org_id', parentOrgId).eq('is_deleted', false),
+        .in('org_id', allOrgIds).eq('is_deleted', false),
     ]);
 
     setEvents((evRes.data ?? []) as Event[]);
@@ -1253,8 +1314,10 @@ export default function OrgAdminEventsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const upcomingCount = events.filter(e => { const s = eventStatus(e); return s === 'upcoming' || s === 'ongoing'; }).length;
-  const pastCount     = events.filter(e => eventStatus(e) === 'past').length;
+  const upcomingCount  = events.filter(e => { const s = eventStatus(e); return s === 'upcoming' || s === 'ongoing'; }).length;
+  const pastCount      = events.filter(e => eventStatus(e) === 'past').length;
+  const orgWideCount   = events.filter(e => !!(e as any).is_org_wide).length;
+  const chapterEvCount = events.filter(e => !(e as any).is_org_wide).length;
 
   // Filter by chapter (show org-wide events always + selected chapter's events)
   const filtered = events.filter(e => {
@@ -1336,6 +1399,8 @@ export default function OrgAdminEventsScreen() {
   }
 
   async function handleDelete(event: Event, mode: 'this' | 'series') {
+    // Org-admin can only delete org-wide events that belong to their parent org
+    if (!(event as any).is_org_wide) return;
     try {
       if (mode === 'series') {
         const isMaster = !!(event as any).recurrence_rule && !(event as any).is_occurrence;
@@ -1354,6 +1419,8 @@ export default function OrgAdminEventsScreen() {
   }
 
   async function handleCancel(event: Event) {
+    // Org-admin can only cancel org-wide events that belong to their parent org
+    if (!(event as any).is_org_wide) return;
     Alert.alert('Cancel Event', `Cancel "${event.title}"?`, [
       { text: 'Never mind', style: 'cancel' },
       {
@@ -1381,7 +1448,7 @@ export default function OrgAdminEventsScreen() {
         <View style={{ flex: 1 }}>
           <Text size="xxl" weight="bold">Events</Text>
           <Text size="xs" color={c.textMuted} style={{ marginTop: 2 }}>
-            {upcomingCount} upcoming · {pastCount} past · org-wide
+            {upcomingCount} upcoming · {pastCount} past · {orgWideCount} org-wide · {chapterEvCount} from chapters
           </Text>
         </View>
         <View style={sc.headerActions}>
@@ -1474,12 +1541,20 @@ export default function OrgAdminEventsScreen() {
           </View>
         ) : isWide ? (
           filtered.map(e => (
-            <TableRow key={e.id} event={e} catMap={catMap}
-              onEdit={() => setEditing(e)} onCancel={() => handleCancel(e)} onScan={() => setScanTarget(e)} />
+            <TableRow key={e.id} event={e} catMap={catMap} chapters={chapters}
+              // Chapter events are read-only — org-admin can only edit their own org-wide events
+              onEdit={() => { if (!!(e as any).is_org_wide) setEditing(e); }}
+              onCancel={() => { if (!!(e as any).is_org_wide) handleCancel(e); }}
+              onScan={() => setScanTarget(e)} />
           ))
         ) : (
           <View style={{ gap: 10 }}>
-            {filtered.map(e => <MobileCard key={e.id} event={e} catMap={catMap} onEdit={() => setEditing(e)} onScan={() => setScanTarget(e)} />)}
+            {filtered.map(e => (
+              <MobileCard key={e.id} event={e} catMap={catMap} chapters={chapters}
+                // Chapter events are read-only — org-admin can only edit their own org-wide events
+                onEdit={() => { if (!!(e as any).is_org_wide) setEditing(e); }}
+                onScan={() => setScanTarget(e)} />
+            ))}
           </View>
         )}
       </ScrollView>
