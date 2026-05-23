@@ -16,7 +16,7 @@ import type { UserRole } from '@/stores/authStore';
 
 type Organization = Tables<'organizations'>;
 
-export type ViewRole = 'member' | 'officer' | 'admin';
+export type ViewRole = 'member' | 'officer' | 'admin' | 'org_admin';
 
 export interface UserViewSession {
   role:        ViewRole;

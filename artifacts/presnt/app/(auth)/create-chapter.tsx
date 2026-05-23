@@ -180,10 +180,10 @@ export default function CreateChapterScreen() {
         </View>
         <View style={{ flex: 1 }}>
           <Input
-            label="School"
+            label="School / Location"
             value={institution}
             onChangeText={setInstitution}
-            placeholder="UCLA"
+            placeholder="UCLA / Los Angeles"
             autoCapitalize="words"
           />
         </View>

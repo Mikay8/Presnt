@@ -2019,17 +2019,6 @@ GET    /orgs/{org_id}/compliance/reports
 - [ ] `(officer)/status/index.tsx`
 - [ ] `(officer)/status/at-risk.tsx`
 - [ ] `(admin)/status/requirements.tsx`
-# 1.8 Rename Compliance to Status in Mobile App
-
-- [ ] Update all references to "compliance" in the mobile app layout, navigation, and screen names to "status" for clarity and consistency.
-- [ ] Example changes:
-  - `(member)/compliance.tsx` → `(member)/status.tsx`
-  - `(officer)/compliance/index.tsx` → `(officer)/status/index.tsx`
-  - `(officer)/compliance/at-risk.tsx` → `(officer)/status/at-risk.tsx`
-  - `(admin)/compliance/requirements.tsx` → `(admin)/status/requirements.tsx`
-- [ ] Update navigation tab labels and any in-app references from "Compliance" to "Status".
-
----
 
 # PHASE 5 — Excuses & Appeals
 > Goal: Members submit excuses, officers approve/deny/escalate, full audit trail.

@@ -14,4 +14,5 @@ export { DonutChart }    from './DonutChart';
 export { Sidebar }       from './Sidebar';
 export { TopBar }        from './TopBar';
 export { AdminSidebar }  from './AdminSidebar';
-export { OfficerSidebar } from './OfficerSidebar';
+export { OfficerSidebar }   from './OfficerSidebar';
+export { OrgAdminSidebar } from './OrgAdminSidebar';

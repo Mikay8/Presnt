@@ -48,6 +48,7 @@ type EventDetail = {
   points:                 number | null;
   checkin_open_minutes:  number | null;
   checkin_grace_minutes: number | null;
+  is_org_wide:   boolean | null;
 };
 
 type RsvpRow = {
@@ -233,7 +234,7 @@ export default function OfficerEventDetailScreen() {
     const [evRes, rsvpRes, attendRes, membRes] = await Promise.all([
       supabase
         .from('events')
-        .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes')
+        .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide')
         .eq('id', id)
         .single(),
 
@@ -459,13 +460,19 @@ export default function OfficerEventDetailScreen() {
   const infoPanel = (
     <View style={[ip.panel, { backgroundColor: c.surface, borderColor: c.border }]}>
       {/* Type badge */}
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <View style={[ip.typeBadge, { backgroundColor: typeColor + '22', borderColor: typeColor }]}>
           <Text size="xs" weight="medium" color={typeColor} style={{ textTransform: 'capitalize' }}>{event.type}</Text>
         </View>
         <View style={[ip.typeBadge, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
           <Text size="xs" weight="medium" color={statusColor}>{statusLabel}</Text>
         </View>
+        {event.is_org_wide && (
+          <View style={[ip.typeBadge, { backgroundColor: '#3B82F618', borderColor: '#3B82F650', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+            <Ionicons name="globe-outline" size={11} color="#3B82F6" />
+            <Text size="xs" weight="medium" color="#3B82F6">Organization Wide</Text>
+          </View>
+        )}
       </View>
 
       <Text size="xl" weight="bold" style={{ marginBottom: 4 }}>{event.title}</Text>

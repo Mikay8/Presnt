@@ -31,6 +31,7 @@ type EventDetail = {
   is_cancelled:  boolean;
   event_code:    string | null;
   is_public:     boolean;
+  is_org_wide:   boolean | null;
 };
 
 /** Returns true if the string looks like a UUID v4. */
@@ -89,12 +90,12 @@ export default function EventDetailScreen() {
     const evQuery = isUuid(id)
       ? supabase
           .from('events')
-          .select('id, title, description, type, location, start_time, end_time, rsvp_required, is_cancelled, event_code, is_public')
+          .select('id, title, description, type, location, start_time, end_time, rsvp_required, is_cancelled, event_code, is_public, is_org_wide')
           .eq('id', id)
           .single()
       : supabase
           .from('events')
-          .select('id, title, description, type, location, start_time, end_time, rsvp_required, is_cancelled, event_code, is_public')
+          .select('id, title, description, type, location, start_time, end_time, rsvp_required, is_cancelled, event_code, is_public, is_org_wide')
           .eq('org_id', orgId)
           .eq('event_code', id)
           .eq('is_deleted', false)
@@ -193,6 +194,12 @@ export default function EventDetailScreen() {
   // ── Info chips ──
   const chips = (
     <View style={styles.chips}>
+      {event.is_org_wide && (
+        <View style={[styles.chip, { backgroundColor: '#3B82F618', borderColor: '#3B82F650', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+          <Ionicons name="globe-outline" size={13} color="#3B82F6" />
+          <Text size="sm" weight="medium" color="#3B82F6">Organization Wide</Text>
+        </View>
+      )}
       {[
         { label: formatDate(event.start_time), icon: 'calendar-outline' as const },
         { label: formatTime(event.start_time), icon: 'time-outline' as const },

@@ -177,9 +177,27 @@ export default function CreateOrgScreen() {
       is_active:  true,
     });
 
-    setMembership(membership, chapter);
+    // Fetch the org_admin membership (for the parent org) so the auth store
+    // has the correct role — routes the user to the org-admin portal.
+    const { data: orgAdminMembership } = await supabase
+      .from('memberships')
+      .select('*, organizations(*)')
+      .eq('user_id', userId)
+      .eq('org_id', org.id)
+      .eq('role', 'org_admin')
+      .single();
+
+    if (orgAdminMembership) {
+      const { organizations: orgRow, ...membershipOnly } = orgAdminMembership as typeof orgAdminMembership & {
+        organizations: NonNullable<typeof orgAdminMembership>['organizations'];
+      };
+      setMembership(membershipOnly, orgRow ?? null);
+    } else {
+      setMembership(membership, chapter);
+    }
+
     setLoading(false);
-    router.replace('/(member)');
+    router.replace('/(org-admin)/dashboard');
   }
 
   // ── Step dots ───────────────────────────────────────────────────────────────
@@ -267,7 +285,7 @@ export default function CreateOrgScreen() {
         </View>
         <View style={{ flex: 1 }}>
           <Input
-            label="School / institution"
+            label="School / institution / location"
             value={institution}
             onChangeText={setInstitution}
             placeholder="University of Michigan"

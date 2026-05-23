@@ -18,7 +18,7 @@ import { useUserViewStore, type ViewRole } from '@/stores/userViewStore';
 import { su } from '../_layout';
 import type { Tables } from '@/types/database';
 
-type Org = Pick<Tables<'organizations'>, 'id' | 'name' | 'institution' | 'slug'>;
+type Org = Pick<Tables<'organizations'>, 'id' | 'name' | 'institution' | 'slug' | 'type'>;
 
 // ─── Other tool stubs ─────────────────────────────────────────────────────────
 
@@ -89,9 +89,10 @@ function PushTester() {
 // ─── User View tool ───────────────────────────────────────────────────────────
 
 const VIEW_ROLES: { role: ViewRole; label: string; description: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
-  { role: 'member',  label: 'Member',  description: 'Standard chapter member — no management access', icon: 'person-outline' },
-  { role: 'officer', label: 'Officer', description: 'Choose which permissions to simulate',            icon: 'shield-half-outline' },
-  { role: 'admin',   label: 'Admin',   description: 'Full chapter admin dashboard access',             icon: 'shield-outline' },
+  { role: 'member',    label: 'Member',    description: 'Standard chapter member — no management access',  icon: 'person-outline'             },
+  { role: 'officer',   label: 'Officer',   description: 'Choose which permissions to simulate',             icon: 'shield-half-outline'        },
+  { role: 'admin',     label: 'Admin',     description: 'Full chapter admin dashboard access',              icon: 'shield-outline'             },
+  { role: 'org_admin', label: 'Org Admin', description: 'Organization-level: manage chapters & members',    icon: 'shield-checkmark-outline'   },
 ];
 
 function UserViewTool() {
@@ -107,7 +108,7 @@ function UserViewTool() {
   useEffect(() => {
     supabase
       .from('organizations')
-      .select('id, name, institution, slug')
+      .select('id, name, institution, slug, type')
       .eq('is_deleted', false)
       .eq('is_active', true)
       .order('name')
@@ -140,7 +141,9 @@ function UserViewTool() {
           permissions: selectedRole === 'officer' ? selectedPerms : [],
         });
         // Navigate immediately — don't rely on RootLayoutNav's declarative redirect
-        if (selectedRole === 'admin') {
+        if (selectedRole === 'org_admin') {
+          router.replace('/(org-admin)/dashboard' as any);
+        } else if (selectedRole === 'admin') {
           router.replace('/(admin)/dashboard' as any);
         } else if (selectedRole === 'officer') {
           router.replace('/(officer)/events-management' as any);
@@ -158,7 +161,8 @@ function UserViewTool() {
 
   // ── Active banner (in-tool) ─────────────────────────────────────────────
   if (activeSession) {
-    const roleLabel = activeSession.role === 'admin' ? 'Admin'
+    const roleLabel = activeSession.role === 'org_admin' ? 'Org Admin'
+      : activeSession.role === 'admin' ? 'Admin'
       : activeSession.role === 'officer' ? 'Officer'
       : 'Member';
 
@@ -261,9 +265,23 @@ function UserViewTool() {
                       <Ionicons name="business-outline" size={16} color={selected ? su.primary : su.textSubtle} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: selected ? su.primary : su.text, fontSize: 13, fontWeight: selected ? '600' : '400' }}>{org.name}</Text>
-                        {org.institution && (
-                          <Text style={{ color: su.textSubtle, fontSize: 11 }}>{org.institution}</Text>
-                        )}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                          {org.institution && (
+                            <Text style={{ color: su.textSubtle, fontSize: 11 }}>{org.institution}</Text>
+                          )}
+                          {(org.type === 'national_hq' || org.type === 'council') && (
+                            <View style={{ backgroundColor: '#3B82F622', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                              <Text style={{ color: '#3B82F6', fontSize: 10, fontWeight: '600' }}>
+                                {org.type === 'national_hq' ? 'NATIONAL' : 'COUNCIL'}
+                              </Text>
+                            </View>
+                          )}
+                          {org.type === 'chapter' && (
+                            <View style={{ backgroundColor: su.surfaceAlt, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                              <Text style={{ color: su.textSubtle, fontSize: 10, fontWeight: '600' }}>CHAPTER</Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
                       {selected && <Ionicons name="checkmark-circle" size={16} color={su.primary} />}
                     </Pressable>
@@ -322,6 +340,16 @@ function UserViewTool() {
           })}
         </View>
       </View>
+
+      {/* Org Admin note — remind superuser to pick a parent org */}
+      {selectedRole === 'org_admin' && (
+        <View style={{ backgroundColor: '#3B82F612', borderWidth: 1, borderColor: '#3B82F640', borderRadius: 10, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+          <Ionicons name="information-circle-outline" size={15} color="#3B82F6" style={{ marginTop: 1 }} />
+          <Text style={{ color: '#3B82F6', fontSize: 12, flex: 1, lineHeight: 18 }}>
+            Select a <Text style={{ fontWeight: '700' }}>parent organization</Text> (National / Council) above, not a chapter. The org admin portal shows chapters under that org.
+          </Text>
+        </View>
+      )}
 
       {/* Step 3 — Officer permissions (only when officer selected) */}
       {selectedRole === 'officer' && (

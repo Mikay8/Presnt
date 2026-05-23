@@ -42,7 +42,8 @@ function UserViewBanner() {
     router.replace('/(superuser)/support' as any);
   }
 
-  const roleLabel = session.role === 'admin' ? 'Admin'
+  const roleLabel = session.role === 'org_admin' ? 'Org Admin'
+    : session.role === 'admin' ? 'Admin'
     : session.role === 'officer' ? 'Officer'
     : 'Member';
 
@@ -120,6 +121,7 @@ function RootLayoutNav() {
   // redirect unauthenticated users away before they can see the invite screen.
   const inAuth      = pathname.startsWith('/(auth)') || pathname === '/' || pathname.startsWith('/invite');
   const inSuperuser = pathname === '/super-user' || pathname.startsWith('/(superuser)');
+  const inOrgAdmin  = pathname.startsWith('/(org-admin)') || pathname.startsWith('/org-admin');
 
   // ── Still loading user data — don't redirect yet ────────────────────────────
   if (isLoading) return null;
@@ -131,6 +133,9 @@ function RootLayoutNav() {
 
   // Superuser routes manage their own auth — never redirect away from them
   if (inSuperuser) return null;
+
+  // Org-admin routes manage their own auth guard — never redirect away from them
+  if (inOrgAdmin) return null;
 
   // No session → send to login
   if (!session && !inAuth) {
@@ -160,7 +165,10 @@ function RootLayoutNav() {
   const onInvite = pathname.startsWith('/(auth)/invite') || pathname.startsWith('/invite');
   if (session && membership && inAuth && !onInvite) {
     const role = membership.role;
-    if (role === 'org_admin' || role === 'admin') {
+    if (role === 'org_admin') {
+      return <Redirect href="/(org-admin)/dashboard" />;
+    }
+    if (role === 'admin') {
       return <Redirect href="/(admin)/dashboard" />;
     }
     if (role === 'officer') {
@@ -332,14 +340,15 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(auth)"      />
-                <Stack.Screen name="(member)"    />
-                <Stack.Screen name="(officer)"   />
-                <Stack.Screen name="(admin)"     />
-                <Stack.Screen name="(superuser)" />
-                <Stack.Screen name="super-user"  />
-                <Stack.Screen name="logout"      />
-                <Stack.Screen name="+not-found"  />
+                <Stack.Screen name="(auth)"       />
+                <Stack.Screen name="(member)"     />
+                <Stack.Screen name="(officer)"    />
+                <Stack.Screen name="(admin)"      />
+                <Stack.Screen name="(org-admin)"  />
+                <Stack.Screen name="(superuser)"  />
+                <Stack.Screen name="super-user"   />
+                <Stack.Screen name="logout"       />
+                <Stack.Screen name="+not-found"   />
               </Stack>
               <RootLayoutNav />
               <UserViewBanner />
