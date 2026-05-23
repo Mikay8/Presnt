@@ -4,8 +4,8 @@
  * Org admins can:
  *  - View all members across all chapters in their organization
  *  - Filter by chapter
+ *  - Manage a member's role (promote to org_admin / admin / officer / member / new_member)
  *  - Move a member from one chapter to another
- *  - See each member's current chapter, role, and status
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -30,13 +30,15 @@ import { useThemeStore } from '@/stores/themeStore';
 import type { Tables } from '@/types/database';
 
 type Chapter = Pick<Tables<'organizations'>, 'id' | 'name' | 'institution' | 'primary_color'>;
+type OrgRole = Pick<Tables<'org_roles'>, 'id' | 'name' | 'color'>;
 
 type MemberRow = {
-  id:         string;
-  role:       string;
-  status:     string;
-  org_id:     string;
-  joined_at:  string | null;
+  id:             string;
+  role:           string;
+  status:         string;
+  org_id:         string;
+  joined_at:      string | null;
+  custom_role_id: string | null;
   profiles: {
     id:         string;
     first_name: string;
@@ -47,43 +49,63 @@ type MemberRow = {
     id:   string;
     name: string;
   } | null;
+  org_roles: OrgRole | null;
 };
 
 const ORG_ADMIN_BLUE = '#3B82F6';
 
 const ROLE_COLOR: Record<string, string> = {
+  org_admin:  '#E26B4A',
   admin:      '#E26B4A',
   officer:    '#A855F7',
   member:     '#3B82F6',
   new_member: '#6B7280',
 };
 
-// ─── Move Chapter Modal ───────────────────────────────────────────────────────
+// Org admins can assign any role including org_admin and admin
+const ASSIGNABLE_ROLES = [
+  { value: 'org_admin',  label: 'Org Admin',  description: 'Organization-level admin — manages all chapters' },
+  { value: 'admin',      label: 'Admin',       description: 'Full chapter management access' },
+  { value: 'officer',    label: 'Officer',     description: 'Custom permissions via a role' },
+  { value: 'member',     label: 'Member',      description: 'Standard member access' },
+  { value: 'new_member', label: 'New Member',  description: 'Probationary access' },
+] as const;
 
-function MoveChapterModal({
+// ─── Manage Member Modal ──────────────────────────────────────────────────────
+// Two tabs: Role and Move Chapter
+
+function ManageMemberModal({
   visible,
   member,
   chapters,
-  currentChapterId,
+  orgRoles,
   onClose,
-  onMove,
-  moving,
+  onSave,
+  saving,
 }: {
-  visible:          boolean;
-  member:           MemberRow | null;
-  chapters:         Chapter[];
-  currentChapterId: string;
-  onClose:          () => void;
-  onMove:           (memberId: string, toChapterId: string) => void;
-  moving:           boolean;
+  visible:  boolean;
+  member:   MemberRow | null;
+  chapters: Chapter[];
+  orgRoles: OrgRole[];
+  onClose:  () => void;
+  onSave:   (memberId: string, role: string, customRoleId: string | null, toChapterId: string | null) => void;
+  saving:   boolean;
 }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
 
-  const [selectedChapter, setSelectedChapter] = useState<string>(currentChapterId);
+  const [tab, setTab] = useState<'role' | 'move'>('role');
+  const [selectedRole, setSelectedRole]       = useState('member');
+  const [selectedOrgRole, setSelectedOrgRole] = useState<string | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<string>('');
 
   useEffect(() => {
-    if (member) setSelectedChapter(member.org_id);
+    if (member) {
+      setSelectedRole(member.role);
+      setSelectedOrgRole(member.custom_role_id);
+      setSelectedChapter(member.org_id);
+      setTab('role');
+    }
   }, [member]);
 
   if (!member) return null;
@@ -94,7 +116,16 @@ function MoveChapterModal({
   const initials  = firstName && lastName ? `${firstName[0]}${lastName[0]}` : '?';
   const fullName  = `${firstName} ${lastName}`.trim() || 'Unknown';
 
-  const otherChapters = chapters.filter((ch) => ch.id !== currentChapterId);
+  const otherChapters = chapters.filter((ch) => ch.id !== member.org_id);
+  const chapterChanged = selectedChapter !== member.org_id;
+
+  function handleSave() {
+    if (!member) return;
+    const chapterId = tab === 'move' && chapterChanged ? selectedChapter : null;
+    const roleId    = tab === 'role' ? (selectedRole === 'officer' ? selectedOrgRole : null) : member.custom_role_id;
+    const role      = tab === 'role' ? selectedRole : member.role;
+    onSave(member.id, role, roleId, chapterId);
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
@@ -111,58 +142,173 @@ function MoveChapterModal({
               <Text size="lg" weight="bold">{fullName}</Text>
               <Text size="sm" color={c.textMuted}>{profile?.email}</Text>
               <Text size="xs" color={c.textSubtle} style={{ marginTop: 3 }}>
-                Currently in: <Text size="xs" weight="medium" color={c.text}>{member.organizations?.name ?? '—'}</Text>
+                Chapter: <Text size="xs" weight="medium" color={c.text}>{member.organizations?.name ?? '—'}</Text>
               </Text>
             </View>
           </View>
 
           <View style={[styles.divider, { backgroundColor: c.border }]} />
 
-          <Text size="xs" weight="medium" color={c.textMuted}
-            style={{ textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-            Move to chapter
-          </Text>
+          {/* Tabs */}
+          <View style={[styles.tabRow, { borderColor: c.border }]}>
+            {(['role', 'move'] as const).map((t) => (
+              <Pressable
+                key={t}
+                onPress={() => setTab(t)}
+                style={[
+                  styles.tabBtn,
+                  tab === t && { borderBottomWidth: 2, borderBottomColor: ORG_ADMIN_BLUE },
+                ]}
+              >
+                <Text size="sm" weight={tab === t ? 'medium' : 'regular'}
+                  color={tab === t ? ORG_ADMIN_BLUE : c.textMuted}>
+                  {t === 'role' ? 'Change Role' : 'Move Chapter'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
-          <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-            <View style={[styles.chapterList, { borderColor: c.border }]}>
-              {otherChapters.length === 0 ? (
-                <View style={{ padding: 20, alignItems: 'center' }}>
-                  <Text size="sm" color={c.textMuted}>No other chapters available.</Text>
-                  <Text size="xs" color={c.textSubtle} style={{ marginTop: 4, textAlign: 'center' }}>
-                    Create another chapter first.
-                  </Text>
+          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+
+            {/* ── Role tab ── */}
+            {tab === 'role' && (
+              <View style={{ gap: 16, paddingTop: 16 }}>
+                <Text size="xs" weight="medium" color={c.textMuted}
+                  style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+                  Base Role
+                </Text>
+                <View style={[styles.roleList, { borderColor: c.border }]}>
+                  {ASSIGNABLE_ROLES.map((r, i) => {
+                    const active = selectedRole === r.value;
+                    return (
+                      <Pressable
+                        key={r.value}
+                        onPress={() => {
+                          setSelectedRole(r.value);
+                          if (r.value !== 'officer') setSelectedOrgRole(null);
+                        }}
+                        style={[
+                          styles.roleOption,
+                          i < ASSIGNABLE_ROLES.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
+                          active && { backgroundColor: ORG_ADMIN_BLUE + '12' },
+                        ]}
+                      >
+                        <View style={[styles.radioOuter, { borderColor: active ? ORG_ADMIN_BLUE : c.border }]}>
+                          {active && <View style={[styles.radioInner, { backgroundColor: ORG_ADMIN_BLUE }]} />}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text size="sm" weight={active ? 'medium' : 'regular'}
+                            color={active ? ORG_ADMIN_BLUE : c.text}>
+                            {r.label}
+                          </Text>
+                          <Text size="xs" color={c.textSubtle}>{r.description}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-              ) : (
-                otherChapters.map((ch, i) => {
-                  const selected = selectedChapter === ch.id;
-                  return (
-                    <Pressable
-                      key={ch.id}
-                      onPress={() => setSelectedChapter(ch.id)}
-                      style={[
-                        styles.chapterOption,
-                        i < otherChapters.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
-                        selected && { backgroundColor: ORG_ADMIN_BLUE + '12' },
-                      ]}
-                    >
-                      <View style={[styles.chapterDot, { backgroundColor: ch.primary_color ?? ORG_ADMIN_BLUE }]} />
-                      <View style={{ flex: 1 }}>
-                        <Text size="sm" weight={selected ? 'medium' : 'regular'}
-                          color={selected ? ORG_ADMIN_BLUE : c.text}>
-                          {ch.name}
-                        </Text>
-                        {ch.institution && (
-                          <Text size="xs" color={c.textSubtle}>{ch.institution}</Text>
-                        )}
-                      </View>
-                      <View style={[styles.radioOuter, { borderColor: selected ? ORG_ADMIN_BLUE : c.border }]}>
-                        {selected && <View style={[styles.radioInner, { backgroundColor: ORG_ADMIN_BLUE }]} />}
-                      </View>
-                    </Pressable>
-                  );
-                })
-              )}
-            </View>
+
+                {/* Officer role picker */}
+                {selectedRole === 'officer' && orgRoles.length > 0 && (
+                  <>
+                    <Text size="xs" weight="medium" color={c.textMuted}
+                      style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+                      Officer Role
+                    </Text>
+                    <View style={[styles.roleList, { borderColor: c.border }]}>
+                      <Pressable
+                        onPress={() => setSelectedOrgRole(null)}
+                        style={[
+                          styles.roleOption,
+                          { borderBottomWidth: 1, borderBottomColor: c.border },
+                          !selectedOrgRole && { backgroundColor: ORG_ADMIN_BLUE + '12' },
+                        ]}
+                      >
+                        <View style={[styles.radioOuter, { borderColor: !selectedOrgRole ? ORG_ADMIN_BLUE : c.border }]}>
+                          {!selectedOrgRole && <View style={[styles.radioInner, { backgroundColor: ORG_ADMIN_BLUE }]} />}
+                        </View>
+                        <Text size="sm" color={!selectedOrgRole ? ORG_ADMIN_BLUE : c.text}>No specific role</Text>
+                      </Pressable>
+                      {orgRoles.map((or, i) => {
+                        const active = selectedOrgRole === or.id;
+                        return (
+                          <Pressable
+                            key={or.id}
+                            onPress={() => setSelectedOrgRole(or.id)}
+                            style={[
+                              styles.roleOption,
+                              i < orgRoles.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
+                              active && { backgroundColor: ORG_ADMIN_BLUE + '12' },
+                            ]}
+                          >
+                            <View style={[styles.radioOuter, { borderColor: active ? ORG_ADMIN_BLUE : c.border }]}>
+                              {active && <View style={[styles.radioInner, { backgroundColor: ORG_ADMIN_BLUE }]} />}
+                            </View>
+                            <View style={[styles.roleColorDot, { backgroundColor: or.color }]} />
+                            <Text size="sm" weight={active ? 'medium' : 'regular'}
+                              color={active ? ORG_ADMIN_BLUE : c.text}>
+                              {or.name}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
+
+                {/* Org admin warning */}
+                {selectedRole === 'org_admin' && (
+                  <View style={{ backgroundColor: '#E26B4A12', borderWidth: 1, borderColor: '#E26B4A40', borderRadius: 10, padding: 12, flexDirection: 'row', gap: 8 }}>
+                    <Ionicons name="warning-outline" size={15} color="#E26B4A" style={{ marginTop: 1 }} />
+                    <Text size="xs" color="#E26B4A" style={{ flex: 1, lineHeight: 18 }}>
+                      Promoting to Org Admin grants organization-wide access. This member will be able to manage all chapters, members, and settings.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* ── Move tab ── */}
+            {tab === 'move' && (
+              <View style={{ paddingTop: 16 }}>
+                {otherChapters.length === 0 ? (
+                  <View style={{ padding: 20, alignItems: 'center' }}>
+                    <Text size="sm" color={c.textMuted}>No other chapters available.</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.roleList, { borderColor: c.border }]}>
+                    {otherChapters.map((ch, i) => {
+                      const selected = selectedChapter === ch.id;
+                      return (
+                        <Pressable
+                          key={ch.id}
+                          onPress={() => setSelectedChapter(ch.id)}
+                          style={[
+                            styles.roleOption,
+                            i < otherChapters.length - 1 && { borderBottomWidth: 1, borderBottomColor: c.border },
+                            selected && { backgroundColor: ORG_ADMIN_BLUE + '12' },
+                          ]}
+                        >
+                          <View style={[{ width: 12, height: 12, borderRadius: 6, backgroundColor: ch.primary_color ?? ORG_ADMIN_BLUE }]} />
+                          <View style={{ flex: 1 }}>
+                            <Text size="sm" weight={selected ? 'medium' : 'regular'}
+                              color={selected ? ORG_ADMIN_BLUE : c.text}>
+                              {ch.name}
+                            </Text>
+                            {ch.institution && (
+                              <Text size="xs" color={c.textSubtle}>{ch.institution}</Text>
+                            )}
+                          </View>
+                          <View style={[styles.radioOuter, { borderColor: selected ? ORG_ADMIN_BLUE : c.border }]}>
+                            {selected && <View style={[styles.radioInner, { backgroundColor: ORG_ADMIN_BLUE }]} />}
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            )}
           </ScrollView>
 
           {/* Actions */}
@@ -174,24 +320,18 @@ function MoveChapterModal({
               <Text size="sm" weight="medium">Cancel</Text>
             </Pressable>
             <Pressable
-              onPress={() => {
-                if (selectedChapter && selectedChapter !== currentChapterId) {
-                  onMove(member.id, selectedChapter);
-                }
-              }}
-              disabled={!selectedChapter || selectedChapter === currentChapterId || otherChapters.length === 0}
+              onPress={handleSave}
+              disabled={saving || (tab === 'move' && !chapterChanged)}
               style={[
-                styles.moveBtn,
-                {
-                  backgroundColor: (!selectedChapter || selectedChapter === currentChapterId || otherChapters.length === 0)
-                    ? c.surfaceAlt
-                    : ORG_ADMIN_BLUE,
-                },
+                styles.saveBtn,
+                { backgroundColor: (tab === 'move' && !chapterChanged) ? c.surfaceAlt : ORG_ADMIN_BLUE },
               ]}
             >
-              {moving
+              {saving
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text size="sm" weight="bold" style={{ color: '#fff' }}>Move member</Text>}
+                : <Text size="sm" weight="bold" style={{ color: '#fff' }}>
+                    {tab === 'role' ? 'Save Role' : 'Move Member'}
+                  </Text>}
             </Pressable>
           </View>
         </View>
@@ -204,10 +344,10 @@ function MoveChapterModal({
 
 function MemberItem({
   member,
-  onMove,
+  onManage,
 }: {
-  member:  MemberRow;
-  onMove:  (m: MemberRow) => void;
+  member:   MemberRow;
+  onManage: (m: MemberRow) => void;
 }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
@@ -219,11 +359,13 @@ function MemberItem({
   const fullName   = `${firstName} ${lastName}`.trim() || 'Unknown';
   const badgeColor = ROLE_COLOR[member.role] ?? '#6B7280';
 
-  const roleLabel  = member.role.charAt(0).toUpperCase() + member.role.slice(1).replace('_', ' ');
+  const roleLabel = member.org_roles
+    ? member.org_roles.name
+    : member.role.charAt(0).toUpperCase() + member.role.slice(1).replace('_', ' ');
 
   return (
     <Pressable
-      onPress={() => onMove(member)}
+      onPress={() => onManage(member)}
       style={({ pressed }) => [
         styles.memberRow,
         { borderBottomColor: c.border, opacity: pressed ? 0.7 : 1 },
@@ -242,18 +384,21 @@ function MemberItem({
       </View>
       <View style={{ alignItems: 'flex-end', gap: 6 }}>
         <View style={[styles.rolePill, { backgroundColor: badgeColor + '18', borderColor: badgeColor }]}>
+          {member.org_roles && (
+            <View style={[styles.roleColorDot, { backgroundColor: member.org_roles.color }]} />
+          )}
           <Text size="xs" weight="medium" color={badgeColor}>{roleLabel}</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Ionicons name="swap-horizontal-outline" size={13} color={ORG_ADMIN_BLUE} />
-          <Text size="xs" color={ORG_ADMIN_BLUE}>Move</Text>
-        </View>
+        <Ionicons name="chevron-forward-outline" size={16} color={c.textSubtle} />
       </View>
     </Pressable>
   );
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
+const ROLE_FILTERS = ['All', 'Org Admins', 'Admins', 'Officers', 'Members'] as const;
+type RoleFilter = typeof ROLE_FILTERS[number];
 
 export default function OrgAdminMembersScreen() {
   const { theme }        = useThemeStore();
@@ -262,30 +407,41 @@ export default function OrgAdminMembersScreen() {
   const isWide           = width >= 800;
   const { organization } = useAuthStore();
 
-  const [chapters, setChapters]     = useState<Chapter[]>([]);
-  const [members, setMembers]       = useState<MemberRow[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [refreshing, setRefresh]    = useState(false);
-  const [chapterFilter, setFilter]  = useState<string>('all');
-  const [moving, setMoving]         = useState<MemberRow | null>(null);
-  const [saving, setSaving]         = useState(false);
+  const [chapters, setChapters]       = useState<Chapter[]>([]);
+  const [orgRoles, setOrgRoles]       = useState<OrgRole[]>([]);
+  const [members, setMembers]         = useState<MemberRow[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [refreshing, setRefresh]      = useState(false);
+  const [chapterFilter, setChFilter]  = useState<string>('all');
+  const [roleFilter, setRoleFilter]   = useState<RoleFilter>('All');
+  const [managing, setManaging]       = useState<MemberRow | null>(null);
+  const [saving, setSaving]           = useState(false);
 
   const orgId = organization?.id;
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
 
-    // Fetch chapters
-    const { data: chaptersData } = await supabase
-      .from('organizations')
-      .select('id, name, institution, primary_color')
-      .eq('parent_org_id', orgId)
-      .eq('is_deleted', false)
-      .order('name');
+    // Fetch chapters + org-level roles in parallel
+    const [chaptersRes, rolesRes] = await Promise.all([
+      supabase
+        .from('organizations')
+        .select('id, name, institution, primary_color')
+        .eq('parent_org_id', orgId)
+        .eq('is_deleted', false)
+        .order('name'),
+      supabase
+        .from('org_roles')
+        .select('id, name, color')
+        .eq('org_id', orgId)
+        .order('name'),
+    ]);
 
-    setChapters((chaptersData as Chapter[]) ?? []);
+    const chaps = (chaptersRes.data as Chapter[]) ?? [];
+    setChapters(chaps);
+    setOrgRoles((rolesRes.data as OrgRole[]) ?? []);
 
-    if (!chaptersData || chaptersData.length === 0) {
+    if (chaps.length === 0) {
       setLoading(false);
       setRefresh(false);
       return;
@@ -295,11 +451,12 @@ export default function OrgAdminMembersScreen() {
     const { data: membersData } = await supabase
       .from('memberships')
       .select(`
-        id, role, status, org_id, joined_at,
+        id, role, status, org_id, joined_at, custom_role_id,
         profiles!user_id(id, first_name, last_name, email),
-        organizations!org_id(id, name)
+        organizations!org_id(id, name),
+        org_roles!custom_role_id(id, name, color)
       `)
-      .in('org_id', chaptersData.map((c) => c.id))
+      .in('org_id', chaps.map((c) => c.id))
       .eq('is_deleted', false)
       .order('role');
 
@@ -310,27 +467,48 @@ export default function OrgAdminMembersScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleMove(memberId: string, toChapterId: string) {
+  async function handleSave(
+    memberId: string,
+    role: string,
+    customRoleId: string | null,
+    toChapterId: string | null,
+  ) {
     setSaving(true);
-    const { error } = await supabase
-      .from('memberships')
-      .update({ org_id: toChapterId })
-      .eq('id', memberId);
 
-    if (error) {
-      Alert.alert('Error', error.message);
+    if (toChapterId) {
+      // Move chapter
+      const { error } = await supabase
+        .from('memberships')
+        .update({ org_id: toChapterId, role: 'member', custom_role_id: null })
+        .eq('id', memberId);
+      if (error) Alert.alert('Error', error.message);
+    } else {
+      // Change role
+      const { error } = await supabase
+        .from('memberships')
+        .update({ role, custom_role_id: customRoleId })
+        .eq('id', memberId);
+      if (error) Alert.alert('Error', error.message);
     }
+
     await load();
     setSaving(false);
-    setMoving(null);
+    setManaging(null);
   }
 
   const c = theme.colors;
 
-  // Apply chapter filter
-  const filtered = chapterFilter === 'all'
-    ? members
-    : members.filter((m) => m.org_id === chapterFilter);
+  // Apply chapter + role filters
+  const filtered = members.filter((m) => {
+    const chapterOk = chapterFilter === 'all' || m.org_id === chapterFilter;
+    const roleOk =
+      roleFilter === 'All'       ? true
+      : roleFilter === 'Org Admins' ? m.role === 'org_admin'
+      : roleFilter === 'Admins'  ? m.role === 'admin'
+      : roleFilter === 'Officers'? m.role === 'officer'
+      : m.role === 'member' || m.role === 'new_member';
+    return chapterOk && roleOk;
+  });
 
   if (loading) {
     return (
@@ -360,11 +538,10 @@ export default function OrgAdminMembersScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
-        style={{ height: 50, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{ flexShrink: 0, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}
       >
-        {/* All */}
         <Pressable
-          onPress={() => setFilter('all')}
+          onPress={() => setChFilter('all')}
           style={[
             styles.filterChip,
             { borderColor: chapterFilter === 'all' ? ORG_ADMIN_BLUE : c.border,
@@ -376,13 +553,12 @@ export default function OrgAdminMembersScreen() {
             All chapters
           </Text>
         </Pressable>
-
         {chapters.map((ch) => {
           const active = chapterFilter === ch.id;
           return (
             <Pressable
               key={ch.id}
-              onPress={() => setFilter(ch.id)}
+              onPress={() => setChFilter(ch.id)}
               style={[
                 styles.filterChip,
                 { borderColor: active ? ORG_ADMIN_BLUE : c.border,
@@ -399,6 +575,34 @@ export default function OrgAdminMembersScreen() {
         })}
       </ScrollView>
 
+      {/* Role filter chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+        style={{ flexShrink: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
+      >
+        {ROLE_FILTERS.map((f) => {
+          const active = roleFilter === f;
+          return (
+            <Pressable
+              key={f}
+              onPress={() => setRoleFilter(f)}
+              style={[
+                styles.filterChipSm,
+                { borderColor: active ? ORG_ADMIN_BLUE : c.border,
+                  backgroundColor: active ? ORG_ADMIN_BLUE + '14' : 'transparent' },
+              ]}
+            >
+              <Text size="xs" weight={active ? 'medium' : 'regular'}
+                color={active ? ORG_ADMIN_BLUE : c.textMuted}>
+                {f}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       <ScrollView
         style={{ backgroundColor: c.background }}
         contentContainerStyle={[styles.scroll, isWide && styles.scrollWide, !isWide && { paddingBottom: insets.bottom + 24 }]}
@@ -407,27 +611,15 @@ export default function OrgAdminMembersScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Info banner */}
-        <View style={[styles.infoBanner, { backgroundColor: ORG_ADMIN_BLUE + '12', borderColor: ORG_ADMIN_BLUE + '40' }]}>
-          <Ionicons name="information-circle-outline" size={16} color={ORG_ADMIN_BLUE} />
-          <Text size="xs" color={ORG_ADMIN_BLUE}>
-            Tap a member to move them to a different chapter. Their role within the new chapter will be set to Member.
-          </Text>
-        </View>
-
         {chapters.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="business-outline" size={40} color={c.textSubtle} />
-            <Text size="md" weight="medium" color={c.textMuted} style={{ marginTop: 12 }}>
-              No chapters yet
-            </Text>
+            <Text size="md" weight="medium" color={c.textMuted} style={{ marginTop: 12 }}>No chapters yet</Text>
           </View>
         ) : filtered.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={40} color={c.textSubtle} />
-            <Text size="md" weight="medium" color={c.textMuted} style={{ marginTop: 12 }}>
-              No members in this chapter
-            </Text>
+            <Text size="md" weight="medium" color={c.textMuted} style={{ marginTop: 12 }}>No members found</Text>
           </View>
         ) : (
           <Card style={{ paddingVertical: 0 }}>
@@ -436,21 +628,21 @@ export default function OrgAdminMembersScreen() {
                 key={m.id}
                 style={i < filtered.length - 1 ? { borderBottomWidth: 1, borderBottomColor: c.border } : undefined}
               >
-                <MemberItem member={m} onMove={setMoving} />
+                <MemberItem member={m} onManage={setManaging} />
               </View>
             ))}
           </Card>
         )}
       </ScrollView>
 
-      <MoveChapterModal
-        visible={!!moving}
-        member={moving}
+      <ManageMemberModal
+        visible={!!managing}
+        member={managing}
         chapters={chapters}
-        currentChapterId={moving?.org_id ?? ''}
-        onClose={() => setMoving(null)}
-        onMove={handleMove}
-        moving={saving}
+        orgRoles={orgRoles}
+        onClose={() => setManaging(null)}
+        onSave={handleSave}
+        saving={saving}
       />
     </View>
   );
@@ -459,40 +651,41 @@ export default function OrgAdminMembersScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  header:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
 
-  filterRow:  { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
-  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
-  filterDot:  { width: 8, height: 8, borderRadius: 4 },
+  filterRow:    { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 6, gap: 8, alignItems: 'center' },
+  filterChip:   { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5 },
+  filterChipSm: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  filterDot:    { width: 8, height: 8, borderRadius: 4 },
 
   scroll:     { padding: 20, paddingBottom: 48, gap: 14 },
   scrollWide: { paddingHorizontal: 48, maxWidth: 760, alignSelf: 'center', width: '100%' },
 
-  infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
-
-  memberRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1 },
-  avatar:     { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  rolePill:   { borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  memberRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1 },
+  avatar:       { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  rolePill:     { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  roleColorDot: { width: 8, height: 8, borderRadius: 4 },
 
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
 
   // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalSheet:   { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, maxHeight: '85%' },
+  modalSheet:   { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, maxHeight: '90%' },
   handle:       { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
 
   memberHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, marginBottom: 20 },
   avatarLg:     { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  divider:      { height: 1, marginBottom: 20 },
+  divider:      { height: 1, marginBottom: 0 },
 
-  chapterList:    { borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
-  chapterOption:  { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  chapterDot:     { width: 12, height: 12, borderRadius: 6 },
+  tabRow:   { flexDirection: 'row', borderBottomWidth: 1, marginBottom: 0 },
+  tabBtn:   { flex: 1, alignItems: 'center', paddingVertical: 12 },
 
+  roleList:   { borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
+  roleOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   radioInner: { width: 10, height: 10, borderRadius: 5 },
 
   modalActions: { flexDirection: 'row', gap: 12 },
   cancelBtn:    { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
-  moveBtn:      { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
+  saveBtn:      { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
 });

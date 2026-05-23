@@ -355,8 +355,8 @@ export default function ExcusesScreen() {
 const xs = StyleSheet.create({
   header:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
   bulkBtn:      { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
-  tabRow:       { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
-  tabChip:      { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  tabRow:       { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: 1 },
+  tabChip:      { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 5 },
   desktopScroll:{ padding: 20, paddingBottom: 48 },
   mobileScroll: { padding: 14, gap: 10, paddingBottom: 48 },
   desktopCard:  { borderWidth: 1, borderRadius: 16, overflow: 'hidden' },

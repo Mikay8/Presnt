@@ -112,13 +112,18 @@ export default function OrgAdminLayout() {
             }}
           />
 
-          {/* ── Hidden routes (accessible via sidebar on desktop) ────── */}
+          {/* ── Hidden routes (accessible via sidebar on desktop only) ── */}
           <Tabs.Screen name="chapters"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="members"           options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="status"            options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="status/index"      options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="events-management" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          {/* Calendar — desktop sidebar only, hidden on mobile */}
           <Tabs.Screen name="calendar"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="calendar/index"    options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          {/* Roles — desktop sidebar only */}
+          <Tabs.Screen name="roles"             options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="roles/index"       options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
         </Tabs>
       </View>
     </View>

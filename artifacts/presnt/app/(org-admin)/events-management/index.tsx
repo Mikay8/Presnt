@@ -1465,7 +1465,7 @@ export default function OrgAdminEventsScreen() {
       {/* ── Chapter filter bar ── */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
         contentContainerStyle={sc.filterRow}
-        style={{ height: 48, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
+        style={{ flexShrink: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
         {/* All */}
         <Pressable onPress={() => setChapterFilter(null)}
           style={[sc.filterChip, {
@@ -1495,7 +1495,7 @@ export default function OrgAdminEventsScreen() {
 
       {/* ── Status tabs ── */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.tabRow}
-        style={{ height: 44, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
+        style={{ flexShrink: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}>
         {TABS.map(t => {
           const count  = t === 'Upcoming' ? upcomingCount : t === 'Past' ? pastCount : null;
           const active = tab === t;
@@ -1589,10 +1589,10 @@ const sc = StyleSheet.create({
   header:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   newBtn:        { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-  filterRow:     { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 9, gap: 8, alignItems: 'center' },
-  filterChip:    { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
-  tabRow:        { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 8, gap: 8, alignItems: 'center' },
-  tabChip:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 6 },
+  filterRow:     { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 6, gap: 8, alignItems: 'center' },
+  filterChip:    { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 },
+  tabRow:        { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 6, gap: 8, alignItems: 'center' },
+  tabChip:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 5 },
   tableHeader:   { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
   mobileScroll:  { padding: 14, gap: 10, paddingBottom: 48 },
   empty:         { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },

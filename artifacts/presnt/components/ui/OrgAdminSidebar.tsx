@@ -28,13 +28,14 @@ const DIVIDER     = '#252D42';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const NAV_ITEMS: { label: string; path: string; icon: IconName }[] = [
-  { label: 'Overview',   path: '/(org-admin)/dashboard',          icon: 'grid-outline'          },
-  { label: 'Chapters',   path: '/(org-admin)/chapters',           icon: 'business-outline'      },
-  { label: 'Members',    path: '/(org-admin)/members',            icon: 'people-outline'        },
+  { label: 'Overview',   path: '/(org-admin)/dashboard',          icon: 'grid-outline'             },
+  { label: 'Chapters',   path: '/(org-admin)/chapters',           icon: 'business-outline'         },
+  { label: 'Members',    path: '/(org-admin)/members',            icon: 'people-outline'           },
+  { label: 'Roles',      path: '/(org-admin)/roles',              icon: 'shield-outline'           },
   { label: 'Status',     path: '/(org-admin)/status',             icon: 'shield-checkmark-outline' },
-  { label: 'Events',     path: '/(org-admin)/events-management',  icon: 'calendar-outline'      },
-  { label: 'Calendar',   path: '/(org-admin)/calendar',           icon: 'calendar-number-outline' },
-  { label: 'Settings',   path: '/(org-admin)/settings',           icon: 'settings-outline'      },
+  { label: 'Events',     path: '/(org-admin)/events-management',  icon: 'calendar-outline'         },
+  { label: 'Calendar',   path: '/(org-admin)/calendar',           icon: 'calendar-number-outline'  },
+  { label: 'Settings',   path: '/(org-admin)/settings',           icon: 'settings-outline'         },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────

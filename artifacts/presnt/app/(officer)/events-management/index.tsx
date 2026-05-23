@@ -1852,7 +1852,7 @@ export default function OfficerEventsScreen() {
       <ScrollView
         horizontal showsHorizontalScrollIndicator={false}
         contentContainerStyle={sc.tabRow}
-        style={{ height: 48, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{ flexShrink: 0, backgroundColor: c.background, borderBottomWidth: 1, borderBottomColor: c.border }}
       >
         {TABS.map((t) => {
           const active = tab === t;
@@ -1950,8 +1950,8 @@ const sc = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   iconBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9 },
   primaryBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
-  tabRow:        { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
-  tabChip:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  tabRow:        { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 6, gap: 8, alignItems: 'center' },
+  tabChip:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 5 },
   tableHeader:   { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
   mobileScroll:  { padding: 14, gap: 10, paddingBottom: 48 },
   empty:         { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },

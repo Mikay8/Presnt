@@ -411,7 +411,7 @@ export default function AdminMembersScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
-        style={{ height: 48, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{ flexShrink: 0, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border }}
       >
         {FILTERS.map((f) => {
           const active = filter === f;
@@ -485,8 +485,8 @@ export default function AdminMembersScreen() {
 
 const styles = StyleSheet.create({
   header:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
-  filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: 'center' },
-  filterChip:{ borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
+  filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 6, gap: 8, alignItems: 'center' },
+  filterChip:{ borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5 },
   scroll:    { padding: 20, paddingBottom: 48 },
   scrollWide:{ paddingHorizontal: 48, maxWidth: 760, alignSelf: 'center', width: '100%' },
 
