@@ -25,7 +25,8 @@ export default function OnboardingScreen() {
   // creating/joining a chapter), send them directly to their portal.
   if (membership) {
     const role = membership.role;
-    if (role === 'org_admin' || role === 'admin') return <Redirect href="/(admin)/dashboard" />;
+    if (role === 'org_admin') return <Redirect href="/(org-admin)/dashboard" />;
+    if (role === 'admin') return <Redirect href="/(admin)/dashboard" />;
     if (role === 'officer') return <Redirect href="/(officer)/events-management" />;
     return <Redirect href="/(member)" />;
   }

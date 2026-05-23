@@ -116,12 +116,36 @@ function RootLayoutNav() {
   const pathname = usePathname();
 
   // Pathname-based route group detection — reliable on every render.
-  // On web, Expo Router strips route groups from the URL, so /(auth)/invite
-  // appears as /invite. Include it explicitly so the auth guard doesn't
-  // redirect unauthenticated users away before they can see the invite screen.
-  const inAuth      = pathname.startsWith('/(auth)') || pathname === '/' || pathname.startsWith('/invite');
-  const inSuperuser = pathname === '/super-user' || pathname.startsWith('/(superuser)');
-  const inOrgAdmin  = pathname.startsWith('/(org-admin)') || pathname.startsWith('/org-admin');
+  //
+  // On web, Expo Router strips route groups from the URL:
+  //   /(auth)/login        → /login
+  //   /(auth)/onboarding   → /onboarding
+  //   /(org-admin)/dash    → /dashboard
+  // We must match BOTH the native form (with group) AND the web form (without).
+  const AUTH_WEB_PATHS = [
+    '/login', '/register', '/onboarding',
+    '/create-org', '/create-chapter', '/join-chapter', '/invite',
+  ];
+  const inAuth =
+    pathname === '/' ||
+    pathname.startsWith('/(auth)') ||
+    AUTH_WEB_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
+
+  const inSuperuser =
+    pathname === '/super-user' ||
+    pathname.startsWith('/(superuser)') ||
+    pathname.startsWith('/super-user/');
+
+  // Org-admin routes: native group prefix OR any web-stripped path that
+  // belongs to the (org-admin) group. We track the known segment names.
+  const ORG_ADMIN_WEB_SEGMENTS = [
+    '/dashboard', '/chapters', '/members', '/status',
+    '/events-management', '/calendar', '/settings',
+  ];
+  const inOrgAdmin =
+    pathname.startsWith('/(org-admin)') ||
+    pathname.startsWith('/org-admin') ||
+    ORG_ADMIN_WEB_SEGMENTS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 
   // ── Still loading user data — don't redirect yet ────────────────────────────
   if (isLoading) return null;
@@ -129,7 +153,16 @@ function RootLayoutNav() {
   // ── User View mode ──────────────────────────────────────────────────────────
   if (userView) return null;
 
-  // ── Normal auth flow ────────────────────────────────────────────────────────
+  // ── No session → always go to login, from ANY route ─────────────────────────
+  // This must run before the portal-bypass checks below so that signing out
+  // from any portal (org-admin, superuser, etc.) always lands on login —
+  // not on a portal's own guard which might redirect to /(member).
+  if (!session) {
+    if (inAuth) return null;           // already on a public auth screen — fine
+    return <Redirect href="/(auth)/login" />;
+  }
+
+  // ── Normal auth flow (session exists) ───────────────────────────────────────
 
   // Superuser routes manage their own auth — never redirect away from them
   if (inSuperuser) return null;
@@ -137,33 +170,32 @@ function RootLayoutNav() {
   // Org-admin routes manage their own auth guard — never redirect away from them
   if (inOrgAdmin) return null;
 
-  // No session → send to login
-  if (!session && !inAuth) {
-    return <Redirect href="/(auth)/login" />;
-  }
-
   // Superuser accounts have no chapter membership — route them to their dashboard
-  if (session && profile?.is_superuser) {
+  if (profile?.is_superuser) {
     return <Redirect href="/(superuser)/" />;
   }
 
   // Session but no membership → onboarding.
   // Fires whether on an auth screen or not, EXCEPT when already mid-flow on
   // onboarding/create-org/join-chapter/create-chapter/invite so we don't interrupt them.
-  const onboardingFlow = pathname.startsWith('/(auth)/onboarding')
-    || pathname.startsWith('/(auth)/create-org')
-    || pathname.startsWith('/(auth)/create-chapter')
-    || pathname.startsWith('/(auth)/join-chapter')
-    || pathname.startsWith('/(auth)/invite')
-    || pathname.startsWith('/invite');   // web: route group stripped
-  if (session && !membership && !onboardingFlow) {
+  const ONBOARDING_PATHS = [
+    '/(auth)/onboarding', '/onboarding',
+    '/(auth)/create-org', '/create-org',
+    '/(auth)/create-chapter', '/create-chapter',
+    '/(auth)/join-chapter', '/join-chapter',
+    '/(auth)/invite', '/invite',
+  ];
+  const onboardingFlow = ONBOARDING_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(p + '/'),
+  );
+  if (!membership && !onboardingFlow) {
     return <Redirect href="/(auth)/onboarding" />;
   }
 
   // Authenticated + membership on an auth screen → route to the correct portal.
   // Exception: invite screen — it handles the "already a member" case itself.
-  const onInvite = pathname.startsWith('/(auth)/invite') || pathname.startsWith('/invite');
-  if (session && membership && inAuth && !onInvite) {
+  const onInvite = pathname.startsWith('/(auth)/invite') || pathname === '/invite' || pathname.startsWith('/invite/');
+  if (membership && inAuth && !onInvite) {
     const role = membership.role;
     if (role === 'org_admin') {
       return <Redirect href="/(org-admin)/dashboard" />;
@@ -247,7 +279,12 @@ export default function RootLayout() {
     setLoading(true);
 
     const t0 = Date.now();
-    const [profileResult, membershipResult] = await Promise.all([
+
+    // Fetch all active memberships so we can prioritize org_admin over admin.
+    // A user who created an org has BOTH an org_admin membership (parent org)
+    // and an admin membership (first chapter). We always prefer org_admin so
+    // they land in the org-admin portal; otherwise use the most-recently-created.
+    const [profileResult, membershipsResult] = await Promise.all([
       supabase
         .from('profiles')
         .select('*')
@@ -259,9 +296,7 @@ export default function RootLayout() {
         .eq('user_id', session.user.id)
         .eq('is_deleted', false)
         .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),                        // null (not error) when no membership yet → onboarding
+        .order('created_at', { ascending: false }),
     ]);
 
     // Log profile fetch
@@ -276,7 +311,10 @@ export default function RootLayout() {
     });
 
     const { data: profile }    = profileResult;
-    const { data: membership } = membershipResult;
+    const allMemberships       = membershipsResult.data ?? [];
+
+    // Prefer org_admin membership if present; otherwise take the most recent one.
+    const membership = allMemberships.find((m) => m.role === 'org_admin') ?? allMemberships[0] ?? null;
 
     if (profile) setProfile(profile);
 
