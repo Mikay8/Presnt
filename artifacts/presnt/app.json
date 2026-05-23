@@ -58,9 +58,7 @@
         }
       ],
       "expo-font",
-      "expo-web-browser",
-      "expo-secure-store",
-      "expo-camera"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
