@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useUserViewStore } from '@/stores/userViewStore';
 import { Text } from './Text';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ export function AdminSidebar() {
   const pathname  = usePathname();
   const { theme } = useThemeStore();
   const { organization, membership, profile } = useAuthStore();
+  const userView  = useUserViewStore((s) => s.session);
   const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
@@ -63,8 +65,10 @@ export function AdminSidebar() {
   const lastName   = profile?.last_name  ?? '';
   const initials   = firstName && lastName ? `${firstName[0]}${lastName[0]}` : '?';
 
-  const roleLabel = membership?.role
-    ? membership.role.toUpperCase().replace('_', ' ')
+  // Show simulated role when in User View, otherwise real membership role
+  const displayRole = userView?.role ?? membership?.role;
+  const roleLabel = displayRole
+    ? displayRole.toUpperCase().replace('_', ' ')
     : 'ADMIN';
 
   // Active if the pathname starts with the item's segment

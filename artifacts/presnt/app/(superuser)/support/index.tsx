@@ -117,7 +117,7 @@ function UserViewTool() {
   // Step 4 — permissions (officer only)
   const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
 
-  // Load parent orgs (non-chapter types only)
+  // Load parent orgs (non-chapter types only) — auto-select first
   useEffect(() => {
     supabase
       .from('organizations')
@@ -128,12 +128,16 @@ function UserViewTool() {
       .order('name')
       .limit(100)
       .then(({ data }) => {
-        setOrgs((data as Org[]) ?? []);
+        const list = (data as Org[]) ?? [];
+        setOrgs(list);
+        if (list.length > 0 && !selectedOrg) {
+          setSelectedOrg(list[0]);
+        }
         setOrgsLoading(false);
       });
   }, []);
 
-  // Load chapters when a parent org is picked
+  // Load chapters when a parent org is picked — auto-select first
   useEffect(() => {
     if (!selectedOrg) {
       setChapters([]);
@@ -151,7 +155,11 @@ function UserViewTool() {
       .order('name')
       .limit(200)
       .then(({ data }) => {
-        setChapters((data as Chapter[]) ?? []);
+        const list = (data as Chapter[]) ?? [];
+        setChapters(list);
+        if (list.length > 0) {
+          setSelectedChapter(list[0]);
+        }
         setChaptersLoading(false);
       });
   }, [selectedOrg?.id]);
@@ -416,7 +424,18 @@ function UserViewTool() {
             return (
               <Pressable
                 key={role}
-                onPress={() => { setSelectedRole(role); setSelectedPerms([]); setSelectedChapter(null); setChapterSearch(''); }}
+                onPress={() => {
+                  setSelectedRole(role);
+                  setSelectedPerms([]);
+                  setChapterSearch('');
+                  // When switching TO org_admin, chapter isn't used — clear it.
+                  // For all other roles, keep the current selection (or fall back to first chapter).
+                  if (role === 'org_admin') {
+                    setSelectedChapter(null);
+                  } else if (!selectedChapter && chapters.length > 0) {
+                    setSelectedChapter(chapters[0]);
+                  }
+                }}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',

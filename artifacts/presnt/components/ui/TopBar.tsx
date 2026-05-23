@@ -4,11 +4,13 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useUserViewStore } from '@/stores/userViewStore';
 import { Text } from './Text';
 
 export function TopBar() {
   const { theme } = useThemeStore();
   const { profile, membership } = useAuthStore();
+  const userView  = useUserViewStore((s) => s.session);
 
   const firstName = profile?.first_name ?? '';
   const lastName  = profile?.last_name  ?? '';
@@ -17,8 +19,10 @@ export function TopBar() {
     ? `${firstName[0]}. ${lastName}`
     : firstName || lastName || 'Member';
 
-  const role = membership?.role
-    ? membership.role.toUpperCase().replace('_', ' ')
+  // Show simulated role when in User View, otherwise real membership role
+  const displayRole = userView?.role ?? membership?.role;
+  const role = displayRole
+    ? displayRole.toUpperCase().replace('_', ' ')
     : 'MEMBER';
 
   return (

@@ -131,16 +131,22 @@ function RootLayoutNav() {
     pathname.startsWith('/(auth)') ||
     AUTH_WEB_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 
+  // Superuser routes: native group prefix OR web-stripped paths.
+  // On web, /(superuser)/support → /support, /(superuser)/orgs → /orgs, etc.
+  const SUPERUSER_WEB_SEGMENTS = [
+    '/orgs', '/users', '/billing', '/flags', '/logs', '/support', '/config',
+  ];
   const inSuperuser =
     pathname === '/super-user' ||
     pathname.startsWith('/(superuser)') ||
-    pathname.startsWith('/super-user/');
+    pathname.startsWith('/super-user/') ||
+    SUPERUSER_WEB_SEGMENTS.some((p) => pathname === p || pathname.startsWith(p + '/'));
 
   // Org-admin routes: native group prefix OR any web-stripped path that
   // belongs to the (org-admin) group. We track the known segment names.
   const ORG_ADMIN_WEB_SEGMENTS = [
     '/dashboard', '/chapters', '/members', '/status',
-    '/events-management', '/calendar', '/settings',
+    '/events-management', '/calendar', '/settings', '/roles',
   ];
   const inOrgAdmin =
     pathname.startsWith('/(org-admin)') ||

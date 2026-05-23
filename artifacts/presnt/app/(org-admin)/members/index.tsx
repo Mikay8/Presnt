@@ -460,7 +460,20 @@ export default function OrgAdminMembersScreen() {
       .eq('is_deleted', false)
       .order('role');
 
-    setMembers((membersData as MemberRow[]) ?? []);
+    // Deduplicate by profile ID — keep the row with the highest-privilege role.
+    // A person in multiple chapters would otherwise appear once per chapter.
+    const ROLE_RANK: Record<string, number> = {
+      org_admin: 5, admin: 4, officer: 3, member: 2, new_member: 1,
+    };
+    const byProfile = new Map<string, MemberRow>();
+    for (const row of (membersData as MemberRow[]) ?? []) {
+      const pid = row.profiles?.id ?? row.id;
+      const existing = byProfile.get(pid);
+      if (!existing || (ROLE_RANK[row.role] ?? 0) > (ROLE_RANK[existing.role] ?? 0)) {
+        byProfile.set(pid, row);
+      }
+    }
+    setMembers(Array.from(byProfile.values()));
     setLoading(false);
     setRefresh(false);
   }, [orgId]);
