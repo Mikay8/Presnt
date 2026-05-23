@@ -1038,7 +1038,10 @@ function TableRow({ event, catMap, chapters, onEdit, onCancel, onScan }: {
   const chapter        = isChapterEvent ? chapters.find(ch => ch.id === event.org_id) : null;
 
   return (
-    <View style={[tr.row, { borderBottomColor: c.border, opacity: isChapterEvent ? 0.85 : 1 }]}>
+    <Pressable
+      onPress={() => router.push(`/(org-admin)/events-management/${event.id}` as any)}
+      style={[tr.row, { borderBottomColor: c.border, opacity: isChapterEvent ? 0.85 : 1 }]}
+    >
       <View style={[tr.dateBadge, { backgroundColor: c.surfaceAlt }]}>
         <Text size="xs" weight="medium" color={c.textSubtle}>{d.month}</Text>
         <Text size="md" weight="bold">{d.day}</Text>
@@ -1126,7 +1129,7 @@ function TableRow({ event, catMap, chapters, onEdit, onCancel, onScan }: {
           </View>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -1159,7 +1162,10 @@ function MobileCard({ event, catMap, chapters, onEdit, onScan }: {
   const chapter        = isChapterEvent ? chapters.find(ch => ch.id === event.org_id) : null;
 
   return (
-    <View style={[mc.card, { backgroundColor: c.surface, borderColor: c.border, opacity: isChapterEvent ? 0.85 : 1 }]}>
+    <Pressable
+      onPress={() => router.push(`/(org-admin)/events-management/${event.id}` as any)}
+      style={[mc.card, { backgroundColor: c.surface, borderColor: c.border, opacity: isChapterEvent ? 0.85 : 1 }]}
+    >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
         <View style={[mc.dateBadge, { backgroundColor: c.surfaceAlt }]}>
           <Text size="xs" weight="medium" color={c.textSubtle}>{d.month}</Text>
@@ -1230,7 +1236,7 @@ function MobileCard({ event, catMap, chapters, onEdit, onScan }: {
           )}
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

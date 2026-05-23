@@ -74,7 +74,7 @@ function ExcuseItem({
   const isPending = excuse.status === 'pending';
 
   function goToDetail() {
-    router.push(`/(officer)/excuses/${excuse.id}` as any);
+    router.push(`/(admin)/excuses/${excuse.id}` as any);
   }
 
   if (isWide) {
@@ -98,6 +98,11 @@ function ExcuseItem({
             </View>
           </View>
           <Text size="xs" color={c.textMuted} numberOfLines={2}>{excuse.reason}</Text>
+          {/* Attachment placeholder */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <Ionicons name="attach-outline" size={12} color={c.textSubtle} />
+            <Text size="xs" color={c.textSubtle}>doc.pdf</Text>
+          </View>
         </View>
 
         {/* Buttons */}
@@ -193,7 +198,7 @@ const ei = StyleSheet.create({
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export default function ExcusesScreen() {
+export default function AdminExcusesScreen() {
   const { theme }      = useThemeStore();
   const insets         = useSafeAreaInsets();
   const { organization, profile } = useAuthStore();

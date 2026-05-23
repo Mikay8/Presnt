@@ -102,6 +102,12 @@ export default function CreateChapterScreen() {
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
 
+  // ── Step 3: date term (optional) ──────────────────────────────────────────
+  const defaultTerm = getCurrentSemester();
+  const [termName,  setTermName]  = useState(defaultTerm.name);
+  const [termStart, setTermStart] = useState(defaultTerm.start);
+  const [termEnd,   setTermEnd]   = useState(defaultTerm.end);
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   function handleNameChange(val: string) {
@@ -227,13 +233,15 @@ export default function CreateChapterScreen() {
       return;
     }
 
-    // Seed first academic term
-    const semester = getCurrentSemester();
+    // Seed first academic term (use user-supplied values, or auto-detected defaults)
+    const tName  = termName.trim()  || defaultTerm.name;
+    const tStart = termStart.trim() || defaultTerm.start;
+    const tEnd   = termEnd.trim()   || defaultTerm.end;
     await supabase.from('academic_terms').insert({
       org_id:     org.id,
-      name:       semester.name,
-      start_date: semester.start,
-      end_date:   semester.end,
+      name:       tName,
+      start_date: tStart,
+      end_date:   tEnd,
       is_active:  true,
     });
 
@@ -469,6 +477,41 @@ export default function CreateChapterScreen() {
                 >
                   <Ionicons name="refresh-outline" size={18} color={c.textMuted} />
                 </Pressable>
+              </View>
+
+              {/* Date Term */}
+              <View style={styles.sectionDivider} />
+              <Text size="xs" weight="medium" color={c.textMuted} style={styles.sectionLabel}>First Academic Term</Text>
+              <Text size="xs" color={c.textSubtle} style={{ marginBottom: 4, marginTop: -4 }}>
+                Pre-filled with the current semester. You can change it any time in Settings.
+              </Text>
+
+              <Input
+                label="Term name"
+                value={termName}
+                onChangeText={setTermName}
+                placeholder="e.g. Fall 2026"
+              />
+
+              <View style={[styles.row, !isWide && styles.col]}>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    label="Start date"
+                    value={termStart}
+                    onChangeText={setTermStart}
+                    placeholder="YYYY-MM-DD"
+                    autoCorrect={false}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    label="End date"
+                    value={termEnd}
+                    onChangeText={setTermEnd}
+                    placeholder="YYYY-MM-DD"
+                    autoCorrect={false}
+                  />
+                </View>
               </View>
 
               {/* Branding */}

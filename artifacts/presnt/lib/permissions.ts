@@ -3,13 +3,14 @@
 // Admins (admin / org_admin) implicitly have ALL permissions.
 
 export const PERMISSIONS = {
-  MANAGE_EVENTS:      'manage_events',
-  MANAGE_ATTENDANCE:  'manage_attendance',
-  POST_ANNOUNCEMENTS: 'post_announcements',
-  MANAGE_DUES:        'manage_dues',
-  MANAGE_MEMBERS:     'manage_members',
-  ASSIGN_ROLES:       'assign_roles',
-  VIEW_REPORTS:       'view_reports',
+  MANAGE_EVENTS:        'manage_events',
+  MANAGE_ATTENDANCE:    'manage_attendance',
+  POST_ANNOUNCEMENTS:   'post_announcements',
+  MANAGE_DUES:          'manage_dues',
+  MANAGE_MEMBERS:       'manage_members',
+  ASSIGN_ROLES:         'assign_roles',
+  VIEW_REPORTS:         'view_reports',
+  MANAGE_TERMS:         'manage_terms',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -53,6 +54,11 @@ export const ALL_PERMISSIONS: {
     key:         'view_reports',
     label:       'View Reports',
     description: 'Access attendance and dues reports',
+  },
+  {
+    key:         'manage_terms',
+    label:       'Manage Terms',
+    description: 'Create and edit academic terms and compliance requirements',
   },
 ];
 

@@ -35,6 +35,12 @@ const MENU_ITEMS = [
     route:       '/(admin)/dues',
   },
   {
+    icon:        'document-text-outline' as const,
+    label:       'Excuses',
+    description: 'Review and approve member absence excuses',
+    route:       '/(admin)/excuses',
+  },
+  {
     icon:        'checkmark-circle-outline' as const,
     label:       'Status',
     description: 'Chapter compliance and at-risk members',

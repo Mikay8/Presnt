@@ -24,6 +24,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 
 import { Card, Text } from '@/components/ui';
+import { usePermissions } from '@/hooks/usePermissions';
+import { PERMISSIONS } from '@/lib/permissions';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 
@@ -78,9 +80,11 @@ export default function OfficerSettingsScreen() {
   const { width }                        = useWindowDimensions();
   const isWide                           = width >= 800;
   const { organization, membership, profile } = useAuthStore();
+  const { can }                          = usePermissions();
   const [codeCopied, setCodeCopied]      = useState(false);
   const [linkShared, setLinkShared]      = useState(false);
   const c = theme.colors;
+  const canManageTerms = can(PERMISSIONS.MANAGE_TERMS);
 
   async function handleSignOut() {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -212,6 +216,28 @@ export default function OfficerSettingsScreen() {
             </View>
           )}
         </Card>
+
+        {/* Compliance — only if officer has manage_terms permission */}
+        {canManageTerms && (
+          <>
+            <SectionHeader label="Compliance" />
+            <Card style={{ paddingVertical: 0 }}>
+              <SettingRow
+                icon="calendar-number-outline"
+                label="Date Terms"
+                value="Manage academic terms (semesters / quarters)"
+                onPress={() => router.push('/(officer)/date-terms' as any)}
+              />
+              <SettingRow
+                icon="clipboard-outline"
+                label="Requirements"
+                value="Set attendance & points thresholds for the active term"
+                onPress={() => router.push('/(officer)/status/requirements' as any)}
+                last
+              />
+            </Card>
+          </>
+        )}
 
         {/* Sign out */}
         <SectionHeader label="Session" />

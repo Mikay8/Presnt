@@ -77,6 +77,10 @@ export default function MemberLayout() {
               name="event/[id]"
               options={{ href: null, tabBarItemStyle: { display: 'none' } }}
             />
+            <Tabs.Screen
+              name="excuses/history"
+              options={{ href: null, tabBarItemStyle: { display: 'none' } }}
+            />
           </Tabs>
         </View>
       </View>
@@ -123,6 +127,10 @@ export default function MemberLayout() {
       />
       <Tabs.Screen
         name="event/[id]"
+        options={{ href: null, tabBarItemStyle: { display: 'none' } }}
+      />
+      <Tabs.Screen
+        name="excuses/history"
         options={{ href: null, tabBarItemStyle: { display: 'none' } }}
       />
     </Tabs>

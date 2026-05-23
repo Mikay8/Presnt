@@ -225,7 +225,7 @@ export default function OrgAdminCalendarScreen() {
   };
 
   function openEvent(ev: CalEvent) {
-    router.push(`/(org-admin)/events-management` as any);
+    router.push(`/(org-admin)/events-management/${ev.id}` as any);
   }
 
   function onRefresh() { setRefreshing(true); load(); }

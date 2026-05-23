@@ -135,7 +135,9 @@ export default function OrgAdminLayout() {
           <Tabs.Screen name="chapters"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="members"           options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="status"            options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
-          <Tabs.Screen name="events-management" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="events-management"             options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="events-management/[id]"        options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
+          <Tabs.Screen name="events-management/member/[id]" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           {/* Calendar — desktop sidebar only, hidden on mobile */}
           <Tabs.Screen name="calendar"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="calendar/index"    options={{ href: null, tabBarItemStyle: { display: 'none' } }} />

@@ -318,11 +318,15 @@ export default function OfficerStatusScreen() {
       {/* Requirements list */}
       {requirements.length > 0 && (
         <Card style={{ gap: 0, paddingVertical: 0 }}>
-          <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: c.border }}>
+          <Pressable
+            onPress={() => router.push('/(officer)/status/requirements' as any)}
+            style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: c.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
             <Text size="xs" weight="medium" color={c.textMuted} style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
               Requirements
             </Text>
-          </View>
+            <Ionicons name="chevron-forward-outline" size={14} color={c.textSubtle} />
+          </Pressable>
           {requirements.map((r, i) => (
             <View key={r.id} style={[
               styles.reqRow,

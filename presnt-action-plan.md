@@ -2507,7 +2507,7 @@ GET    /orgs/{org_id}/audit-log
 
 ---
 
-# PHASE 11 — Officer Handoff & HQ Rollup
+# PHASE 11 — Officer Handoff & HQ Rollup Term pop up
 > Goal: Officer transition under 10 minutes. National HQ sees all chapters.
 
 ## 11.1 Officer Handoff Flow
@@ -2535,6 +2535,12 @@ GET    /orgs/{org_id}/audit-log
 
 ---
 
+
+
+# Bulk upload for members and it would send out emails to members bulk uploaded for memeber
+
+# allow self checkin to meeting with button during time period
+
 # Global Rules for Agent
 
 1. **Permission check before every write** — call `require_permission(membership_id, org_id, domain, action)` before any route that modifies data.
@@ -2555,7 +2561,3 @@ GET    /orgs/{org_id}/audit-log
 14. **Branding changes are logged** — always snapshot `org_branding_history` before updating any color, logo, or display name field.
 
 ---
-
-# PHASE 12 — Platform Superuser
-> **Merged into Phase 1.5.** All superuser infrastructure — database schema, RLS bypass, FastAPI middleware, API routes, UI screens, impersonation, and security rules — is fully specified in **Phase 1.5 — Super User Platform Dashboard**. Build it in Phase 1.5 order; there is nothing left here that is not already covered there.
-

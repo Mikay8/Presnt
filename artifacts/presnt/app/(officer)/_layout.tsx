@@ -111,8 +111,11 @@ export default function OfficerLayout() {
           />
 
           {/* ── Hidden sub-routes ─────────────────────────────────────── */}
-          <Tabs.Screen name="events-management/index" options={HIDDEN} />
-          <Tabs.Screen name="events-management/[id]"  options={HIDDEN} />
+          <Tabs.Screen name="events-management/index"       options={HIDDEN} />
+          <Tabs.Screen name="events-management/[id]"        options={HIDDEN} />
+          <Tabs.Screen name="events-management/member/[id]" options={HIDDEN} />
+          <Tabs.Screen name="date-terms"              options={HIDDEN} />
+          <Tabs.Screen name="status/requirements"    options={HIDDEN} />
           <Tabs.Screen name="attendance/index"        options={HIDDEN} />
           <Tabs.Screen name="status/index"            options={HIDDEN} />
           <Tabs.Screen name="excuses/index"           options={HIDDEN} />

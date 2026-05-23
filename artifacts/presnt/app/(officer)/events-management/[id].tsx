@@ -609,6 +609,15 @@ export default function OfficerEventDetailScreen() {
         <Ionicons name="create-outline" size={15} color={c.text} />
         <Text size="sm" weight="medium">Edit event</Text>
       </Pressable>
+
+      {/* See Member View */}
+      <Pressable
+        onPress={() => router.push(`/(officer)/events-management/member/${id}` as any)}
+        style={[ip.editBtn, { borderColor: c.primary + '60', backgroundColor: c.primary + '10', marginTop: 8 }]}
+      >
+        <Ionicons name="eye-outline" size={15} color={c.primary} />
+        <Text size="sm" weight="medium" color={c.primary}>See Member View</Text>
+      </Pressable>
     </View>
   );
 

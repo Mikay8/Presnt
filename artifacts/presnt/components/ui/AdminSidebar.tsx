@@ -36,6 +36,7 @@ const NAV_ITEMS: { label: string; path: string; icon: IconName }[] = [
   { label: 'Roles',      path: '/(admin)/roles',        icon: 'shield-outline'            },
   { label: 'Committees', path: '/(admin)/committees',   icon: 'people-circle-outline'     },
   { label: 'Dues',       path: '/(admin)/dues',         icon: 'cash-outline'              },
+  { label: 'Excuses',    path: '/(admin)/excuses',      icon: 'document-text-outline'     },
   { label: 'Status',     path: '/(admin)/status',       icon: 'checkmark-circle-outline'  },
   { label: 'Settings',   path: '/(admin)/settings',     icon: 'settings-outline'          },
 ];
