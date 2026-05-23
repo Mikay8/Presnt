@@ -16,7 +16,9 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -85,6 +87,56 @@ function fmtTime(iso: string) {
 function fullName(p: { first_name: string; last_name: string } | null) {
   if (!p) return 'Unknown';
   return `${p.first_name} ${p.last_name}`;
+}
+
+/** Format a Date as YYYYMMDDTHHmmssZ for iCal / Google Calendar URLs */
+function toCalStamp(d: Date) {
+  return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+function openGoogleCalendar(ev: EventDetail) {
+  const start = new Date(ev.start_time);
+  const end   = ev.end_time ? new Date(ev.end_time) : new Date(start.getTime() + 60 * 60_000);
+  const params = new URLSearchParams({
+    action:   'TEMPLATE',
+    text:     ev.title,
+    dates:    `${toCalStamp(start)}/${toCalStamp(end)}`,
+    details:  ev.description ?? '',
+    location: ev.location ?? '',
+  });
+  Linking.openURL(`https://calendar.google.com/calendar/render?${params.toString()}`);
+}
+
+function downloadIcal(ev: EventDetail) {
+  const start = new Date(ev.start_time);
+  const end   = ev.end_time ? new Date(ev.end_time) : new Date(start.getTime() + 60 * 60_000);
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    `DTSTART:${toCalStamp(start)}`,
+    `DTEND:${toCalStamp(end)}`,
+    `SUMMARY:${ev.title}`,
+    `DESCRIPTION:${(ev.description ?? '').replace(/\n/g, '\\n')}`,
+    `LOCATION:${ev.location ?? ''}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  if (Platform.OS === 'web') {
+    const blob = new Blob([ics], { type: 'text/calendar' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${ev.title.replace(/\s+/g, '_')}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } else {
+    const encoded = encodeURIComponent(ics);
+    Linking.openURL(`data:text/calendar;charset=utf-8,${encoded}`).catch(() => {
+      Alert.alert('Export failed', 'Could not open the calendar file on this device.');
+    });
+  }
 }
 
 // ─── Add-member modal ─────────────────────────────────────────────────────────
@@ -519,6 +571,24 @@ export default function AdminEventDetailScreen() {
         </Text>
       )}
 
+      {/* Save to Calendar */}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+        <Pressable
+          onPress={() => openGoogleCalendar(event)}
+          style={[ip.calBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+        >
+          <Ionicons name="logo-google" size={14} color={c.text} />
+          <Text size="xs" weight="medium" color={c.text}>Google Calendar</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => downloadIcal(event)}
+          style={[ip.calBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+        >
+          <Ionicons name="calendar-outline" size={14} color={c.text} />
+          <Text size="xs" weight="medium" color={c.text}>Save .ics</Text>
+        </Pressable>
+      </View>
+
       {/* Stats */}
       <View style={[ip.stats, { borderTopColor: c.border, marginTop: 16, paddingTop: 14 }]}>
         <View style={ip.stat}>
@@ -679,6 +749,7 @@ const ip = StyleSheet.create({
   stat:      { alignItems: 'center', gap: 2 },
   statDivider:{ width: 1, height: 36 },
   editBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingVertical: 10 },
+  calBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, flex: 1, justifyContent: 'center' },
 });
 
 const tp = StyleSheet.create({

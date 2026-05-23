@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import QRCode from 'react-native-qrcode-svg';
 
 import { Avatar, Button, Card, Text } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
@@ -60,6 +63,57 @@ function formatDate(iso: string) {
 }
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+/** Format a Date as YYYYMMDDTHHmmssZ for iCal / Google Calendar URLs */
+function toCalStamp(d: Date) {
+  return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+function openGoogleCalendar(ev: EventDetail) {
+  const start = new Date(ev.start_time);
+  const end   = ev.end_time ? new Date(ev.end_time) : new Date(start.getTime() + 60 * 60_000);
+  const params = new URLSearchParams({
+    action:   'TEMPLATE',
+    text:     ev.title,
+    dates:    `${toCalStamp(start)}/${toCalStamp(end)}`,
+    details:  ev.description ?? '',
+    location: ev.location ?? '',
+  });
+  Linking.openURL(`https://calendar.google.com/calendar/render?${params.toString()}`);
+}
+
+function downloadIcal(ev: EventDetail) {
+  const start = new Date(ev.start_time);
+  const end   = ev.end_time ? new Date(ev.end_time) : new Date(start.getTime() + 60 * 60_000);
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    `DTSTART:${toCalStamp(start)}`,
+    `DTEND:${toCalStamp(end)}`,
+    `SUMMARY:${ev.title}`,
+    `DESCRIPTION:${(ev.description ?? '').replace(/\n/g, '\\n')}`,
+    `LOCATION:${ev.location ?? ''}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  if (Platform.OS === 'web') {
+    const blob = new Blob([ics], { type: 'text/calendar' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${ev.title.replace(/\s+/g, '_')}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } else {
+    // On native, open as a data URI so the OS can handle .ics
+    const encoded = encodeURIComponent(ics);
+    Linking.openURL(`data:text/calendar;charset=utf-8,${encoded}`).catch(() => {
+      Alert.alert('Export failed', 'Could not open the calendar file on this device.');
+    });
+  }
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -191,7 +245,15 @@ export default function EventDetailScreen() {
   const extraGoers = Math.max(0, rsvpCount - attendees.length);
   const isRsvped   = !!userRsvp;
 
-  // ── Info chips ──
+  // ── Category pill ──
+  const categoryPill = (
+    <View style={[styles.categoryPill, { backgroundColor: typeColor + '20', borderColor: typeColor }]}>
+      <Ionicons name="pricetag-outline" size={13} color={typeColor} />
+      <Text size="sm" weight="medium" color={typeColor}>{typeLabel}</Text>
+    </View>
+  );
+
+  // ── Info chips (date, time, location) ──
   const chips = (
     <View style={styles.chips}>
       {event.is_org_wide && (
@@ -204,22 +266,32 @@ export default function EventDetailScreen() {
         { label: formatDate(event.start_time), icon: 'calendar-outline' as const },
         { label: formatTime(event.start_time), icon: 'time-outline' as const },
         { label: event.location ?? 'TBD',      icon: 'location-outline' as const },
-        { label: typeLabel,                     icon: 'flag-outline' as const, colored: true },
-      ].map(({ label, icon, colored }) => (
-        <View key={label} style={[
-          styles.chip,
-          {
-            backgroundColor: colored ? typeColor + '20' : theme.colors.surfaceAlt,
-            borderColor:     colored ? typeColor : theme.colors.border,
-          },
-        ]}>
-          <Ionicons name={icon} size={13} color={colored ? typeColor : theme.colors.textMuted} />
-          <Text size="sm" weight={colored ? 'medium' : 'regular'}
-            color={colored ? typeColor : theme.colors.text}>
-            {label}
-          </Text>
+      ].map(({ label, icon }) => (
+        <View key={label} style={[styles.chip, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}>
+          <Ionicons name={icon} size={13} color={theme.colors.textMuted} />
+          <Text size="sm" color={theme.colors.text}>{label}</Text>
         </View>
       ))}
+    </View>
+  );
+
+  // ── Save to calendar row ──
+  const calendarButtons = (
+    <View style={styles.calendarRow}>
+      <Pressable
+        onPress={() => openGoogleCalendar(event)}
+        style={[styles.calBtn, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}
+      >
+        <Ionicons name="logo-google" size={15} color={theme.colors.text} />
+        <Text size="sm" weight="medium" color={theme.colors.text}>Google Calendar</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => downloadIcal(event)}
+        style={[styles.calBtn, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}
+      >
+        <Ionicons name="calendar-outline" size={15} color={theme.colors.text} />
+        <Text size="sm" weight="medium" color={theme.colors.text}>Save .ics</Text>
+      </Pressable>
     </View>
   );
 
@@ -255,6 +327,23 @@ export default function EventDetailScreen() {
       )}
     </View>
   );
+
+  // ── Profile QR (for check-in) ──
+  const profileQr = userId ? (
+    <View style={styles.qrContainer}>
+      <View style={[styles.qrInner, { backgroundColor: '#fff' }]}>
+        <QRCode
+          value={`presnt://user/${userId}`}
+          size={140}
+          backgroundColor="#ffffff"
+          color="#000000"
+        />
+      </View>
+      <Text size="xs" color={theme.colors.textSubtle} style={{ marginTop: 8, textAlign: 'center' }}>
+        Present this QR at the door
+      </Text>
+    </View>
+  ) : null;
 
   // ── Banner ──
   const banner = (
@@ -301,8 +390,12 @@ export default function EventDetailScreen() {
         <View style={styles.wideContent}>
           <View style={{ flex: 1, gap: 20 }}>
             {banner}
-            <Text size="xl" weight="bold">{event.title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text size="xl" weight="bold" style={{ flex: 1 }}>{event.title}</Text>
+              {categoryPill}
+            </View>
             {chips}
+            {calendarButtons}
             {event.description && (
               <View>
                 <Text size="xs" weight="medium" color={theme.colors.textMuted}
@@ -323,13 +416,7 @@ export default function EventDetailScreen() {
                 style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
                 Check-in
               </Text>
-              <View style={[styles.qrBox, { backgroundColor: theme.colors.surfaceAlt }]}>
-                <Ionicons name="qr-code-outline" size={48} color={theme.colors.textSubtle} />
-                <Text size="sm" color={theme.colors.textSubtle} style={{ marginTop: 8 }}>QR / check-in</Text>
-              </View>
-              <Text size="sm" color={theme.colors.textMuted} style={{ textAlign: 'center' }}>
-                Present this code at the door
-              </Text>
+              {profileQr}
             </Card>
           </View>
         </View>
@@ -355,8 +442,12 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {banner}
-        <Text size="xl" weight="bold" style={{ marginTop: 16 }}>{event.title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 }}>
+          <Text size="xl" weight="bold" style={{ flex: 1 }}>{event.title}</Text>
+          {categoryPill}
+        </View>
         <View style={{ marginTop: 14 }}>{chips}</View>
+        <View style={{ marginTop: 14 }}>{calendarButtons}</View>
 
         {event.description && (
           <>
@@ -371,6 +462,13 @@ export default function EventDetailScreen() {
         )}
 
         <View style={{ marginTop: 20 }}>{goingSection}</View>
+
+        {/* Check-in QR */}
+        <Text size="xs" weight="medium" color={theme.colors.textMuted}
+          style={{ textTransform: 'uppercase', letterSpacing: 1, marginTop: 24, marginBottom: 12 }}>
+          Check-in
+        </Text>
+        {profileQr}
       </ScrollView>
 
       <View style={[styles.mobileActionBar, {
@@ -385,7 +483,6 @@ export default function EventDetailScreen() {
           loading={rsvpLoading}
           onPress={handleRsvp}
         />
-        <Button label="Check in" style={{ flex: 1 }} onPress={() => {}} />
       </View>
     </View>
   );
@@ -399,7 +496,6 @@ const styles = StyleSheet.create({
   wideTitleRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   wideContent:   { flexDirection: 'row', gap: 24 },
   wideRightPanel:{ width: 280, gap: 16 },
-  qrBox:         { borderRadius: 12, height: 140, alignItems: 'center', justifyContent: 'center' },
   backBtn:       { width: 36, height: 36, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   mobileRoot:      { flex: 1 },
   mobileTopNav:    { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
@@ -412,4 +508,9 @@ const styles = StyleSheet.create({
   chip:          { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   avatarRow:     { flexDirection: 'row', alignItems: 'center' },
   goingAvatar:   { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  categoryPill:  { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  calendarRow:   { flexDirection: 'row', gap: 10 },
+  calBtn:        { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, flex: 1, justifyContent: 'center' },
+  qrContainer:   { alignItems: 'center', paddingVertical: 8 },
+  qrInner:       { borderRadius: 12, padding: 12 },
 });

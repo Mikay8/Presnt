@@ -113,6 +113,15 @@ export default function OrgAdminLayout() {
             }}
           />
           <Tabs.Screen
+            name="status/index"
+            options={{
+              title: 'Status',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="shield-checkmark-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
             name="settings"
             options={{
               title: 'Settings',
@@ -126,7 +135,6 @@ export default function OrgAdminLayout() {
           <Tabs.Screen name="chapters"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="members"           options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="status"            options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
-          <Tabs.Screen name="status/index"      options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           <Tabs.Screen name="events-management" options={{ href: null, tabBarItemStyle: { display: 'none' } }} />
           {/* Calendar — desktop sidebar only, hidden on mobile */}
           <Tabs.Screen name="calendar"          options={{ href: null, tabBarItemStyle: { display: 'none' } }} />

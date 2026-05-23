@@ -36,11 +36,12 @@ const ALL_NAV_ITEMS: {
   icon:       IconName;
   permission: string | null; // null = always visible
 }[] = [
-  { label: 'Events',     path: '/(officer)/events-management',     icon: 'list-outline',            permission: PERMISSIONS.MANAGE_EVENTS },
-  { label: 'Calendar',   path: '/(officer)/calendar',   icon: 'calendar-outline',        permission: PERMISSIONS.MANAGE_EVENTS },
-  { label: 'Attendance', path: '/(officer)/attendance', icon: 'checkmark-done-outline',  permission: PERMISSIONS.MANAGE_ATTENDANCE },
-  { label: 'Excuses',    path: '/(officer)/excuses',    icon: 'document-text-outline',   permission: null }, // shown if manage_attendance OR manage_members
-  { label: 'Members',    path: '/(officer)/members',    icon: 'people-outline',          permission: PERMISSIONS.MANAGE_MEMBERS },
+  { label: 'Events',     path: '/(officer)/events-management',     icon: 'list-outline',                permission: PERMISSIONS.MANAGE_EVENTS },
+  { label: 'Calendar',   path: '/(officer)/calendar',             icon: 'calendar-outline',            permission: PERMISSIONS.MANAGE_EVENTS },
+  { label: 'Attendance', path: '/(officer)/attendance',           icon: 'checkmark-done-outline',      permission: PERMISSIONS.MANAGE_ATTENDANCE },
+  { label: 'Status',     path: '/(officer)/status',               icon: 'shield-checkmark-outline',    permission: PERMISSIONS.MANAGE_ATTENDANCE },
+  { label: 'Excuses',    path: '/(officer)/excuses',              icon: 'document-text-outline',       permission: null }, // shown if manage_attendance OR manage_members
+  { label: 'Members',    path: '/(officer)/members',              icon: 'people-outline',              permission: PERMISSIONS.MANAGE_MEMBERS },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────

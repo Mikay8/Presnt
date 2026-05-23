@@ -114,6 +114,7 @@ export default function OfficerLayout() {
           <Tabs.Screen name="events-management/index" options={HIDDEN} />
           <Tabs.Screen name="events-management/[id]"  options={HIDDEN} />
           <Tabs.Screen name="attendance/index"        options={HIDDEN} />
+          <Tabs.Screen name="status/index"            options={HIDDEN} />
           <Tabs.Screen name="excuses/index"           options={HIDDEN} />
           <Tabs.Screen name="locations/index"         options={HIDDEN} />
           <Tabs.Screen name="categories/index"        options={HIDDEN} />
