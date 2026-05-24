@@ -65,7 +65,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://workspacepresnt-production.up.railway.app"
         }
       ],
       "expo-font",
