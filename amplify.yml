@@ -1,6 +1,6 @@
 version: 1
 applications:
-  - appRoot: artifacts/mockup-sandbox
+  - appRoot: artifacts/presnt
     frontend:
       phases:
         preBuild:
@@ -9,7 +9,7 @@ applications:
             - cd /codebuild/output/src*/src/Presnt && pnpm install --no-frozen-lockfile
         build:
           commands:
-            - pnpm run build
+            - npx expo export -p web
       artifacts:
         baseDirectory: dist
         files:
