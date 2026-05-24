@@ -9,11 +9,9 @@ applications:
             - cd /codebuild/output/src*/src/Presnt && pnpm install --no-frozen-lockfile
         build:
           commands:
-            - echo "=== PWD ===" && pwd
-            - echo "=== find expo binary ===" && find /codebuild -name "expo" -type f 2>/dev/null | head -20
-            - echo "=== root node_modules/.bin ===" && ls /codebuild/output/src*/src/Presnt/node_modules/.bin/ 2>/dev/null | grep expo || echo "not found"
+            - artifacts/presnt/node_modules/.bin/expo export -p web --output-dir artifacts/presnt/dist
       artifacts:
-        baseDirectory: dist
+        baseDirectory: artifacts/presnt/dist
         files:
           - "**/*"
       cache:
