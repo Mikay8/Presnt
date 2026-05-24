@@ -9,7 +9,7 @@ applications:
             - cd /codebuild/output/src*/src/Presnt && pnpm install --no-frozen-lockfile
         build:
           commands:
-            - npx expo export -p web
+            - pnpm exec expo export -p web
       artifacts:
         baseDirectory: dist
         files:
