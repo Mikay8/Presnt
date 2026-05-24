@@ -9,7 +9,7 @@ applications:
             - cd /codebuild/output/src*/src/Presnt && pnpm install --no-frozen-lockfile
         build:
           commands:
-            - node_modules/.bin/expo export -p web
+            - cd /codebuild/output/src*/src/Presnt/artifacts/presnt && ../../node_modules/.bin/expo export -p web
       artifacts:
         baseDirectory: dist
         files:
