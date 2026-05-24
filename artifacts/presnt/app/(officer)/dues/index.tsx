@@ -197,7 +197,7 @@ export default function DuesOverviewScreen() {
     if (!orgId) { setLoading(false); return; }
 
     // Fetch via Supabase — join dues_balances → memberships → profiles
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from('dues_balances')
       .select(`
         id, amount_due, amount_paid, amount_waived, status, due_date,

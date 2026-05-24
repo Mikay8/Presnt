@@ -77,7 +77,7 @@ router.get('/notifications', requireAuth, async (req, res) => {
       : r
     );
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { res.status(500).json({ error: error.message }); return; }
 
   // Return unread count alongside list
   const { count } = await svc
@@ -101,7 +101,7 @@ router.patch('/notifications/:id/read', requireAuth, async (req, res) => {
     .eq('id', id)
     .eq('user_id', userId); // RLS: own only
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { res.status(500).json({ error: error.message }); return; }
   res.json({ ok: true });
 });
 
@@ -116,7 +116,7 @@ router.patch('/notifications/read-all', requireAuth, async (req, res) => {
     .eq('user_id', userId)
     .eq('is_read', false);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { res.status(500).json({ error: error.message }); return; }
   res.json({ ok: true });
 });
 
@@ -138,17 +138,17 @@ router.post('/orgs/:orgId/announcements', requireAuth, async (req, res) => {
     .single();
 
   if (!membership || !['admin', 'org_admin', 'officer'].includes(membership.role)) {
-    return res.status(403).json({ error: 'Insufficient permissions' });
+    res.status(403).json({ error: 'Insufficient permissions' }); return;
   }
 
   // org_admin can send org-wide; admin/officer can only send chapter
   const { title, body, scope = 'chapter', audience = 'all', send_push = true, send_email = false, expires_at } = req.body;
 
   if (!title?.trim() || !body?.trim()) {
-    return res.status(400).json({ error: 'title and body are required' });
+    res.status(400).json({ error: 'title and body are required' }); return;
   }
   if (scope === 'org' && membership.role !== 'org_admin') {
-    return res.status(403).json({ error: 'Only org admins can send org-wide announcements' });
+    res.status(403).json({ error: 'Only org admins can send org-wide announcements' }); return;
   }
 
   const now = new Date().toISOString();
@@ -172,7 +172,7 @@ router.post('/orgs/:orgId/announcements', requireAuth, async (req, res) => {
     .select()
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { res.status(500).json({ error: error.message }); return; }
 
   // Deliver push notifications to members with a push_token
   if (send_push) {
@@ -231,7 +231,7 @@ router.get('/orgs/:orgId/announcements', requireAuth, async (req, res) => {
     .single();
 
   if (!membership) {
-    return res.status(403).json({ error: 'Not a member of this org' });
+    res.status(403).json({ error: 'Not a member of this org' }); return;
   }
 
   const { data, error } = await svc
@@ -243,7 +243,7 @@ router.get('/orgs/:orgId/announcements', requireAuth, async (req, res) => {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { res.status(500).json({ error: error.message }); return; }
   res.json({ announcements: data ?? [] });
 });
 

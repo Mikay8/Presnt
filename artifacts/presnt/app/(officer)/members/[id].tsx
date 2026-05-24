@@ -186,19 +186,19 @@ export default function MemberDetailScreen() {
         .eq('org_id', orgId)
         .single(),
 
-      supabase
+      (supabase as any)
         .from('member_restrictions')
         .select('id, restriction_type, reason, internal_note, is_active, starts_at, ends_at, auto_lift_condition, lifted_at, lift_reason')
         .eq('membership_id', membershipId)
         .order('created_at', { ascending: false }),
 
-      supabase
+      (supabase as any)
         .from('dues_balances')
         .select('id, amount_due, amount_paid, amount_waived, status, due_date, term_id')
         .eq('membership_id', membershipId)
         .order('created_at', { ascending: false }),
 
-      supabase
+      (supabase as any)
         .from('attendance_records')
         .select('status')
         .eq('membership_id', membershipId),
@@ -234,7 +234,7 @@ export default function MemberDetailScreen() {
           text: 'Lift',
           onPress: async () => {
             setLiftingId(restriction.id);
-            await supabase
+            await (supabase as any)
               .from('member_restrictions')
               .update({ is_active: false, lifted_at: new Date().toISOString(), lifted_by: profile?.id, lift_reason: 'Lifted by officer' })
               .eq('id', restriction.id);

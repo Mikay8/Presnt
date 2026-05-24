@@ -117,7 +117,8 @@ router.post('/', requireAuth, async (req, res) => {
 // ─── GET /excuses/:excuseId ───────────────────────────────────────────────────
 
 router.get('/:excuseId', requireAuth, async (req, res) => {
-  const { excuseId } = req.params;
+  let { excuseId } = req.params;
+  if (Array.isArray(excuseId)) excuseId = excuseId[0];
 
   const [excuse] = await db
     .select()
@@ -152,7 +153,8 @@ router.get('/:excuseId', requireAuth, async (req, res) => {
 // ─── PATCH /excuses/:excuseId/approve ────────────────────────────────────────
 
 router.patch('/:excuseId/approve', requireAuth, async (req, res) => {
-  const { excuseId } = req.params;
+  let { excuseId } = req.params;
+  if (Array.isArray(excuseId)) excuseId = excuseId[0];
   const { note } = req.body as { note?: string };
 
   const [excuse] = await db
@@ -192,7 +194,8 @@ router.patch('/:excuseId/approve', requireAuth, async (req, res) => {
 // ─── PATCH /excuses/:excuseId/deny ───────────────────────────────────────────
 
 router.patch('/:excuseId/deny', requireAuth, async (req, res) => {
-  const { excuseId } = req.params;
+  let { excuseId } = req.params;
+  if (Array.isArray(excuseId)) excuseId = excuseId[0];
   const { note } = req.body as { note?: string };
 
   const [excuse] = await db
@@ -232,7 +235,8 @@ router.patch('/:excuseId/deny', requireAuth, async (req, res) => {
 // ─── PATCH /excuses/:excuseId/escalate ───────────────────────────────────────
 
 router.patch('/:excuseId/escalate', requireAuth, async (req, res) => {
-  const { excuseId } = req.params;
+  let { excuseId } = req.params;
+  if (Array.isArray(excuseId)) excuseId = excuseId[0];
   const { escalated_to, escalation_reason } = req.body as {
     escalated_to?: string;
     escalation_reason?: string;
@@ -275,7 +279,8 @@ router.patch('/:excuseId/escalate', requireAuth, async (req, res) => {
 // ─── PATCH /excuses/:excuseId/withdraw ───────────────────────────────────────
 
 router.patch('/:excuseId/withdraw', requireAuth, async (req, res) => {
-  const { excuseId } = req.params;
+  let { excuseId } = req.params;
+  if (Array.isArray(excuseId)) excuseId = excuseId[0];
 
   const [excuse] = await db
     .select()
@@ -311,8 +316,10 @@ router.patch('/:excuseId/withdraw', requireAuth, async (req, res) => {
 // Officer: all excuses for the org, optional ?status= filter.
 
 router.get('/orgs/:orgId/excuses', requireAuth, async (req, res) => {
-  const { orgId } = req.params;
-  const statusFilter = req.query.status as string | undefined;
+  let { orgId } = req.params;
+  if (Array.isArray(orgId)) orgId = orgId[0];
+  let statusFilter = req.query.status as string | undefined;
+  if (Array.isArray(statusFilter)) statusFilter = statusFilter[0];
 
   const membership = await getMembership(req.user.id, orgId);
   if (!membership) {
@@ -347,7 +354,8 @@ router.get('/orgs/:orgId/excuses', requireAuth, async (req, res) => {
 // Member's own excuse history (or officer viewing a member).
 
 router.get('/members/:membershipId/excuses', requireAuth, async (req, res) => {
-  const { membershipId } = req.params;
+  let { membershipId } = req.params;
+  if (Array.isArray(membershipId)) membershipId = membershipId[0];
 
   // Fetch the membership to verify access
   const [targetMembership] = await db

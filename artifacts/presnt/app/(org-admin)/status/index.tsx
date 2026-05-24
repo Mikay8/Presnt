@@ -281,7 +281,7 @@ export default function OrgAdminStatusScreen() {
       const onHold     = chMembers.filter((m) => m.dues_hold === true);
       const goodStanding = chMembers.filter((m) => m.dues_status === 'paid' && !m.dues_hold);
       const compliance = total > 0 ? Math.round((goodStanding.length / total) * 100) : 100;
-      return { chapter: ch, members: chMembers, total, goodStanding, atRisk, onHold, compliance };
+      return { chapter: ch, members: chMembers, total, goodStanding: goodStanding.length, atRisk, onHold, compliance };
     });
 
     setChapterStats(stats);

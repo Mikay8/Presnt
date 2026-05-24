@@ -441,7 +441,7 @@ function ClearSheet({
     setErrorMsg(null);
     try {
       const { data, error } = await supabase
-        .rpc('clear_api_request_log', { older_than_hours: opt.hours });
+        .rpc('clear_api_request_log', { older_than_hours: opt.hours ?? undefined });
       if (error) throw error;
       onCleared((data as number) ?? 0);
       onClose();

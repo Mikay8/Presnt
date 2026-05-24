@@ -188,7 +188,7 @@ function RootLayoutNav() {
 
   // Superuser accounts have no chapter membership — route them to their dashboard
   if (profile?.is_superuser) {
-    return <Redirect href="/(superuser)/" />;
+    return <Redirect href="/(superuser)" />;
   }
 
   // Session but no membership → onboarding.

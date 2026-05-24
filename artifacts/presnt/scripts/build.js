@@ -508,6 +508,19 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
 async function main() {
   console.log("Building static Expo Go deployment...");
 
+  // This script is a Replit-specific deploy pipeline. Skip gracefully when
+  // none of the required Replit env vars are present (e.g. local dev builds).
+  const hasReplitEnv =
+    process.env.REPLIT_INTERNAL_APP_DOMAIN ||
+    process.env.REPLIT_DEV_DOMAIN ||
+    process.env.EXPO_PUBLIC_DOMAIN;
+
+  if (!hasReplitEnv) {
+    console.log("Skipping Replit deploy — no deployment domain set (REPLIT_INTERNAL_APP_DOMAIN / REPLIT_DEV_DOMAIN / EXPO_PUBLIC_DOMAIN).");
+    console.log("Run this script on Replit to produce a deployable static bundle.");
+    process.exit(0);
+  }
+
   setupSignalHandlers();
 
   const domain = getDeploymentDomain();

@@ -245,7 +245,7 @@ export default function ExcuseDetailScreen() {
       updates.escalation_reason = note;
     }
 
-    await supabase.from('excuses').update(updates).eq('id', excuse.id);
+    await supabase.from('excuses').update(updates as any).eq('id', excuse.id);
 
     // Write audit log
     await supabase.from('excuse_audit_log').insert({

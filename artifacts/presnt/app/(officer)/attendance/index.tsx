@@ -39,7 +39,7 @@ type EventRow = Pick<Tables<'events'>, 'id' | 'title' | 'start_time' | 'type' | 
 
 type AttRow = {
   id:      string;
-  status:  string;
+  status:  string | null;
   user_id: string;
   event_id: string;
 };
@@ -137,7 +137,7 @@ function RosterModal({
     } else if (existing) {
       const res = await supabase
         .from('event_attendance')
-        .update({ status })
+        .update({ status: status! })
         .eq('id', existing.id)
         .select('id, status, user_id, event_id')
         .single();
@@ -145,7 +145,7 @@ function RosterModal({
     } else {
       const res = await supabase
         .from('event_attendance')
-        .insert({ event_id: event.id, org_id: orgId, user_id: userId, status })
+        .insert({ event_id: event.id, org_id: orgId, user_id: userId, status: status! })
         .select('id, status, user_id, event_id')
         .single();
       if (res.data) setAttendance(prev => ({ ...prev, [userId]: res.data as AttRow }));

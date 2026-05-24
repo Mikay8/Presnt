@@ -53,7 +53,7 @@ export default function OrgDetailScreen() {
       supabase.from('memberships').select('*, profiles(*)').eq('org_id', org_id as string).eq('is_deleted', false).limit(50),
     ]);
     setOrg(orgData);
-    setMembers((memberData as Member[]) ?? []);
+    setMembers((memberData as unknown as Member[]) ?? []);
     setLoading(false);
   }
 

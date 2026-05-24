@@ -14,111 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      org_locations: {
-        Row: {
-          id:            string
-          org_id:        string
-          name:          string
-          address:       string | null
-          latitude:      number | null
-          longitude:     number | null
-          radius_meters: number | null
-          is_deleted:    boolean | null
-          created_by:    string | null
-          created_at:    string | null
-          updated_at:    string | null
-        }
-        Insert: {
-          id?:           string
-          org_id:        string
-          name:          string
-          address?:      string | null
-          latitude?:     number | null
-          longitude?:    number | null
-          radius_meters?: number | null
-          is_deleted?:   boolean | null
-          created_by?:   string | null
-          created_at?:   string | null
-          updated_at?:   string | null
-        }
-        Update: {
-          id?:           string
-          org_id?:       string
-          name?:         string
-          address?:      string | null
-          latitude?:     number | null
-          longitude?:    number | null
-          radius_meters?: number | null
-          is_deleted?:   boolean | null
-          created_by?:   string | null
-          created_at?:   string | null
-          updated_at?:   string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "org_locations_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "org_locations_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      api_request_log: {
-        Row: {
-          id:            string
-          created_at:    string
-          user_id:       string | null
-          org_id:        string | null
-          method:        string
-          endpoint:      string
-          domain:        string
-          status:        string
-          status_code:   number | null
-          duration_ms:   number | null
-          request_body:  Record<string, unknown> | null
-          response_meta: Record<string, unknown> | null
-          error_message: string | null
-        }
-        Insert: {
-          id?:           string
-          created_at?:   string
-          user_id?:      string | null
-          org_id?:       string | null
-          method:        string
-          endpoint:      string
-          domain?:       string
-          status?:       string
-          status_code?:  number | null
-          duration_ms?:  number | null
-          request_body?: Record<string, unknown> | null
-          response_meta?: Record<string, unknown> | null
-          error_message?: string | null
-        }
-        Update: {
-          id?:           string
-          created_at?:   string
-          user_id?:      string | null
-          org_id?:       string | null
-          method?:       string
-          endpoint?:     string
-          domain?:       string
-          status?:       string
-          status_code?:  number | null
-          duration_ms?:  number | null
-          request_body?: Record<string, unknown> | null
-          response_meta?: Record<string, unknown> | null
-          error_message?: string | null
-        }
-        Relationships: []
-      }
       academic_terms: {
         Row: {
           created_at: string | null
@@ -162,35 +57,59 @@ export type Database = {
       }
       announcements: {
         Row: {
+          audience: string
           author_id: string
           body: string
           created_at: string | null
+          created_by: string | null
+          expires_at: string | null
           id: string
           is_deleted: boolean | null
           is_pinned: boolean | null
           org_id: string
+          published_at: string | null
+          recipient_count: number | null
+          scope: string
+          send_email: boolean
+          send_push: boolean
           title: string
           updated_at: string | null
         }
         Insert: {
+          audience?: string
           author_id: string
           body: string
           created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
           id?: string
           is_deleted?: boolean | null
           is_pinned?: boolean | null
           org_id: string
+          published_at?: string | null
+          recipient_count?: number | null
+          scope?: string
+          send_email?: boolean
+          send_push?: boolean
           title: string
           updated_at?: string | null
         }
         Update: {
+          audience?: string
           author_id?: string
           body?: string
           created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
           id?: string
           is_deleted?: boolean | null
           is_pinned?: boolean | null
           org_id?: string
+          published_at?: string | null
+          recipient_count?: number | null
+          scope?: string
+          send_email?: boolean
+          send_push?: boolean
           title?: string
           updated_at?: string | null
         }
@@ -198,6 +117,13 @@ export type Database = {
           {
             foreignKeyName: "announcements_author_id_fkey"
             columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -211,13 +137,78 @@ export type Database = {
           },
         ]
       }
+      api_request_log: {
+        Row: {
+          created_at: string
+          domain: string
+          duration_ms: number | null
+          endpoint: string
+          error_message: string | null
+          id: string
+          method: string
+          org_id: string | null
+          request_body: Json | null
+          response_meta: Json | null
+          status: string
+          status_code: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          domain?: string
+          duration_ms?: number | null
+          endpoint: string
+          error_message?: string | null
+          id?: string
+          method: string
+          org_id?: string | null
+          request_body?: Json | null
+          response_meta?: Json | null
+          status?: string
+          status_code?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          duration_ms?: number | null
+          endpoint?: string
+          error_message?: string | null
+          id?: string
+          method?: string
+          org_id?: string | null
+          request_body?: Json | null
+          response_meta?: Json | null
+          status?: string
+          status_code?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_request_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_request_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attendance: {
         Row: {
           check_in_method: string | null
           checked_in_at: string | null
           created_at: string | null
+          distance_m: number | null
           event_id: string
           id: string
+          membership_id: string | null
           notes: string | null
           org_id: string
           status: string
@@ -228,8 +219,10 @@ export type Database = {
           check_in_method?: string | null
           checked_in_at?: string | null
           created_at?: string | null
+          distance_m?: number | null
           event_id: string
           id?: string
+          membership_id?: string | null
           notes?: string | null
           org_id: string
           status?: string
@@ -240,8 +233,10 @@ export type Database = {
           check_in_method?: string | null
           checked_in_at?: string | null
           created_at?: string | null
+          distance_m?: number | null
           event_id?: string
           id?: string
+          membership_id?: string | null
           notes?: string | null
           org_id?: string
           status?: string
@@ -254,6 +249,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_attendance_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
           {
@@ -274,46 +276,51 @@ export type Database = {
       }
       event_categories: {
         Row: {
-          id:          string
-          org_id:      string
-          name:        string
-          color:       string
+          color: string
+          created_at: string | null
+          created_by: string | null
+          default_points: number | null
           description: string | null
-          is_deleted:  boolean | null
-          created_by:  string | null
-          created_at:  string | null
-          updated_at:  string | null
+          icon: string | null
+          id: string
+          is_deleted: boolean | null
+          is_mandatory: boolean | null
+          name: string
+          org_id: string
+          updated_at: string | null
+          warning_threshold: number | null
         }
         Insert: {
-          id?:          string
-          org_id:       string
-          name:         string
-          color?:       string
+          color?: string
+          created_at?: string | null
+          created_by?: string | null
+          default_points?: number | null
           description?: string | null
-          is_deleted?:  boolean | null
-          created_by?:  string | null
-          created_at?:  string | null
-          updated_at?:  string | null
+          icon?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          is_mandatory?: boolean | null
+          name: string
+          org_id: string
+          updated_at?: string | null
+          warning_threshold?: number | null
         }
         Update: {
-          id?:          string
-          org_id?:      string
-          name?:        string
-          color?:       string
+          color?: string
+          created_at?: string | null
+          created_by?: string | null
+          default_points?: number | null
           description?: string | null
-          is_deleted?:  boolean | null
-          created_by?:  string | null
-          created_at?:  string | null
-          updated_at?:  string | null
+          icon?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          is_mandatory?: boolean | null
+          name?: string
+          org_id?: string
+          updated_at?: string | null
+          warning_threshold?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "event_categories_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "event_categories_created_by_fkey"
             columns: ["created_by"]
@@ -321,116 +328,129 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "event_categories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       events: {
         Row: {
-          allow_excuses:         boolean | null
-          category_id:           string | null
+          allow_excuses: boolean | null
+          category_id: string | null
           checkin_grace_minutes: number | null
-          checkin_open_minutes:  number | null
-          created_at:            string | null
-          created_by:            string | null
-          description:           string | null
-          end_time:              string | null
-          event_code:            string | null
-          geofence_required:     boolean | null
-          id:                    string
-          is_cancelled:          boolean | null
-          is_deleted:            boolean | null
-          is_mandatory:          boolean | null
-          is_occurrence:         boolean
-          is_public:             boolean
-          location:              string | null
-          location_id:           string | null
-          location_lat:          number | null
-          location_lng:          number | null
-          max_capacity:          number | null
-          meeting_url:           string | null
-          occurrence_index:      number | null
-          occurrences_horizon:   string | null
-          org_id:                string
-          parent_event_id:       string | null
-          points:                number | null
-          qr_checkin:            boolean | null
-          recurrence_rule:       string | null
-          rsvp_required:         boolean | null
-          start_time:            string
-          title:                 string
-          type:                  string
-          updated_at:            string | null
+          checkin_open_minutes: number | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_time: string | null
+          event_code: string | null
+          geofence_radius_m: number | null
+          geofence_required: boolean | null
+          id: string
+          is_cancelled: boolean | null
+          is_deleted: boolean | null
+          is_mandatory: boolean | null
+          is_occurrence: boolean
+          is_org_wide: boolean | null
+          is_public: boolean
+          location: string | null
+          location_id: string | null
+          location_lat: number | null
+          location_lng: number | null
+          max_capacity: number | null
+          meeting_url: string | null
+          occurrence_index: number | null
+          occurrences_horizon: string | null
+          org_id: string
+          parent_event_id: string | null
+          points: number | null
+          qr_checkin: boolean | null
+          recurrence_rule: string | null
+          rsvp_required: boolean | null
+          start_time: string
+          title: string
+          type: string
+          updated_at: string | null
         }
         Insert: {
-          allow_excuses?:         boolean | null
-          category_id?:           string | null
+          allow_excuses?: boolean | null
+          category_id?: string | null
           checkin_grace_minutes?: number | null
-          checkin_open_minutes?:  number | null
-          created_at?:            string | null
-          created_by?:            string | null
-          description?:           string | null
-          end_time?:              string | null
-          event_code?:            string | null
-          geofence_required?:     boolean | null
-          id?:                    string
-          is_cancelled?:          boolean | null
-          is_deleted?:            boolean | null
-          is_mandatory?:          boolean | null
-          is_occurrence?:         boolean
-          is_public?:             boolean
-          location?:              string | null
-          location_id?:           string | null
-          location_lat?:          number | null
-          location_lng?:          number | null
-          max_capacity?:          number | null
-          meeting_url?:           string | null
-          occurrence_index?:      number | null
-          occurrences_horizon?:   string | null
-          org_id:                 string
-          parent_event_id?:       string | null
-          points?:                number | null
-          qr_checkin?:            boolean | null
-          recurrence_rule?:       string | null
-          rsvp_required?:         boolean | null
-          start_time:             string
-          title:                  string
-          type?:                  string
-          updated_at?:            string | null
+          checkin_open_minutes?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          event_code?: string | null
+          geofence_radius_m?: number | null
+          geofence_required?: boolean | null
+          id?: string
+          is_cancelled?: boolean | null
+          is_deleted?: boolean | null
+          is_mandatory?: boolean | null
+          is_occurrence?: boolean
+          is_org_wide?: boolean | null
+          is_public?: boolean
+          location?: string | null
+          location_id?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          max_capacity?: number | null
+          meeting_url?: string | null
+          occurrence_index?: number | null
+          occurrences_horizon?: string | null
+          org_id: string
+          parent_event_id?: string | null
+          points?: number | null
+          qr_checkin?: boolean | null
+          recurrence_rule?: string | null
+          rsvp_required?: boolean | null
+          start_time: string
+          title: string
+          type?: string
+          updated_at?: string | null
         }
         Update: {
-          allow_excuses?:         boolean | null
-          category_id?:           string | null
+          allow_excuses?: boolean | null
+          category_id?: string | null
           checkin_grace_minutes?: number | null
-          checkin_open_minutes?:  number | null
-          created_at?:            string | null
-          created_by?:            string | null
-          description?:           string | null
-          end_time?:              string | null
-          event_code?:            string | null
-          geofence_required?:     boolean | null
-          id?:                    string
-          is_cancelled?:          boolean | null
-          is_deleted?:            boolean | null
-          is_mandatory?:          boolean | null
-          is_occurrence?:         boolean
-          is_public?:             boolean
-          location?:              string | null
-          location_id?:           string | null
-          location_lat?:          number | null
-          location_lng?:          number | null
-          max_capacity?:          number | null
-          meeting_url?:           string | null
-          occurrence_index?:      number | null
-          occurrences_horizon?:   string | null
-          org_id?:                string
-          parent_event_id?:       string | null
-          points?:                number | null
-          qr_checkin?:            boolean | null
-          recurrence_rule?:       string | null
-          rsvp_required?:         boolean | null
-          start_time?:            string
-          title?:                 string
-          type?:                  string
-          updated_at?:            string | null
+          checkin_open_minutes?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_time?: string | null
+          event_code?: string | null
+          geofence_radius_m?: number | null
+          geofence_required?: boolean | null
+          id?: string
+          is_cancelled?: boolean | null
+          is_deleted?: boolean | null
+          is_mandatory?: boolean | null
+          is_occurrence?: boolean
+          is_org_wide?: boolean | null
+          is_public?: boolean
+          location?: string | null
+          location_id?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          max_capacity?: number | null
+          meeting_url?: string | null
+          occurrence_index?: number | null
+          occurrences_horizon?: string | null
+          org_id?: string
+          parent_event_id?: string | null
+          points?: number | null
+          qr_checkin?: boolean | null
+          recurrence_rule?: string | null
+          rsvp_required?: boolean | null
+          start_time?: string
+          title?: string
+          type?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -470,52 +490,132 @@ export type Database = {
           },
         ]
       }
+      excuse_audit_log: {
+        Row: {
+          changed_at: string | null
+          changed_by: string
+          excuse_id: string
+          id: string
+          new_status: string | null
+          note: string | null
+          previous_status: string | null
+        }
+        Insert: {
+          changed_at?: string | null
+          changed_by: string
+          excuse_id: string
+          id?: string
+          new_status?: string | null
+          note?: string | null
+          previous_status?: string | null
+        }
+        Update: {
+          changed_at?: string | null
+          changed_by?: string
+          excuse_id?: string
+          id?: string
+          new_status?: string | null
+          note?: string | null
+          previous_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "excuse_audit_log_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "excuse_audit_log_excuse_id_fkey"
+            columns: ["excuse_id"]
+            isOneToOne: false
+            referencedRelation: "excuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       excuses: {
         Row: {
           admin_notes: string | null
           created_at: string | null
+          escalated_at: string | null
+          escalated_to: string | null
+          escalation_reason: string | null
           event_id: string
           id: string
+          membership_id: string | null
           org_id: string
           reason: string
           reviewed_at: string | null
           reviewed_by: string | null
+          reviewer_note: string | null
           status: string
+          submitted_at: string | null
+          supporting_docs: string[] | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
           admin_notes?: string | null
           created_at?: string | null
+          escalated_at?: string | null
+          escalated_to?: string | null
+          escalation_reason?: string | null
           event_id: string
           id?: string
+          membership_id?: string | null
           org_id: string
           reason: string
           reviewed_at?: string | null
           reviewed_by?: string | null
+          reviewer_note?: string | null
           status?: string
+          submitted_at?: string | null
+          supporting_docs?: string[] | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
           admin_notes?: string | null
           created_at?: string | null
+          escalated_at?: string | null
+          escalated_to?: string | null
+          escalation_reason?: string | null
           event_id?: string
           id?: string
+          membership_id?: string | null
           org_id?: string
           reason?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
+          reviewer_note?: string | null
           status?: string
+          submitted_at?: string | null
+          supporting_docs?: string[] | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "excuses_escalated_to_fkey"
+            columns: ["escalated_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "excuses_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "excuses_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
           {
@@ -537,6 +637,63 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geofence_events: {
+        Row: {
+          accuracy_m: number | null
+          created_at: string | null
+          event_id: string
+          id: string
+          lat: number | null
+          lng: number | null
+          membership_id: string
+          processed: boolean | null
+          processed_at: string | null
+          trigger_type: string
+          triggered_at: string | null
+        }
+        Insert: {
+          accuracy_m?: number | null
+          created_at?: string | null
+          event_id: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          membership_id: string
+          processed?: boolean | null
+          processed_at?: string | null
+          trigger_type: string
+          triggered_at?: string | null
+        }
+        Update: {
+          accuracy_m?: number | null
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          membership_id?: string
+          processed?: boolean | null
+          processed_at?: string | null
+          trigger_type?: string
+          triggered_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geofence_events_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "geofence_events_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
             referencedColumns: ["id"]
           },
         ]
@@ -747,6 +904,63 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          body: string
+          created_at: string
+          data: Json | null
+          id: string
+          is_read: boolean
+          org_id: string | null
+          read_at: string | null
+          sent_via: string[] | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          data?: Json | null
+          id?: string
+          is_read?: boolean
+          org_id?: string | null
+          read_at?: string | null
+          sent_via?: string[] | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          data?: Json | null
+          id?: string
+          is_read?: boolean
+          org_id?: string | null
+          read_at?: string | null
+          sent_via?: string[] | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_branding_history: {
         Row: {
           changed_at: string | null
@@ -782,6 +996,63 @@ export type Database = {
           },
           {
             foreignKeyName: "org_branding_history_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_locations: {
+        Row: {
+          address: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_deleted: boolean | null
+          latitude: number | null
+          longitude: number | null
+          name: string
+          org_id: string
+          radius_meters: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          org_id: string
+          radius_meters?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          org_id?: string
+          radius_meters?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_locations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_locations_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1086,6 +1357,223 @@ export type Database = {
           },
         ]
       }
+      status_reports: {
+        Row: {
+          created_at: string | null
+          file_url: string | null
+          filters: Json | null
+          generated_at: string | null
+          generated_by: string
+          id: string
+          org_id: string
+          report_type: string
+          term_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          file_url?: string | null
+          filters?: Json | null
+          generated_at?: string | null
+          generated_by: string
+          id?: string
+          org_id: string
+          report_type: string
+          term_id: string
+        }
+        Update: {
+          created_at?: string | null
+          file_url?: string | null
+          filters?: Json | null
+          generated_at?: string | null
+          generated_by?: string
+          id?: string
+          org_id?: string
+          report_type?: string
+          term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_reports_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_reports_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_reports_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "academic_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_requirements: {
+        Row: {
+          applies_to: string | null
+          category_id: string | null
+          consequence: string | null
+          created_at: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          is_deleted: boolean | null
+          is_mandatory: boolean | null
+          min_events: number | null
+          min_points: number
+          name: string
+          org_id: string
+          term_id: string
+          updated_at: string | null
+          warning_threshold: number | null
+        }
+        Insert: {
+          applies_to?: string | null
+          category_id?: string | null
+          consequence?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          is_mandatory?: boolean | null
+          min_events?: number | null
+          min_points?: number
+          name: string
+          org_id: string
+          term_id: string
+          updated_at?: string | null
+          warning_threshold?: number | null
+        }
+        Update: {
+          applies_to?: string | null
+          category_id?: string | null
+          consequence?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          is_mandatory?: boolean | null
+          min_events?: number | null
+          min_points?: number
+          name?: string
+          org_id?: string
+          term_id?: string
+          updated_at?: string | null
+          warning_threshold?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_requirements_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "event_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_requirements_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_requirements_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "academic_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_snapshots: {
+        Row: {
+          created_at: string | null
+          events_attended: number | null
+          events_required: number | null
+          id: string
+          is_at_risk: boolean | null
+          is_compliant: boolean | null
+          last_calculated_at: string | null
+          membership_id: string
+          org_id: string
+          points_earned: number | null
+          points_required: number
+          requirement_id: string
+          term_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          events_attended?: number | null
+          events_required?: number | null
+          id?: string
+          is_at_risk?: boolean | null
+          is_compliant?: boolean | null
+          last_calculated_at?: string | null
+          membership_id: string
+          org_id: string
+          points_earned?: number | null
+          points_required: number
+          requirement_id: string
+          term_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          events_attended?: number | null
+          events_required?: number | null
+          id?: string
+          is_at_risk?: boolean | null
+          is_compliant?: boolean | null
+          last_calculated_at?: string | null
+          membership_id?: string
+          org_id?: string
+          points_earned?: number | null
+          points_required?: number
+          requirement_id?: string
+          term_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_snapshots_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_snapshots_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_snapshots_requirement_id_fkey"
+            columns: ["requirement_id"]
+            isOneToOne: false
+            referencedRelation: "status_requirements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_snapshots_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "academic_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       superuser_audit_log: {
         Row: {
           action: string
@@ -1139,21 +1627,42 @@ export type Database = {
     }
     Functions: {
       clear_api_request_log: {
-        Args: { older_than_hours?: number | null }
+        Args: { older_than_hours?: number }
         Returns: number
       }
       expand_recurring_event: {
-        Args: { p_event_id: string; batch_size?: number }
+        Args: { batch_size?: number; p_event_id: string }
         Returns: number
       }
       generate_event_code: {
-        Args: { p_org_id: string; p_type: string; p_start: string }
+        Args: { p_org_id: string; p_start: string; p_type: string }
         Returns: string
       }
+      insert_notification: {
+        Args: {
+          p_body: string
+          p_data?: Json
+          p_org_id: string
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      is_org_admin: { Args: { check_org_id: string }; Returns: boolean }
       is_org_member: { Args: { check_org_id: string }; Returns: boolean }
+      is_parent_org_admin: { Args: { check_org_id: string }; Returns: boolean }
       is_superuser: { Args: never; Returns: boolean }
+      nth_weekday_of_month: {
+        Args: { p_dow: string; p_month: number; p_nth: number; p_year: number }
+        Returns: string
+      }
+      recalculate_status_snapshot: {
+        Args: { p_membership_id: string; p_org_id: string }
+        Returns: undefined
+      }
       topup_recurring_events: {
-        Args: { p_org_id: string; lookahead_days?: number }
+        Args: { lookahead_days?: number; p_org_id: string }
         Returns: number
       }
     }
@@ -1288,3 +1797,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

@@ -161,7 +161,7 @@ export async function registerGeofenceForEvent(region: GeofenceRegion): Promise<
 
   try {
     // Fetch current regions and avoid duplicates
-    const current = await Location.getGeofencingTasksAsync(GEOFENCE_TASK).catch(() => []);
+    const current = await (Location as any).getGeofencingTasksAsync(GEOFENCE_TASK).catch(() => []);
     const alreadyRegistered = current.some((r: Location.LocationRegion) => r.identifier === region.eventId);
     if (alreadyRegistered) {
       console.log('[Geofence] Region already registered for event', region.eventId);
@@ -199,7 +199,7 @@ export async function unregisterGeofenceForEvent(eventId: string): Promise<void>
     if (!isRunning) return;
 
     // Re-register with all regions EXCEPT the one being removed
-    const current = await Location.getGeofencingTasksAsync(GEOFENCE_TASK).catch(() => [] as Location.LocationRegion[]);
+    const current = await (Location as any).getGeofencingTasksAsync(GEOFENCE_TASK).catch(() => [] as Location.LocationRegion[]);
     const remaining = (current as Location.LocationRegion[]).filter(
       (r) => r.identifier !== eventId
     );

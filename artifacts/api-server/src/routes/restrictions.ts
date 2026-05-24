@@ -64,7 +64,9 @@ const router = Router({ mergeParams: true });
 
 // ── GET /orgs/:orgId/members/:membershipId/restrictions ──────────────────────
 router.get('/orgs/:orgId/members/:membershipId/restrictions', requireAuth, async (req, res) => {
-  const { orgId, membershipId } = req.params;
+  let { orgId, membershipId } = req.params;
+  if (Array.isArray(orgId)) orgId = orgId[0];
+  if (Array.isArray(membershipId)) membershipId = membershipId[0];
 
   if (!(await isOfficerOrAdmin(req.user.id, orgId))) {
     res.status(403).json({ error: 'Forbidden' });
@@ -82,7 +84,9 @@ router.get('/orgs/:orgId/members/:membershipId/restrictions', requireAuth, async
 
 // ── POST /orgs/:orgId/members/:membershipId/restrictions ─────────────────────
 router.post('/orgs/:orgId/members/:membershipId/restrictions', requireAuth, async (req, res) => {
-  const { orgId, membershipId } = req.params;
+  let { orgId, membershipId } = req.params;
+  if (Array.isArray(orgId)) orgId = orgId[0];
+  if (Array.isArray(membershipId)) membershipId = membershipId[0];
 
   if (!(await isOfficerOrAdmin(req.user.id, orgId))) {
     res.status(403).json({ error: 'Forbidden' });
@@ -123,7 +127,8 @@ router.post('/orgs/:orgId/members/:membershipId/restrictions', requireAuth, asyn
 
 // ── PATCH /restrictions/:restrictionId/lift ───────────────────────────────────
 router.patch('/restrictions/:restrictionId/lift', requireAuth, async (req, res) => {
-  const { restrictionId } = req.params;
+  let { restrictionId } = req.params;
+  if (Array.isArray(restrictionId)) restrictionId = restrictionId[0];
   const { liftReason } = req.body as { liftReason?: string };
 
   const [existing] = await db
@@ -174,7 +179,9 @@ router.patch('/restrictions/:restrictionId/lift', requireAuth, async (req, res) 
 
 // ── GET /orgs/:orgId/members/:membershipId/dues ───────────────────────────────
 router.get('/orgs/:orgId/members/:membershipId/dues', requireAuth, async (req, res) => {
-  const { orgId, membershipId } = req.params;
+  let { orgId, membershipId } = req.params;
+  if (Array.isArray(orgId)) orgId = orgId[0];
+  if (Array.isArray(membershipId)) membershipId = membershipId[0];
 
   // Officers OR the member themselves can view
   const [callerMembership] = await db
@@ -200,7 +207,8 @@ router.get('/orgs/:orgId/members/:membershipId/dues', requireAuth, async (req, r
 
 // ── POST /orgs/:orgId/dues/balances ───────────────────────────────────────────
 router.post('/orgs/:orgId/dues/balances', requireAuth, async (req, res) => {
-  const { orgId } = req.params;
+  let { orgId } = req.params;
+  if (Array.isArray(orgId)) orgId = orgId[0];
 
   if (!(await isOfficerOrAdmin(req.user.id, orgId))) {
     res.status(403).json({ error: 'Forbidden' });
@@ -216,7 +224,8 @@ router.post('/orgs/:orgId/dues/balances', requireAuth, async (req, res) => {
 
 // ── POST /dues/:balanceId/transactions ────────────────────────────────────────
 router.post('/dues/:balanceId/transactions', requireAuth, async (req, res) => {
-  const { balanceId } = req.params;
+  let { balanceId } = req.params;
+  if (Array.isArray(balanceId)) balanceId = balanceId[0];
 
   const [balance] = await db
     .select()
@@ -272,7 +281,8 @@ router.post('/dues/:balanceId/transactions', requireAuth, async (req, res) => {
 
 // ── GET /orgs/:orgId/dues/overdue ─────────────────────────────────────────────
 router.get('/orgs/:orgId/dues/overdue', requireAuth, async (req, res) => {
-  const { orgId } = req.params;
+  let { orgId } = req.params;
+  if (Array.isArray(orgId)) orgId = orgId[0];
 
   if (!(await isOfficerOrAdmin(req.user.id, orgId))) {
     res.status(403).json({ error: 'Forbidden' });
