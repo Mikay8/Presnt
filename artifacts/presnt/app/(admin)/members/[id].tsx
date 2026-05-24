@@ -286,19 +286,19 @@ export default function AdminMemberDetailScreen() {
 
       supabase.from('org_roles').select('id, name, color').eq('org_id', orgId).order('name'),
 
-      supabase
+      (supabase as any)
         .from('member_restrictions')
         .select('id, restriction_type, reason, internal_note, is_active, starts_at, ends_at, lifted_at, lift_reason')
         .eq('membership_id', membershipId)
         .order('created_at', { ascending: false }),
 
-      supabase
+      (supabase as any)
         .from('dues_balances')
         .select('id, amount_due, amount_paid, amount_waived, status, due_date')
         .eq('membership_id', membershipId)
         .order('created_at', { ascending: false }),
 
-      supabase.from('attendance_records').select('status').eq('membership_id', membershipId),
+      (supabase as any).from('attendance_records').select('status').eq('membership_id', membershipId),
     ]);
 
     // Normalize array joins

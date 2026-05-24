@@ -125,13 +125,13 @@ export default function AccountStandingScreen() {
     if (!membershipId || !orgId) { setLoading(false); return; }
 
     const [balRes, resRes] = await Promise.all([
-      supabase
+      (supabase as any)
         .from('dues_balances')
         .select('id, amount_due, amount_paid, amount_waived, status, due_date, notes')
         .eq('membership_id', membershipId)
         .order('created_at', { ascending: false }),
 
-      supabase
+      (supabase as any)
         .from('member_restrictions')
         .select('id, restriction_type, reason, starts_at, ends_at, auto_lift_condition, blocks_event_attendance, blocks_event_rsvp, blocks_excuse_submission, blocks_voting, blocks_calendar_view')
         .eq('membership_id', membershipId)

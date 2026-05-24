@@ -86,10 +86,10 @@ export async function loggedQuery<T>(opts: LoggedQueryOptions<T>) {
     status:        isError ? 'error' : 'ok',
     status_code:   statusCode,
     duration_ms:   duration,
-    request_body:  opts.requestBody ?? null,
-    response_meta: isError
+    request_body:  (opts.requestBody ?? null) as any,
+    response_meta: (isError
       ? { error_code: result.error?.code, message: result.error?.message }
-      : { row_count: Array.isArray(result.data) ? result.data.length : (result.data ? 1 : 0) },
+      : { row_count: Array.isArray(result.data) ? result.data.length : (result.data ? 1 : 0) }) as any,
     error_message: result.error?.message ?? null,
   }).then(() => { /* silently drop */ });
 
@@ -119,8 +119,8 @@ export function logEvent(opts: {
     status:        opts.status      ?? 'ok',
     status_code:   opts.statusCode  ?? (opts.status === 'error' ? 500 : 200),
     duration_ms:   opts.durationMs  ?? null,
-    request_body:  opts.requestBody ?? null,
-    response_meta: opts.responseMeta ?? null,
+    request_body:  (opts.requestBody ?? null) as any,
+    response_meta: (opts.responseMeta ?? null) as any,
     error_message: opts.errorMessage ?? null,
   }).then(() => { /* silently drop */ });
 }

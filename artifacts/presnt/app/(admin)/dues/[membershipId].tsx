@@ -126,7 +126,7 @@ function RecordTxModal({
     setSaving(true);
 
     const isCredit = txType === 'payment' || txType === 'waiver';
-    const { error } = await supabase.from('dues_transactions').insert({
+    const { error } = await (supabase as any).from('dues_transactions').insert({
       dues_balance_id:  balanceId,
       membership_id:    membershipId,
       org_id:           orgId,
@@ -146,13 +146,13 @@ function RecordTxModal({
     }
 
     // Update balance amounts
-    const { data: bal } = await supabase.from('dues_balances').select('amount_due, amount_paid, amount_waived').eq('id', balanceId).single();
+    const { data: bal } = await (supabase as any).from('dues_balances').select('amount_due, amount_paid, amount_waived').eq('id', balanceId).single();
     if (bal) {
       const due    = parseFloat(bal.amount_due ?? '0');
       const paid   = parseFloat(bal.amount_paid ?? '0') + (isCredit && txType === 'payment' ? amt : 0);
       const waived = parseFloat(bal.amount_waived ?? '0') + (txType === 'waiver' ? amt : 0);
       const newStatus = (paid + waived >= due) ? 'paid' : (paid + waived > 0) ? 'partial' : 'overdue';
-      await supabase.from('dues_balances').update({
+      await (supabase as any).from('dues_balances').update({
         amount_paid:   txType === 'payment' ? String(paid) : undefined,
         amount_waived: txType === 'waiver'  ? String(waived) : undefined,
         status:        newStatus,
@@ -310,7 +310,7 @@ export default function MemberDuesScreen() {
         .select('id, dues_hold, dues_status, profiles!user_id(first_name, last_name, email)')
         .eq('id', membershipId)
         .single(),
-      supabase
+      (supabase as any)
         .from('dues_balances')
         .select('id, amount_due, amount_paid, amount_waived, status, due_date, notes, term_id')
         .eq('membership_id', membershipId)
@@ -322,7 +322,7 @@ export default function MemberDuesScreen() {
     setBalances(bals);
 
     if (bals.length > 0) {
-      const txRes = await supabase
+      const txRes = await (supabase as any)
         .from('dues_transactions')
         .select('id, type, amount, direction, description, payment_method, transaction_date, dues_balance_id')
         .in('dues_balance_id', bals.map(b => b.id))
@@ -375,7 +375,7 @@ export default function MemberDuesScreen() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View>
             <Text size="xs" color={c.textSubtle}>Total Outstanding</Text>
-            <Text size="xxxl" weight="bold" color={totalBalance > 0 ? '#EF4444' : '#22C55E'}>
+            <Text size="xxl" weight="bold" color={totalBalance > 0 ? '#EF4444' : '#22C55E'}>
               ${totalBalance.toFixed(2)}
             </Text>
           </View>

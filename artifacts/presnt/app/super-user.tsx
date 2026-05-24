@@ -57,7 +57,7 @@ export default function AdminLogin() {
         .single();
 
       if (profile?.is_superuser) {
-        router.replace('/(superuser)/');
+        router.replace('/(superuser)');
       } else {
         setLoading(false);
       }
@@ -102,7 +102,7 @@ export default function AdminLogin() {
     }
 
     // 3 — All good — go to dashboard
-    router.replace('/(superuser)/');
+    router.replace('/(superuser)');
   }
 
   // ── Initial session check spinner ──────────────────────────────────────────

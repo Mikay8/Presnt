@@ -369,7 +369,7 @@ function UserViewTool() {
                   />
                 </View>
                 <View style={{ maxHeight: 180 }}>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollEnabled={false}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
                     {filteredChapters.length === 0 ? (
                       <Text style={{ color: su.textSubtle, fontSize: 13, textAlign: 'center', paddingVertical: 12 }}>No chapters match</Text>
                     ) : (

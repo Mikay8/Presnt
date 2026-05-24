@@ -301,7 +301,7 @@ export default function AdminDuesScreen() {
           <View style={[styles.tableHeader, { borderBottomColor: c.border, backgroundColor: c.surfaceAlt }]}>
             {['MEMBER', 'BALANCE', 'LAST PAYMENT', 'STATUS'].map((col) => (
               <Text key={col} size="xs" weight="medium" color={c.textMuted}
-                style={[styles.colHeader, col === 'MEMBER' && { flex: 1 }]}>
+                style={col === 'MEMBER' ? [styles.colHeader, { flex: 1 }] : styles.colHeader}>
                 {col}
               </Text>
             ))}

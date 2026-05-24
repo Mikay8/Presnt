@@ -16,9 +16,10 @@ export const defaultTheme = {
   },
   typography: {
     fontFamily: {
-      regular: 'SpaceGrotesk_400Regular',
-      medium:  'SpaceGrotesk_500Medium',
-      bold:    'SpaceGrotesk_600SemiBold',
+      regular:  'SpaceGrotesk_400Regular',
+      medium:   'SpaceGrotesk_500Medium',
+      semibold: 'SpaceGrotesk_600SemiBold',
+      bold:     'SpaceGrotesk_600SemiBold',
     },
     size: {
       xs:  11,

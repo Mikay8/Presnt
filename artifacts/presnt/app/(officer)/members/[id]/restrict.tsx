@@ -159,7 +159,7 @@ export default function ApplyRestrictionScreen() {
   const { can }                    = usePermissions();
   const c                          = theme.colors;
 
-  const orgId     = userView?.org.id ?? membership?.org_id ?? '';
+  const orgId     = userView?.org.id ?? '';
   const viewPerms = userView?.role === 'officer' ? userView.permissions : null;
   const canManage = viewPerms ? viewPerms.includes(PERMISSIONS.MANAGE_MEMBERS) : can(PERMISSIONS.MANAGE_MEMBERS as any);
 
@@ -226,7 +226,7 @@ export default function ApplyRestrictionScreen() {
       is_active:               true,
     };
 
-    const { error } = await supabase.from('member_restrictions').insert(payload);
+    const { error } = await (supabase as any).from('member_restrictions').insert(payload);
 
     if (error) {
       setSaving(false);
@@ -245,7 +245,7 @@ export default function ApplyRestrictionScreen() {
       updates.dues_status     = 'overdue';
     }
     if (Object.keys(updates).length > 0) {
-      await supabase.from('memberships').update(updates).eq('id', membershipId);
+      await supabase.from('memberships').update(updates as any).eq('id', membershipId);
     }
 
     setSaving(false);
