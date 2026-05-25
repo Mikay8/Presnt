@@ -3,7 +3,7 @@
  *
  * Reachable via:
  *   - Deep link:  presnt://invite?code=TEST-7114
- *   - Web URL:    https://presnt.app/(auth)/invite?code=TEST-7114
+ *   - Web URL:    https://www.presnt.link/(auth)/invite?code=TEST-7114
  *
  * Three scenarios:
  *   1. Not logged in  → show org welcome + register form (name/email/pw) that

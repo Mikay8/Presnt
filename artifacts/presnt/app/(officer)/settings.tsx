@@ -110,7 +110,7 @@ export default function OfficerSettingsScreen() {
   async function handleShareLink() {
     const code = organization?.join_code;
     if (!code) return;
-    const webLink = `https://presnt.app/invite?code=${encodeURIComponent(code)}`;
+    const webLink = `https://www.presnt.link/invite?code=${encodeURIComponent(code)}`;
     const orgName = organization?.name ?? 'our chapter';
     const message = `Join ${orgName} on Presnt!\n\nTap the link to create your account and join instantly:\n${webLink}\n\nOr enter code ${code} manually in the app.`;
     try {

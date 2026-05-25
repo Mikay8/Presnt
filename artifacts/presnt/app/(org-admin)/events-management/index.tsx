@@ -629,7 +629,7 @@ function EventForm({
           {codeError ? <Text size="xs" color="#EF4444" style={{ marginBottom: 4 }}>{codeError}</Text> : null}
           {form.event_code ? (
             form.is_public
-              ? <Text size="xs" color={c.textSubtle} style={{ fontFamily: 'monospace' }}>presnt.app/c/{orgSlug}/events/{form.event_code}</Text>
+              ? <Text size="xs" color={c.textSubtle} style={{ fontFamily: 'monospace' }}>presnt.link/c/{orgSlug}/events/{form.event_code}</Text>
               : <Text size="xs" color={c.textSubtle}>Internal URL · enable Public to share externally</Text>
           ) : (
             <Text size="xs" color={c.textSubtle}>Used as the in-app URL slug. Tap ↺ to generate.</Text>

@@ -802,7 +802,7 @@ function EventForm({
           {form.event_code ? (
             form.is_public ? (
               <Text size="xs" color={c.textSubtle} style={{ fontFamily: 'monospace' }}>
-                presnt.app/c/{orgSlug}/events/{form.event_code}
+                presnt.link/c/{orgSlug}/events/{form.event_code}
               </Text>
             ) : (
               <Text size="xs" color={c.textSubtle}>
