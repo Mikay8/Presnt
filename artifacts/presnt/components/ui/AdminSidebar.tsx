@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { useDemoStore } from '@/stores/demoStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useUserViewStore } from '@/stores/userViewStore';
 import { Text } from './Text';
@@ -42,24 +43,39 @@ const NAV_ITEMS: { label: string; path: string; icon: IconName }[] = [
   { label: 'Settings',      path: '/(admin)/settings',         icon: 'settings-outline'         },
 ];
 
+const DEMO_NAV_ITEMS: { label: string; path: string; icon: IconName }[] = [
+  { label: 'Dashboard',     path: '/(demo)/admin',                   icon: 'grid-outline'              },
+  { label: 'Events',        path: '/(demo)/admin/events-management', icon: 'list-outline'              },
+  { label: 'Calendar',      path: '/(demo)/admin/calendar',          icon: 'calendar-outline'          },
+  { label: 'Members',       path: '/(demo)/admin/members',           icon: 'people-outline'            },
+  { label: 'Announcements', path: '/(demo)/admin/announcements',     icon: 'megaphone-outline'         },
+  { label: 'Dues',          path: '/(demo)/admin/dues',              icon: 'cash-outline'              },
+  { label: 'Status',        path: '/(demo)/admin/status',            icon: 'checkmark-circle-outline'  },
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AdminSidebar() {
+export function AdminSidebar({ demoMode = false }: { demoMode?: boolean } = {}) {
   const insets    = useSafeAreaInsets();
   const pathname  = usePathname();
   const { theme } = useThemeStore();
   const { organization, membership, profile } = useAuthStore();
   const userView  = useUserViewStore((s) => s.session);
+  const { stopDemo } = useDemoStore();
   const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
     setSigningOut(true);
     try {
+      if (demoMode) stopDemo();
       await supabase.auth.signOut();
+      if (demoMode) router.replace('/(auth)/login' as any);
     } finally {
       setSigningOut(false);
     }
   }
+
+  const navItems = demoMode ? DEMO_NAV_ITEMS : NAV_ITEMS;
 
   const orgName    = organization?.name        ?? 'My Chapter';
   const institution = organization?.institution ?? '';
@@ -75,7 +91,12 @@ export function AdminSidebar() {
 
   // Active if the pathname starts with the item's segment
   const isActive = (path: string) => {
-    const segment = path.replace('/(admin)/', '');
+    const prefix  = demoMode ? '/(demo)/admin' : '/(admin)';
+    const segment = path.replace(prefix + '/', '').replace(prefix, '');
+    if (!segment) {
+      // Root dashboard — exact match only
+      return pathname === '/admin' || pathname === path;
+    }
     return pathname === `/${segment}` || pathname.startsWith(`/${segment}/`);
   };
 
@@ -101,7 +122,7 @@ export function AdminSidebar() {
 
       {/* ── Nav items ─────────────────────────────────────────────────── */}
       <View style={styles.nav}>
-        {NAV_ITEMS.map(({ label, path, icon }) => {
+        {navItems.map(({ label, path, icon }) => {
           const active = isActive(path);
           return (
             <Pressable
@@ -143,12 +164,12 @@ export function AdminSidebar() {
           ? <ActivityIndicator size="small" color={MUTED_TEXT} />
           : <Ionicons name="log-out-outline" size={16} color={MUTED_TEXT} />
         }
-        <Text size="sm" color={MUTED_TEXT}>Sign out</Text>
+        <Text size="sm" color={MUTED_TEXT}>{demoMode ? 'Exit Demo' : 'Sign out'}</Text>
       </Pressable>
 
       {/* ── Org footer ───────────────────────────────────────────────── */}
       <Pressable
-        onPress={() => router.push('/(admin)/profile')}
+        onPress={() => router.push((demoMode ? '/(demo)/admin/profile' : '/(admin)/profile') as any)}
         style={({ pressed }) => [
           styles.orgRow,
           { borderTopColor: DIVIDER, opacity: pressed ? 0.7 : 1 },

@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DemoBanner } from '@/components/DemoBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DOMAIN, logEvent } from '@/lib/apiLogger';
 import {
@@ -28,6 +29,7 @@ import '@/lib/geofence';
 import { requestGeofencePermissions, stopAllGeofences } from '@/lib/geofence';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { useDemoStore } from '@/stores/demoStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useUserViewStore } from '@/stores/userViewStore';
 
@@ -123,6 +125,7 @@ function UserViewBanner() {
 function RootLayoutNav() {
   const { session, profile, membership, isLoading } = useAuthStore();
   const userView = useUserViewStore((s) => s.session);
+  const isDemo   = useDemoStore((s) => s.isActive);
   const pathname = usePathname();
 
   // Pathname-based route group detection — reliable on every render.
@@ -135,11 +138,19 @@ function RootLayoutNav() {
   const AUTH_WEB_PATHS = [
     '/login', '/register', '/onboarding',
     '/create-org', '/create-chapter', '/join-chapter', '/invite',
+    '/demo',
   ];
   const inAuth =
     pathname === '/' ||
     pathname.startsWith('/(auth)') ||
     AUTH_WEB_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
+
+  // Demo routes — never redirect away from them
+  const inDemo =
+    isDemo ||
+    pathname.startsWith('/(demo)') ||
+    pathname.startsWith('/demo-admin') ||
+    pathname.startsWith('/demo-member');
 
   // Superuser routes: native group prefix OR web-stripped paths.
   // On web, /(superuser)/support → /support, /(superuser)/orgs → /orgs, etc.
@@ -168,6 +179,9 @@ function RootLayoutNav() {
 
   // ── User View mode ──────────────────────────────────────────────────────────
   if (userView) return null;
+
+  // ── Demo mode — never redirect away from demo routes ────────────────────────
+  if (inDemo) return null;
 
   // ── No session → always go to login, from ANY route ─────────────────────────
   // This must run before the portal-bypass checks below so that signing out
@@ -425,6 +439,7 @@ export default function RootLayout() {
             <KeyboardProvider>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="(auth)"       />
+                <Stack.Screen name="(demo)"       />
                 <Stack.Screen name="(member)"     />
                 <Stack.Screen name="(officer)"    />
                 <Stack.Screen name="(admin)"      />
@@ -436,6 +451,7 @@ export default function RootLayout() {
               </Stack>
               <RootLayoutNav />
               <UserViewBanner />
+              <DemoBanner />
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
