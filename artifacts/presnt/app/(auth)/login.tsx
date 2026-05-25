@@ -144,6 +144,15 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </Link>
       </View>
+
+      <View style={styles.demoRow}>
+        <Text size="sm" color={theme.colors.textMuted}>Want to explore first? </Text>
+        <Link href="/(auth)/demo" asChild>
+          <TouchableOpacity>
+            <Text size="sm" color={theme.colors.primary} weight="medium">Try a demo</Text>
+          </TouchableOpacity>
+        </Link>
+      </View>
     </View>
   );
 
@@ -211,5 +220,6 @@ const styles = StyleSheet.create({
   cta:             { marginTop: 4 },
 
   footer:          { flexDirection: 'row', justifyContent: 'center', marginTop: 28 },
+  demoRow:         { flexDirection: 'row', justifyContent: 'center', marginTop: 12 },
   unverifiedBox:   { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 10, padding: 12, alignItems: 'flex-start' },
 });
