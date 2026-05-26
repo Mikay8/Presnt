@@ -12,7 +12,6 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,7 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Text } from '@/components/ui';
+import { Button, Card, Text, useAlert } from '@/components/ui';
 import { DateRangePickerModal, formatDateRange, type DateRange } from '@/lib/pickers';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -136,6 +135,7 @@ export default function AdminDateTermsScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
+  const { showAlert, confirm } = useAlert();
   const { membership } = useAuthStore();
   const orgId = membership?.org_id ?? '';
 
@@ -159,7 +159,7 @@ export default function AdminDateTermsScreen() {
   useEffect(() => { load(); }, [load]);
 
   async function handleSave(name: string, range: DateRange) {
-    if (!name.trim()) { Alert.alert('Required', 'Term name is required.'); return; }
+    if (!name.trim()) { showAlert('Required', 'Term name is required.'); return; }
     setSaving(true);
     const start_date = toDateStr(range.start);
     const end_date   = toDateStr(range.end);
@@ -169,14 +169,14 @@ export default function AdminDateTermsScreen() {
         .from('academic_terms')
         .update({ name: name.trim(), start_date, end_date, updated_at: new Date().toISOString() })
         .eq('id', editing.id);
-      if (error) { Alert.alert('Error', error.message); setSaving(false); return; }
+      if (error) { showAlert('Error', error.message); setSaving(false); return; }
     } else {
       // Auto-set active if this is the first term
       const isFirst = terms.length === 0;
       const { error } = await supabase
         .from('academic_terms')
         .insert({ org_id: orgId, name: name.trim(), start_date, end_date, is_active: isFirst });
-      if (error) { Alert.alert('Error', error.message); setSaving(false); return; }
+      if (error) { showAlert('Error', error.message); setSaving(false); return; }
     }
     setSaving(false);
     setShowForm(false);
@@ -185,17 +185,16 @@ export default function AdminDateTermsScreen() {
   }
 
   async function handleSetActive(term: Term) {
-    Alert.alert('Set active term?', `"${term.name}" will become the active term. Compliance data is scoped to it.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Set active',
-        onPress: async () => {
-          await supabase.from('academic_terms').update({ is_active: false }).eq('org_id', orgId);
-          await supabase.from('academic_terms').update({ is_active: true }).eq('id', term.id);
-          load();
-        },
+    confirm(
+      'Set active term?',
+      `"${term.name}" will become the active term. Compliance data is scoped to it.`,
+      async () => {
+        await supabase.from('academic_terms').update({ is_active: false }).eq('org_id', orgId);
+        await supabase.from('academic_terms').update({ is_active: true }).eq('id', term.id);
+        load();
       },
-    ]);
+      { confirmLabel: 'Set active' }
+    );
   }
 
   // Default range for new term form

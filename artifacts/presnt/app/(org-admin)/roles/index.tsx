@@ -11,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -19,11 +18,11 @@ import {
   StyleSheet,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Text } from '@/components/ui';
+import { Button, Card, Text, useAlert } from '@/components/ui';
 import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { ALL_PERMISSIONS, ROLE_COLORS, type Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
@@ -40,8 +39,8 @@ const ORG_ADMIN_BLUE = '#3B82F6';
 function RoleCard({
   role,
   onEdit,
-  onDelete,
-}: {
+  onDelete
+} : {
   role: OrgRole;
   onEdit: (r: OrgRole) => void;
   onDelete: (r: OrgRole) => void;
@@ -97,8 +96,8 @@ function RoleModal({
   initial,
   onClose,
   onSave,
-  saving,
-}: {
+  saving
+} : {
   visible: boolean;
   initial: Partial<OrgRole> | null;
   onClose: () => void;
@@ -250,6 +249,7 @@ export default function OrgAdminRolesScreen() {
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
   const { organization, profile } = useAuthStore();
+  const { confirm } = useAlert();
 
   const [roles, setRoles]        = useState<OrgRole[]>([]);
   const [loading, setLoading]    = useState(true);
@@ -271,8 +271,8 @@ export default function OrgAdminRolesScreen() {
         .from('org_roles')
         .select('*')
         .eq('org_id', orgId)
-        .order('name'),
-    });
+        .order('name')
+} );
     setRoles(data ?? []);
     setLoading(false);
     setRefresh(false);
@@ -295,8 +295,8 @@ export default function OrgAdminRolesScreen() {
         query: supabase
           .from('org_roles')
           .update({ name, color, permissions, updated_at: new Date().toISOString() })
-          .eq('id', editing.id),
-      });
+          .eq('id', editing.id)
+} );
     } else {
       await loggedQuery({
         domain: DOMAIN.ROLES, method: 'POST', endpoint: 'org_roles',
@@ -304,8 +304,8 @@ export default function OrgAdminRolesScreen() {
         requestBody: { name, color, permissions },
         query: supabase
           .from('org_roles')
-          .insert({ org_id: orgId, name, color, permissions, created_by: userId }),
-      });
+          .insert({ org_id: orgId, name, color, permissions, created_by: userId })
+} );
     }
 
     await load();
@@ -314,25 +314,19 @@ export default function OrgAdminRolesScreen() {
   }
 
   async function handleDelete(role: OrgRole) {
-    Alert.alert(
+    confirm(
       'Delete Role',
       `Delete "${role.name}"? Members assigned this role will be set to plain officer.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await loggedQuery({
-              domain: DOMAIN.ROLES, method: 'DELETE', endpoint: 'org_roles',
-              orgId, userId,
-              requestBody: { id: role.id },
-              query: supabase.from('org_roles').delete().eq('id', role.id),
-            });
-            await load();
-          },
-        },
-      ],
+      async () => {
+        await loggedQuery({
+          domain: DOMAIN.ROLES, method: 'DELETE', endpoint: 'org_roles',
+          orgId, userId,
+          requestBody: { id: role.id },
+          query: supabase.from('org_roles').delete().eq('id', role.id),
+        });
+        await load();
+      },
+      { confirmLabel: 'Delete', destructive: true }
     );
   }
 
@@ -456,8 +450,8 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1, borderRadius: 10,
     paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 15,
-  },
+    fontSize: 15
+} ,
 
   colorRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   colorSwatch: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
@@ -467,5 +461,5 @@ const styles = StyleSheet.create({
   permRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 
-  modalActions: { flexDirection: 'row', gap: 12, marginTop: 24 },
-});
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 24 }
+} );

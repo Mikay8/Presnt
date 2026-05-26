@@ -14,7 +14,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Linking,
   Modal,
@@ -24,11 +23,11 @@ import {
   StyleSheet,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Text } from '@/components/ui';
+import { Text, useAlert } from '@/components/ui';
 import { registerGeofenceForEvent, unregisterGeofenceForEvent } from '@/lib/geofence';
 import { QRCheckinModal } from '@/lib/QRCheckin';
 import { supabase } from '@/lib/supabase';
@@ -52,6 +51,8 @@ type EventDetail = {
   checkin_open_minutes:  number | null;
   checkin_grace_minutes: number | null;
   is_org_wide:   boolean | null;
+  is_public:     boolean | null;
+  event_code:    string | null;
   org_id:        string;
   location_lat:  number | null;
   location_lng:  number | null;
@@ -80,12 +81,26 @@ type Member = {
   profiles: { first_name: string; last_name: string; email: string } | null;
 };
 
+type GuestRow = {
+  id:         string;
+  first_name: string;
+  last_name:  string;
+  email:      string;
+  type:       'rsvp' | 'attendance';
+  created_at: string | null;
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Returns true if the string looks like a UUID v4. */
+function isUuid(s: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-  });
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+} );
 }
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -107,8 +122,8 @@ function openGoogleCalendar(ev: EventDetail) {
     text:     ev.title,
     dates:    `${toCalStamp(start)}/${toCalStamp(end)}`,
     details:  ev.description ?? '',
-    location: ev.location ?? '',
-  });
+    location: ev.location ?? ''
+} );
   Linking.openURL(`https://calendar.google.com/calendar/render?${params.toString()}`);
 }
 
@@ -139,7 +154,7 @@ function downloadIcal(ev: EventDetail) {
   } else {
     const encoded = encodeURIComponent(ics);
     Linking.openURL(`data:text/calendar;charset=utf-8,${encoded}`).catch(() => {
-      Alert.alert('Export failed', 'Could not open the calendar file on this device.');
+      showAlert('Export failed', 'Could not open the calendar file on this device.');
     });
   }
 }
@@ -147,8 +162,8 @@ function downloadIcal(ev: EventDetail) {
 // ─── Add-member modal ─────────────────────────────────────────────────────────
 
 function AddMemberModal({
-  visible, title, members, alreadyAdded, onAdd, onClose,
-}: {
+  visible, title, members, alreadyAdded, onAdd, onClose
+} : {
   visible: boolean; title: string; members: Member[];
   alreadyAdded: Set<string>; onAdd: (m: Member) => Promise<void>; onClose: () => void;
 }) {
@@ -245,8 +260,8 @@ const am = StyleSheet.create({
   searchInput:{ flex: 1, fontSize: 14 },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
   avatar:    { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  addBtn:    { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
-});
+  addBtn:    { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -258,6 +273,7 @@ export default function OrgAdminEventDetailScreen() {
   const c         = theme.colors;
   const { width } = useWindowDimensions();
   const insets    = useSafeAreaInsets();
+  const { showAlert, confirm } = useAlert();
   const isWide    = width >= 800;
   const { organization } = useAuthStore();
   const parentOrgId = organization?.id ?? '';
@@ -265,6 +281,7 @@ export default function OrgAdminEventDetailScreen() {
   const [event,      setEvent]      = useState<EventDetail | null>(null);
   const [rsvps,      setRsvps]      = useState<RsvpRow[]>([]);
   const [attendance, setAttendance] = useState<AttendRow[]>([]);
+  const [guests,     setGuests]     = useState<GuestRow[]>([]);
   const [allMembers, setAllMembers] = useState<Member[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [tab,        setTab]        = useState<TabKey>('registrations');
@@ -276,31 +293,41 @@ export default function OrgAdminEventDetailScreen() {
   const load = useCallback(async () => {
     if (!id || !parentOrgId) { setLoading(false); return; }
 
-    // Load event first so we know which org owns it
-    const evRes = await supabase
-      .from('events')
-      .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide, org_id, location_lat, location_lng, geofence_radius_m, geofence_required')
-      .eq('id', id)
-      .single();
+    // Load event first so we know which org owns it (support UUID or event_code slug)
+    const evQuery = isUuid(id)
+      ? supabase
+          .from('events')
+          .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide, is_public, event_code, org_id, location_lat, location_lng, geofence_radius_m, geofence_required')
+          .eq('id', id)
+          .single()
+      : supabase
+          .from('events')
+          .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide, is_public, event_code, org_id, location_lat, location_lng, geofence_radius_m, geofence_required')
+          .eq('event_code', id)
+          .eq('is_deleted', false)
+          .single();
+
+    const evRes = await evQuery;
 
     const ev = evRes.data as EventDetail | null;
     if (ev) setEvent(ev);
 
-    // Use the event's actual org_id for RSVP / attendance queries
+    // Use the event's actual UUID and org_id for RSVP / attendance queries
+    const eventUuid  = ev?.id ?? id;
     const eventOrgId = ev?.org_id ?? parentOrgId;
 
-    const [rsvpRes, attendRes, membRes] = await Promise.all([
+    const [rsvpRes, attendRes, membRes, guestRes] = await Promise.all([
       supabase
         .from('rsvps')
         .select('id, user_id, status, created_at, profiles(first_name, last_name, email)')
-        .eq('event_id', id)
+        .eq('event_id', eventUuid)
         .eq('org_id', eventOrgId)
         .order('created_at'),
 
       supabase
         .from('event_attendance')
         .select('id, user_id, status, checked_in_at, profiles(first_name, last_name, email)')
-        .eq('event_id', id)
+        .eq('event_id', eventUuid)
         .eq('org_id', eventOrgId)
         .order('checked_in_at'),
 
@@ -311,11 +338,18 @@ export default function OrgAdminEventDetailScreen() {
         .eq('org_id', eventOrgId)
         .is('deleted_at', null)
         .order('user_id'),
+
+      supabase
+        .from('public_event_guests')
+        .select('id, first_name, last_name, email, type, created_at')
+        .eq('event_id', eventUuid)
+        .order('created_at'),
     ]);
 
     if (rsvpRes.data)   setRsvps(rsvpRes.data as unknown as RsvpRow[]);
     if (attendRes.data) setAttendance(attendRes.data as unknown as AttendRow[]);
     if (membRes.data)   setAllMembers(membRes.data as unknown as Member[]);
+    if (guestRes.data)  setGuests(guestRes.data as GuestRow[]);
     setLoading(false);
   }, [id, parentOrgId]);
 
@@ -343,8 +377,8 @@ export default function OrgAdminEventDetailScreen() {
         eventId:  id,
         lat:      event.location_lat,
         lng:      event.location_lng,
-        radiusM:  event.geofence_radius_m ?? 100,
-      }).catch(() => {});
+        radiusM:  event.geofence_radius_m ?? 100
+} ).catch(() => {});
     } else if (now > winClose) {
       unregisterGeofenceForEvent(id).catch(() => {});
     }
@@ -355,9 +389,9 @@ export default function OrgAdminEventDetailScreen() {
   async function addRsvp(m: Member) {
     if (!event?.is_org_wide) return;
     const { error } = await supabase.from('rsvps').upsert({
-      event_id: id, org_id: event.org_id, user_id: m.user_id, status: 'confirmed',
-    }, { onConflict: 'event_id,user_id' });
-    if (error) { Alert.alert('Error', error.message); return; }
+      event_id: id, org_id: event.org_id, user_id: m.user_id, status: 'confirmed'
+} , { onConflict: 'event_id,user_id' });
+    if (error) { showAlert('Error', error.message); return; }
     await load();
   }
 
@@ -365,32 +399,30 @@ export default function OrgAdminEventDetailScreen() {
     if (!event?.is_org_wide) return;
     const { error } = await supabase.from('event_attendance').upsert({
       event_id: id, org_id: event.org_id, user_id: m.user_id,
-      status: 'present', checked_in_at: new Date().toISOString(), check_in_method: 'manual',
-    }, { onConflict: 'event_id,user_id' });
-    if (error) { Alert.alert('Error', error.message); return; }
+      status: 'present', checked_in_at: new Date().toISOString(), check_in_method: 'manual'
+} , { onConflict: 'event_id,user_id' });
+    if (error) { showAlert('Error', error.message); return; }
     await load();
   }
 
   async function removeRsvp(rsvpId: string) {
     if (!event?.is_org_wide) return;
-    Alert.alert('Remove registration', 'Remove this person from the registration list?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => {
-        await supabase.from('rsvps').delete().eq('id', rsvpId);
-        await load();
-      }},
-    ]);
+    confirm(
+      'Remove registration',
+      'Remove this person from the registration list?',
+      async () => { await supabase.from('rsvps').delete().eq('id', rsvpId); await load(); },
+      { confirmLabel: 'Remove', destructive: true }
+    );
   }
 
   async function removeAttendance(attendId: string) {
     if (!event?.is_org_wide) return;
-    Alert.alert('Remove attendance', 'Remove this attendance record?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => {
-        await supabase.from('event_attendance').delete().eq('id', attendId);
-        await load();
-      }},
-    ]);
+    confirm(
+      'Remove attendance',
+      'Remove this attendance record?',
+      async () => { await supabase.from('event_attendance').delete().eq('id', attendId); await load(); },
+      { confirmLabel: 'Remove', destructive: true }
+    );
   }
 
   const rsvpUserIds   = new Set(rsvps.map((r) => r.user_id));
@@ -422,8 +454,8 @@ export default function OrgAdminEventDetailScreen() {
   // ── Status ────────────────────────────────────────────────────────────────
 
   const TYPE_COLORS: Record<string, string> = {
-    mandatory: '#E26B4A', social: '#A855F7', optional: '#22C55E', meeting: '#3B82F6',
-  };
+    mandatory: '#E26B4A', social: '#A855F7', optional: '#22C55E', meeting: '#3B82F6'
+} ;
   const typeColor = TYPE_COLORS[event.type] ?? c.primary;
 
   const _now       = new Date();
@@ -472,6 +504,12 @@ export default function OrgAdminEventDetailScreen() {
           <View style={[ip.typeBadge, { backgroundColor: c.surfaceAlt, borderColor: c.border, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
             <Ionicons name="business-outline" size={11} color={c.textSubtle} />
             <Text size="xs" weight="medium" color={c.textSubtle}>Chapter Event</Text>
+          </View>
+        )}
+        {event.is_public && (
+          <View style={[ip.typeBadge, { backgroundColor: '#22C55E18', borderColor: '#22C55E50', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+            <Ionicons name="globe-outline" size={11} color="#22C55E" />
+            <Text size="xs" weight="medium" color="#22C55E">Public</Text>
           </View>
         )}
       </View>
@@ -529,12 +567,12 @@ export default function OrgAdminEventDetailScreen() {
       {/* Stats */}
       <View style={[ip.stats, { borderTopColor: c.border, marginTop: 16, paddingTop: 14 }]}>
         <View style={ip.stat}>
-          <Text size="xl" weight="bold" color={c.primary}>{rsvps.length}</Text>
+          <Text size="xl" weight="bold" color={c.primary}>{rsvps.length + guestRsvps.length}</Text>
           <Text size="xs" color={c.textSubtle}>Registered</Text>
         </View>
         <View style={[ip.statDivider, { backgroundColor: c.border }]} />
         <View style={ip.stat}>
-          <Text size="xl" weight="bold" color="#22C55E">{attendance.length}</Text>
+          <Text size="xl" weight="bold" color="#22C55E">{attendance.length + guestAttend.length}</Text>
           <Text size="xs" color={c.textSubtle}>Attended</Text>
         </View>
       </View>
@@ -563,8 +601,20 @@ export default function OrgAdminEventDetailScreen() {
 
   // ── Tabs panel ────────────────────────────────────────────────────────────
 
+  const guestRsvps  = guests.filter((g) => g.type === 'rsvp');
+  const guestAttend = guests.filter((g) => g.type === 'attendance');
+
+  function GuestBadge() {
+    return (
+      <View style={[ls.statusChip, { backgroundColor: '#8B5CF618', borderColor: '#8B5CF6' }]}>
+        <Text size="xs" weight="medium" color="#8B5CF6">Guest</Text>
+      </View>
+    );
+  }
+
   function RsvpList() {
-    if (rsvps.length === 0) {
+    const hasAny = rsvps.length > 0 || guestRsvps.length > 0;
+    if (!hasAny) {
       return (
         <View style={ls.emptyBox}>
           <Ionicons name="person-outline" size={28} color={c.textSubtle} />
@@ -587,8 +637,8 @@ export default function OrgAdminEventDetailScreen() {
             </View>
             <View style={[ls.statusChip, {
               backgroundColor: r.status === 'confirmed' ? '#22C55E18' : '#F5940018',
-              borderColor:     r.status === 'confirmed' ? '#22C55E'   : '#F59400',
-            }]}>
+              borderColor:     r.status === 'confirmed' ? '#22C55E'   : '#F59400'
+} ]}>
               <Text size="xs" weight="medium" color={r.status === 'confirmed' ? '#22C55E' : '#F59400'}>
                 {r.status}
               </Text>
@@ -600,12 +650,27 @@ export default function OrgAdminEventDetailScreen() {
             )}
           </View>
         ))}
+        {guestRsvps.map((g) => (
+          <View key={g.id} style={[ls.personRow, { borderBottomColor: c.border }]}>
+            <View style={[ls.avatar, { backgroundColor: '#8B5CF622' }]}>
+              <Text size="sm" weight="bold" color="#8B5CF6">
+                {g.first_name[0] ?? '?'}{g.last_name[0] ?? ''}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text size="sm" weight="medium">{g.first_name} {g.last_name}</Text>
+              <Text size="xs" color={c.textMuted}>{g.email}</Text>
+            </View>
+            <GuestBadge />
+          </View>
+        ))}
       </>
     );
   }
 
   function AttendList() {
-    if (attendance.length === 0) {
+    const hasAny = attendance.length > 0 || guestAttend.length > 0;
+    if (!hasAny) {
       return (
         <View style={ls.emptyBox}>
           <Ionicons name="checkmark-circle-outline" size={28} color={c.textSubtle} />
@@ -641,6 +706,20 @@ export default function OrgAdminEventDetailScreen() {
             )}
           </View>
         ))}
+        {guestAttend.map((g) => (
+          <View key={g.id} style={[ls.personRow, { borderBottomColor: c.border }]}>
+            <View style={[ls.avatar, { backgroundColor: '#8B5CF622' }]}>
+              <Text size="sm" weight="bold" color="#8B5CF6">
+                {g.first_name[0] ?? '?'}{g.last_name[0] ?? ''}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text size="sm" weight="medium">{g.first_name} {g.last_name}</Text>
+              <Text size="xs" color={c.textMuted}>{g.email}</Text>
+            </View>
+            <GuestBadge />
+          </View>
+        ))}
       </>
     );
   }
@@ -650,7 +729,7 @@ export default function OrgAdminEventDetailScreen() {
       <View style={[tp.tabBar, { borderBottomColor: c.border }]}>
         {(['registrations', 'attendance'] as TabKey[]).map((t) => {
           const active = tab === t;
-          const count  = t === 'registrations' ? rsvps.length : attendance.length;
+          const count  = t === 'registrations' ? rsvps.length + guestRsvps.length : attendance.length + guestAttend.length;
           return (
             <Pressable key={t} onPress={() => setTab(t)}
               style={[tp.tabBtn, active && [tp.tabBtnActive, { borderBottomColor: c.primary }]]}>
@@ -703,9 +782,9 @@ export default function OrgAdminEventDetailScreen() {
       <View style={[sc.topBar, {
         paddingTop: isWide ? 20 : insets.top + 12,
         borderBottomColor: c.border,
-        backgroundColor: c.background,
-      }]}>
-        <Pressable onPress={() => router.back()} style={sc.backBtn}>
+        backgroundColor: c.background
+} ]}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(org-admin)/events-management' as any)} style={sc.backBtn}>
           <Ionicons name="arrow-back-outline" size={18} color={c.text} />
           <Text size="sm" weight="medium">Events</Text>
         </Pressable>
@@ -768,8 +847,8 @@ export default function OrgAdminEventDetailScreen() {
 
 const sc = StyleSheet.create({
   topBar:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-});
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 }
+} );
 
 const ip = StyleSheet.create({
   panel:      { borderWidth: 1, borderRadius: 16, padding: 20 },
@@ -779,15 +858,15 @@ const ip = StyleSheet.create({
   stat:       { alignItems: 'center', gap: 2 },
   statDivider:{ width: 1, height: 36 },
   editBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingVertical: 10 },
-  calBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, flex: 1, justifyContent: 'center' },
-});
+  calBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, flex: 1, justifyContent: 'center' }
+} );
 
 const tp = StyleSheet.create({
   tabBar:       { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
   tabBtn:       { paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabBtnActive: { borderBottomWidth: 2 },
-  addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-});
+  addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }
+} );
 
 const ls = StyleSheet.create({
   list:       { paddingHorizontal: 12, paddingTop: 8 },
@@ -795,5 +874,5 @@ const ls = StyleSheet.create({
   personRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: 1 },
   avatar:     { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   statusChip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  removeBtn:  { padding: 6 },
-});
+  removeBtn:  { padding: 6 }
+} );

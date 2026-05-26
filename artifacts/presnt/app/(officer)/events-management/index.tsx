@@ -17,7 +17,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -27,11 +26,11 @@ import {
   Switch,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Text } from '@/components/ui';
+import { Text, useAlert } from '@/components/ui';
 import { QRCheckinModal } from '@/lib/QRCheckin';
 import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { MapPickerModal } from '@/lib/MapPicker';
@@ -43,15 +42,15 @@ import {
   combineDateTime,
   formatDateDisplay,
   formatDateRange,
-  formatTimeDisplay,
-} from '@/lib/pickers';
+  formatTimeDisplay
+}  from '@/lib/pickers';
 import {
   BLANK_RULE,
   RecurrencePickerModal,
   RecurrenceRule,
   buildRRule,
-  describeRule,
-} from '@/lib/recurrence';
+  describeRule
+}  from '@/lib/recurrence';
 import { supabase } from '@/lib/supabase';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/lib/permissions';
@@ -138,8 +137,8 @@ const BLANK_FORM: EventFormState = {
   checkin_open_minutes:  '15',
   checkin_grace_minutes: '15',
   is_public:             false,
-  event_code:            '',
-};
+  event_code:            ''
+} ;
 
 const DESKTOP = 768;
 
@@ -151,8 +150,8 @@ function fmtDate(iso: string) {
     month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
     day:   d.getDate(),
     full:  d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    time:  d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-  };
+    time:  d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+} ;
 }
 
 // ── Helpers shared by nextOccurrenceAfter ──────────────────────────────────────
@@ -299,14 +298,14 @@ const STATUS_COLOR: Record<ReturnType<typeof eventStatus>, string> = {
   cancelled: '#EF4444',
   ongoing:   '#F59E0B',
   upcoming:  '#22C55E',
-  past:      '',
-};
+  past:      ''
+} ;
 const STATUS_LABEL: Record<ReturnType<typeof eventStatus>, string> = {
   cancelled: 'Cancelled',
   ongoing:   'Ongoing',
   upcoming:  'Upcoming',
-  past:      'Past',
-};
+  past:      'Past'
+} ;
 
 /** Display date: for recurring events show next occurrence, else base start. */
 function displayDate(event: Event): string {
@@ -349,8 +348,8 @@ function formFromEvent(e: Event): EventFormState {
     checkin_open_minutes:  (e as any).checkin_open_minutes  != null ? String((e as any).checkin_open_minutes)  : '',
     checkin_grace_minutes: (e as any).checkin_grace_minutes != null ? String((e as any).checkin_grace_minutes) : '',
     is_public:             !!(e as any).is_public,
-    event_code:            (e as any).event_code ?? '',
-  };
+    event_code:            (e as any).event_code ?? ''
+} ;
 }
 
 // ─── Location Picker (saved locations bottom sheet) ───────────────────────────
@@ -360,8 +359,8 @@ function LocationPickerModal({
   orgId,
   selectedId,
   onSelect,
-  onClose,
-}: {
+  onClose
+} : {
   visible:    boolean;
   orgId:      string;
   selectedId: string | null;
@@ -443,8 +442,8 @@ function LocationPickerModal({
                 style={[lp.locRow, {
                   backgroundColor: pending === null ? c.primary + '10' : 'transparent',
                   borderColor: pending === null ? c.primary : c.border,
-                  borderWidth: pending === null ? 1.5 : 1, marginBottom: 8,
-                }]}
+                  borderWidth: pending === null ? 1.5 : 1, marginBottom: 8
+} ]}
               >
                 <Ionicons name="close-circle-outline" size={16} color={c.textSubtle} />
                 <Text size="sm" color={c.textMuted}>No location</Text>
@@ -465,8 +464,8 @@ function LocationPickerModal({
                         backgroundColor: selected ? c.primary + '10' : 'transparent',
                         borderColor:     selected ? c.primary : c.border,
                         borderWidth:     selected ? 1.5 : 1,
-                        marginBottom:    8,
-                      }]}
+                        marginBottom:    8
+} ]}
                     >
                       <Ionicons name="location" size={16} color={selected ? c.primary : c.textSubtle} />
                       <View style={{ flex: 1 }}>
@@ -511,8 +510,8 @@ const lp = StyleSheet.create({
   searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   locRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, padding: 14 },
   checkCircle: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  useBtn:      { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-});
+  useBtn:      { borderRadius: 14, paddingVertical: 14, alignItems: 'center' }
+} );
 
 // ─── Picker trigger button ────────────────────────────────────────────────────
 
@@ -521,8 +520,8 @@ function PickerBtn({
   value,
   icon,
   onPress,
-  color,
-}: {
+  color
+} : {
   label:   string;
   value:   string;
   icon:    keyof typeof Ionicons.glyphMap;
@@ -547,8 +546,8 @@ function PickerBtn({
 }
 
 const pb = StyleSheet.create({
-  btn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
-});
+  btn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }
+} );
 
 // ─── Event Form (full screen modal) ──────────────────────────────────────────
 
@@ -562,8 +561,8 @@ function EventForm({
   onDelete,
   saving,
   codeErrorMsg,
-  onClearCodeError,
-}: {
+  onClearCodeError
+} : {
   visible:   boolean;
   initial:   Event | null;
   orgId:     string;
@@ -629,8 +628,8 @@ function EventForm({
       const { data } = await supabase.rpc('generate_event_code', {
         p_org_id: orgId,
         p_type:   'event',
-        p_start:  date.toISOString(),
-      });
+        p_start:  date.toISOString()
+} );
       if (data) setForm(f => ({ ...f, event_code: data as string }));
     } finally {
       setCodeGenerating(false);
@@ -787,8 +786,8 @@ function EventForm({
                 borderWidth: 1, borderColor: c.border, borderRadius: 10,
                 paddingHorizontal: 12, paddingVertical: 13,
                 backgroundColor: pressed ? c.surfaceAlt : c.surface,
-                opacity: codeGenerating ? 0.5 : 1,
-              })}
+                opacity: codeGenerating ? 0.5 : 1
+} )}
             >
               {codeGenerating
                 ? <ActivityIndicator size="small" color={c.primary} />
@@ -802,7 +801,7 @@ function EventForm({
           {form.event_code ? (
             form.is_public ? (
               <Text size="xs" color={c.textSubtle} style={{ fontFamily: 'monospace' }}>
-                presnt.app/c/{orgSlug}/events/{form.event_code}
+                presnt.link/c/{orgSlug}/events/{form.event_code}
               </Text>
             ) : (
               <Text size="xs" color={c.textSubtle}>
@@ -901,8 +900,8 @@ function EventForm({
               onPress={() => set('isMultiDay')(multi)}
               style={[ef.modeChip, {
                 backgroundColor: form.isMultiDay === multi ? c.primary : c.surfaceAlt,
-                borderColor: form.isMultiDay === multi ? c.primary : c.border,
-              }]}>
+                borderColor: form.isMultiDay === multi ? c.primary : c.border
+} ]}>
               <Text size="sm"
                 weight={form.isMultiDay === multi ? 'bold' : 'regular'}
                 color={form.isMultiDay === multi ? '#fff' : c.text}>
@@ -1027,8 +1026,8 @@ function EventForm({
                 style={[ef.modeChip, {
                   backgroundColor: active ? c.primary : c.surfaceAlt,
                   borderColor:     active ? c.primary : c.border,
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                }]}
+                  flexDirection: 'row', alignItems: 'center', gap: 6
+} ]}
               >
                 <Ionicons
                   name={mode === 'remote' ? 'videocam-outline' : 'location-outline'}
@@ -1326,8 +1325,8 @@ function EventForm({
             location_id:  loc?.id ?? null,
             location_text: loc?.name ?? f.location_text,
             location_lat: loc?.latitude ?? f.location_lat,
-            location_lng: loc?.longitude ?? f.location_lng,
-          }));
+            location_lng: loc?.longitude ?? f.location_lng
+} ));
           setShowLocPicker(false);
         }}
         onClose={() => setShowLocPicker(false)}
@@ -1344,8 +1343,8 @@ function EventForm({
             ...f,
             location_lat:  lat || null,
             location_lng:  lng || null,
-            location_text: address || f.location_text,
-          }));
+            location_text: address || f.location_text
+} ));
           setShowMapPicker(false);
         }}
         onClose={() => setShowMapPicker(false)}
@@ -1378,8 +1377,8 @@ const ef = StyleSheet.create({
   panel:       { borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
   panelSection:{ padding: 16 },
   toggleRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
-  checkinRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-});
+  checkinRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }
+} );
 
 // ─── Desktop Table Row ────────────────────────────────────────────────────────
 
@@ -1389,8 +1388,8 @@ function EventTableRow({
   onEdit,
   onCancel,
   onScan,
-  canManage,
-}: {
+  canManage
+} : {
   event:      Event;
   catMap:     Record<string, EventCategory>;
   onEdit:     (e: Event) => void;
@@ -1408,7 +1407,7 @@ function EventTableRow({
 
   return (
     <Pressable
-      onPress={() => router.push(`/(officer)/events-management/${event.id}` as any)}
+      onPress={() => router.push(`/(officer)/events-management/${(event as any).event_code ?? event.id}` as any)}
       style={({ pressed }) => [dt.row, { borderBottomColor: c.border, backgroundColor: pressed ? c.surfaceAlt : 'transparent' }]}
     >
       <View style={[dt.dateBadge, { backgroundColor: c.surfaceAlt }]}>
@@ -1495,8 +1494,8 @@ const dt = StyleSheet.create({
   scanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, width: 80, justifyContent: 'center' },
   menuBtn:    { padding: 8 },
   menu:       { position: 'absolute', right: 0, top: 28, zIndex: 200, borderWidth: 1, borderRadius: 10, width: 120, overflow: 'hidden' },
-  menuItem:   { padding: 12, borderBottomWidth: 1 },
-});
+  menuItem:   { padding: 12, borderBottomWidth: 1 }
+} );
 
 // ─── Mobile Event Card ────────────────────────────────────────────────────────
 
@@ -1510,7 +1509,7 @@ function EventCard({ event, catMap, onEdit, onScan, canManage }: { event: Event;
 
   return (
     <Pressable
-      onPress={() => router.push(`/(officer)/events-management/${event.id}` as any)}
+      onPress={() => router.push(`/(officer)/events-management/${(event as any).event_code ?? event.id}` as any)}
       style={[mc.card, { backgroundColor: c.surface, borderColor: c.border }]}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -1584,8 +1583,8 @@ const mc = StyleSheet.create({
   dateBadge:  { width: 48, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   statusChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   editBtn:    { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
-  scanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 },
-});
+  scanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4 }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -1598,6 +1597,7 @@ export default function OfficerEventsScreen() {
   const { organization, membership, profile } = useAuthStore();
   const userView       = useUserViewStore((s) => s.session);
   const { can }        = usePermissions();
+  const { showAlert, confirm } = useAlert();
   const { width }      = useWindowDimensions();
   const isWide         = width >= DESKTOP;
   const c              = theme.colors;
@@ -1621,7 +1621,7 @@ export default function OfficerEventsScreen() {
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const [evRes, catRes] = await Promise.all([
+    const [evRes, occRes, catRes] = await Promise.all([
       loggedQuery({
         domain: DOMAIN.EVENTS, method: 'GET', endpoint: 'events',
         orgId, userId: profile?.id,
@@ -1631,15 +1631,31 @@ export default function OfficerEventsScreen() {
           .eq('org_id', orgId)
           .eq('is_deleted', false)
           .eq('is_occurrence', false)
-          .order('start_time', { ascending: false }),
-      }),
+          .order('start_time', { ascending: false })
+} ),
+      // Upcoming occurrences (children of recurring masters)
+      supabase
+        .from('events')
+        .select('*')
+        .eq('org_id', orgId)
+        .eq('is_deleted', false)
+        .eq('is_occurrence', true)
+        .gte('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true }),
       supabase
         .from('event_categories')
         .select('id, name, color')
         .eq('org_id', orgId)
         .eq('is_deleted', false),
     ]);
-    setEvents((evRes.data ?? []) as Event[]);
+    const masters    = (evRes.data  ?? []) as Event[];
+    const upcomingOcc= (occRes.data ?? []) as Event[];
+    const seen = new Set<string>(masters.map(e => e.id));
+    const merged = [...masters];
+    for (const occ of upcomingOcc) {
+      if (!seen.has(occ.id)) { merged.push(occ); seen.add(occ.id); }
+    }
+    setEvents(merged);
     const map: Record<string, EventCategory> = {};
     for (const cat of (catRes.data ?? []) as EventCategory[]) map[cat.id] = cat;
     setCatMap(map);
@@ -1712,8 +1728,8 @@ export default function OfficerEventsScreen() {
         checkin_grace_minutes: form.checkin_grace_minutes.trim() !== '' ? parseInt(form.checkin_grace_minutes) || null : null,
         is_public:             form.is_public,
         event_code:            form.event_code.trim() || null,
-        category_id:           form.category_id ?? null,
-      };
+        category_id:           form.category_id ?? null
+} ;
 
       const editingEvent: Event | null = editTarget === false || editTarget === null ? null : editTarget;
       if (editingEvent?.id) {
@@ -1721,8 +1737,8 @@ export default function OfficerEventsScreen() {
           domain: DOMAIN.EVENTS, method: 'PATCH', endpoint: 'events',
           orgId, userId: profile?.id,
           requestBody: { id: editingEvent.id, ...payload },
-          query: supabase.from('events').update(payload).eq('id', editingEvent.id),
-        });
+          query: supabase.from('events').update(payload).eq('id', editingEvent.id)
+} );
         if (error?.code === '23505') { setCodeErrorMsg('That event code is already in use. Choose a different one or tap ↺ to generate a new one.'); setSaving(false); return; }
         if (error) throw error;
       } else {
@@ -1730,8 +1746,8 @@ export default function OfficerEventsScreen() {
           domain: DOMAIN.EVENTS, method: 'POST', endpoint: 'events',
           orgId, userId: profile?.id,
           requestBody: payload,
-          query: supabase.from('events').insert({ ...payload, org_id: orgId, created_by: profile?.id ?? null }),
-        });
+          query: supabase.from('events').insert({ ...payload, org_id: orgId, created_by: profile?.id ?? null })
+} );
         if (error?.code === '23505') { setCodeErrorMsg('That event code is already in use. Choose a different one or tap ↺ to generate a new one.'); setSaving(false); return; }
         if (error) throw error;
       }
@@ -1740,7 +1756,7 @@ export default function OfficerEventsScreen() {
       setCodeErrorMsg(null);
       setEdit(false);
     } catch {
-      Alert.alert('Error', 'Failed to save event.');
+      showAlert('Error', 'Failed to save event.');
     } finally {
       setSaving(false);
     }
@@ -1757,8 +1773,8 @@ export default function OfficerEventsScreen() {
           domain: DOMAIN.EVENTS, method: 'DELETE', endpoint: 'events/series',
           orgId, userId: profile?.id,
           requestBody: { master_id: masterId },
-          query: supabase.from('events').update({ is_deleted: true }).eq('id', masterId),
-        });
+          query: supabase.from('events').update({ is_deleted: true }).eq('id', masterId)
+} );
         if (e1) throw e1;
         // Occurrences share parent_event_id — soft-delete them all too
         const { error: e2 } = await supabase
@@ -1771,34 +1787,33 @@ export default function OfficerEventsScreen() {
           domain: DOMAIN.EVENTS, method: 'DELETE', endpoint: 'events',
           orgId, userId: profile?.id,
           requestBody: { id: event.id },
-          query: supabase.from('events').update({ is_deleted: true }).eq('id', event.id),
-        });
+          query: supabase.from('events').update({ is_deleted: true }).eq('id', event.id)
+} );
         if (error) throw error;
       }
 
       await load();
       setEdit(false);
     } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Failed to delete event.');
+      showAlert('Error', err?.message ?? 'Failed to delete event.');
     }
   }
 
   async function handleCancel(event: Event) {
-    Alert.alert('Cancel Event', `Cancel "${event.title}"?`, [
-      { text: 'Never mind', style: 'cancel' },
-      {
-        text: 'Cancel Event', style: 'destructive',
-        onPress: async () => {
-          await loggedQuery({
-            domain: DOMAIN.EVENTS, method: 'PATCH', endpoint: 'events/cancel',
-            orgId, userId: profile?.id,
-            requestBody: { id: event.id, is_cancelled: true },
-            query: supabase.from('events').update({ is_cancelled: true }).eq('id', event.id),
-          });
-          await load();
-        },
+    confirm(
+      'Cancel Event',
+      `Cancel "${event.title}"?`,
+      async () => {
+        await loggedQuery({
+          domain: DOMAIN.EVENTS, method: 'PATCH', endpoint: 'events/cancel',
+          orgId, userId: profile?.id,
+          requestBody: { id: event.id, is_cancelled: true },
+          query: supabase.from('events').update({ is_cancelled: true }).eq('id', event.id),
+        });
+        await load();
       },
-    ]);
+      { confirmLabel: 'Cancel Event', destructive: true }
+    );
   }
 
   if (loading) {
@@ -1863,8 +1878,8 @@ export default function OfficerEventsScreen() {
               onPress={() => setTab(t)}
               style={[sc.tabChip, {
                 backgroundColor: active ? c.surfaceAlt : 'transparent',
-                borderColor:     active ? c.border : 'transparent',
-              }]}
+                borderColor:     active ? c.border : 'transparent'
+} ]}
             >
               <Text size="sm" weight={active ? 'medium' : 'regular'}
                 color={active ? c.text : c.textMuted}>
@@ -1954,5 +1969,5 @@ const sc = StyleSheet.create({
   tabChip:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 5 },
   tableHeader:   { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
   mobileScroll:  { padding: 14, gap: 10, paddingBottom: 48 },
-  empty:         { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
-});
+  empty:         { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 }
+} );

@@ -12,17 +12,16 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
@@ -144,8 +143,8 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
 
 const sh = StyleSheet.create({
   row:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, marginBottom: 12, borderBottomWidth: 1 },
-  label: { textTransform: 'uppercase', letterSpacing: 0.8 },
-});
+  label: { textTransform: 'uppercase', letterSpacing: 0.8 }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -155,6 +154,7 @@ export default function MemberDetailScreen() {
   const insets                 = useSafeAreaInsets();
   const { width }              = useWindowDimensions();
   const isWide                 = width >= DESKTOP;
+  const { confirm } = useAlert();
   const { membership, profile } = useAuthStore();
   const userView               = useUserViewStore((s) => s.session);
   const { can }                = usePermissions();
@@ -214,8 +214,8 @@ export default function MemberDetailScreen() {
         total:   records.length,
         present: records.filter(r => r.status === 'present').length,
         excused: records.filter(r => r.status === 'excused').length,
-        absent:  records.filter(r => r.status === 'absent').length,
-      });
+        absent:  records.filter(r => r.status === 'absent').length
+} );
     }
 
     setLoading(false);
@@ -225,35 +225,30 @@ export default function MemberDetailScreen() {
   useEffect(() => { load(); }, [load]);
 
   async function liftRestriction(restriction: Restriction) {
-    Alert.alert(
+    confirm(
       'Lift Restriction',
       `Remove "${restrictionLabel(restriction.restriction_type)}"? Reason: ${restriction.reason}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Lift',
-          onPress: async () => {
-            setLiftingId(restriction.id);
-            await (supabase as any)
-              .from('member_restrictions')
-              .update({ is_active: false, lifted_at: new Date().toISOString(), lifted_by: profile?.id, lift_reason: 'Lifted by officer' })
-              .eq('id', restriction.id);
+      async () => {
+        setLiftingId(restriction.id);
+        await (supabase as any)
+          .from('member_restrictions')
+          .update({ is_active: false, lifted_at: new Date().toISOString(), lifted_by: profile?.id, lift_reason: 'Lifted by officer' })
+          .eq('id', restriction.id);
 
-            // Sync membership flags
-            const remaining = restrictions.filter(r => r.id !== restriction.id && r.is_active);
-            await supabase
-              .from('memberships')
-              .update({
-                can_attend_events:  !remaining.some(r => r.restriction_type !== 'dues_hold'),
-                dues_hold:          remaining.some(r => r.restriction_type === 'dues_hold'),
-              })
-              .eq('id', membershipId);
+        // Sync membership flags
+        const remaining = restrictions.filter(r => r.id !== restriction.id && r.is_active);
+        await supabase
+          .from('memberships')
+          .update({
+            can_attend_events:  !remaining.some(r => r.restriction_type !== 'dues_hold'),
+            dues_hold:          remaining.some(r => r.restriction_type === 'dues_hold'),
+          })
+          .eq('id', membershipId);
 
-            setLiftingId(null);
-            await load();
-          },
-        },
-      ],
+        setLiftingId(null);
+        await load();
+      },
+      { confirmLabel: 'Lift' }
     );
   }
 
@@ -407,8 +402,8 @@ export default function MemberDetailScreen() {
               </View>
               <View style={[xs.typeBadge, {
                 backgroundColor: duesStatusColor(member.dues_status) + '18',
-                borderColor:     duesStatusColor(member.dues_status),
-              }]}>
+                borderColor:     duesStatusColor(member.dues_status)
+} ]}>
                 <Text size="xs" weight="semibold" color={duesStatusColor(member.dues_status)}>
                   {member.dues_status.toUpperCase()}
                 </Text>
@@ -460,8 +455,8 @@ export default function MemberDetailScreen() {
       <View style={[xs.header, {
         paddingTop: isWide ? 20 : insets.top + 12,
         backgroundColor: c.background,
-        borderBottomColor: c.border,
-      }]}>
+        borderBottomColor: c.border
+} ]}>
         <Pressable onPress={() => router.back()} style={xs.backBtn}>
           <Ionicons name="arrow-back-outline" size={20} color={c.text} />
         </Pressable>
@@ -499,5 +494,5 @@ const xs = StyleSheet.create({
   duesSummary: { gap: 0 },
   holdBanner:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 12 },
 
-  pastRow:     { borderWidth: 1, borderRadius: 10, padding: 12, gap: 2 },
-});
+  pastRow:     { borderWidth: 1, borderRadius: 10, padding: 12, gap: 2 }
+} );

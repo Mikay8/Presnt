@@ -1,4 +1,5 @@
 export { Text } from './Text';
+export { AlertProvider, useAlert } from './AlertModal';
 export { Button } from './Button';
 export { Card } from './Card';
 export { Input } from './Input';

@@ -19,13 +19,14 @@ import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import type { Tables } from '@/types/database';
 
-type Organization = Tables<'organizations'>;
+// Chapters are the joinable entities; org_id links them to their parent org.
+type Chapter = Tables<'chapters'>;
 
 // ─── Step types ───────────────────────────────────────────────────────────────
 
 type Step =
   | { kind: 'search' }
-  | { kind: 'code'; org: Organization };
+  | { kind: 'code'; org: Chapter };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ export default function JoinChapterScreen() {
 
   // ── Search step ─────────────────────────────────────────────────────────────
   const [query,     setQuery]     = useState('');
-  const [results,   setResults]   = useState<Organization[]>([]);
+  const [results,   setResults]   = useState<Chapter[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState('');
 
@@ -61,7 +62,7 @@ export default function JoinChapterScreen() {
     setSearching(true);
 
     const { data, error } = await supabase
-      .from('organizations')
+      .from('chapters')
       .select('*')
       .ilike('name', `%${text.trim()}%`)
       .eq('is_deleted', false)
@@ -170,9 +171,17 @@ export default function JoinChapterScreen() {
       membershipData = data;
     }
 
+    // Fetch the organizations row (synced from chapters via trigger) so
+    // the auth store receives the correct Organization shape.
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('id', org.id)
+      .maybeSingle();
+
     setJoining(false);
     setSuccess(true);
-    setMembership(membershipData, org);
+    setMembership(membershipData, orgRow ?? null);
 
     // Reload auth state from DB then navigate
     await supabase.auth.refreshSession();

@@ -55,7 +55,6 @@ type DuesMember = {
   profiles: { first_name: string; last_name: string; email: string } | null;
 };
 
-type AcademicTerm = { id: string; name: string; };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -112,7 +111,6 @@ export default function AdminStatusScreen() {
   const orgId = membership?.org_id ?? '';
 
   const [tab,          setTab]          = useState<TabKey>('attendance');
-  const [term,         setTerm]         = useState<AcademicTerm | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [attMembers,   setAttMembers]   = useState<AttendanceMember[]>([]);
   const [duesMembers,  setDuesMembers]  = useState<DuesMember[]>([]);
@@ -123,21 +121,12 @@ export default function AdminStatusScreen() {
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
 
-    // Active term
-    const { data: termData } = await supabase
-      .from('academic_terms').select('id, name')
-      .eq('org_id', orgId).eq('is_active', true).single();
-    setTerm(termData ?? null);
-
-    // Requirements
-    const reqs: Requirement[] = [];
-    if (termData) {
-      const { data: rData } = await supabase
-        .from('status_requirements')
-        .select('id, name, min_points, min_events')
-        .eq('org_id', orgId).eq('term_id', termData.id).eq('is_deleted', false);
-      reqs.push(...((rData ?? []) as Requirement[]));
-    }
+    // Requirements (no term filter)
+    const { data: rData } = await supabase
+      .from('status_requirements')
+      .select('id, name, min_points, min_events')
+      .eq('org_id', orgId).eq('is_deleted', false);
+    const reqs = (rData ?? []) as Requirement[];
     setRequirements(reqs);
 
     // All active memberships
@@ -148,13 +137,13 @@ export default function AdminStatusScreen() {
 
     setDuesMembers((membData ?? []) as unknown as DuesMember[]);
 
-    // Snapshots
+    // Snapshots (no term filter)
     const snaps: Snapshot[] = [];
-    if (termData && membData?.length) {
+    if (membData?.length) {
       const { data: sData } = await supabase
         .from('status_snapshots')
         .select('membership_id, requirement_id, points_earned, points_required, events_attended, is_compliant, is_at_risk')
-        .eq('org_id', orgId).eq('term_id', termData.id);
+        .eq('org_id', orgId);
       snaps.push(...((sData ?? []) as Snapshot[]));
     }
 
@@ -235,7 +224,7 @@ export default function AdminStatusScreen() {
         </View>
         <ComplianceBar value={overallPct} color={overallColor} />
         <Text size="xs" color={c.textSubtle}>
-          {compliantCt}/{total} members meeting requirements · {term?.name ?? 'Current term'}
+          {compliantCt}/{total} members meeting requirements
         </Text>
       </Card>
 
@@ -270,7 +259,7 @@ export default function AdminStatusScreen() {
         <Card style={{ alignItems: 'center', gap: 8, paddingVertical: 20 }}>
           <Ionicons name="clipboard-outline" size={28} color={c.textSubtle} />
           <Text size="sm" color={c.textMuted} style={{ textAlign: 'center' }}>
-            No requirements set for this term
+            No requirements set yet
           </Text>
           <Pressable onPress={() => router.push('/(admin)/status/requirements' as any)}>
             <Text size="sm" color={c.primary}>+ Add requirements</Text>

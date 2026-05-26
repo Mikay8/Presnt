@@ -12,18 +12,17 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -59,8 +58,8 @@ const ROLE_COLOR: Record<string, string> = {
   admin:      '#E26B4A',
   officer:    '#A855F7',
   member:     '#3B82F6',
-  new_member: '#6B7280',
-};
+  new_member: '#6B7280'
+} ;
 
 // Org admins can assign any role including org_admin and admin
 const ASSIGNABLE_ROLES = [
@@ -81,8 +80,8 @@ function ManageMemberModal({
   orgRoles,
   onClose,
   onSave,
-  saving,
-}: {
+  saving
+} : {
   visible:  boolean;
   member:   MemberRow | null;
   chapters: Chapter[];
@@ -344,8 +343,8 @@ function ManageMemberModal({
 
 function MemberItem({
   member,
-  onManage,
-}: {
+  onManage
+} : {
   member:   MemberRow;
   onManage: (m: MemberRow) => void;
 }) {
@@ -406,6 +405,7 @@ export default function OrgAdminMembersScreen() {
   const { width }        = useWindowDimensions();
   const isWide           = width >= 800;
   const { organization } = useAuthStore();
+  const { showAlert } = useAlert();
 
   const [chapters, setChapters]       = useState<Chapter[]>([]);
   const [orgRoles, setOrgRoles]       = useState<OrgRole[]>([]);
@@ -463,15 +463,15 @@ export default function OrgAdminMembersScreen() {
     // Deduplicate by profile ID — keep the row with the highest-privilege role.
     // A person in multiple chapters would otherwise appear once per chapter.
     const ROLE_RANK: Record<string, number> = {
-      org_admin: 5, admin: 4, officer: 3, member: 2, new_member: 1,
-    };
+      org_admin: 5, admin: 4, officer: 3, member: 2, new_member: 1
+} ;
     // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
     const normalized: MemberRow[] = ((membersData ?? []) as any[]).map((m) => ({
       ...m,
       profiles:      Array.isArray(m.profiles)      ? (m.profiles[0]      ?? null) : m.profiles,
       organizations: Array.isArray(m.organizations) ? (m.organizations[0] ?? null) : m.organizations,
-      org_roles:     Array.isArray(m.org_roles)     ? (m.org_roles[0]     ?? null) : m.org_roles,
-    }));
+      org_roles:     Array.isArray(m.org_roles)     ? (m.org_roles[0]     ?? null) : m.org_roles
+} ));
 
     const byProfile = new Map<string, MemberRow>();
     for (const row of normalized) {
@@ -502,14 +502,14 @@ export default function OrgAdminMembersScreen() {
         .from('memberships')
         .update({ org_id: toChapterId, role: 'member', custom_role_id: null })
         .eq('id', memberId);
-      if (error) Alert.alert('Error', error.message);
+      if (error) showAlert('Error', error.message);
     } else {
       // Change role
       const { error } = await supabase
         .from('memberships')
         .update({ role, custom_role_id: customRoleId })
         .eq('id', memberId);
-      if (error) Alert.alert('Error', error.message);
+      if (error) showAlert('Error', error.message);
     }
 
     await load();
@@ -708,5 +708,5 @@ const styles = StyleSheet.create({
 
   modalActions: { flexDirection: 'row', gap: 12 },
   cancelBtn:    { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
-  saveBtn:      { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
-});
+  saveBtn:      { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' }
+} );

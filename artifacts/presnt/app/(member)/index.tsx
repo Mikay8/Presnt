@@ -179,7 +179,6 @@ export default function MemberHomeScreen() {
   const [showNotifs,    setShowNotifs]      = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
   const [attendance, setAttendance]         = useState<AttendanceSummary>({ attended: 0, total: 0 });
-  const [termLabel, setTermLabel]           = useState('');
   const [loading, setLoading]               = useState(true);
   const [refreshing, setRefreshing]         = useState(false);
 
@@ -196,7 +195,7 @@ export default function MemberHomeScreen() {
 
     const now = new Date().toISOString();
 
-    const [annResult, evResult, termResult, notifResult] = await Promise.all([
+    const [annResult, evResult, notifResult] = await Promise.all([
       // Announcements with author name
       supabase
         .from('announcements')
@@ -218,14 +217,6 @@ export default function MemberHomeScreen() {
         .order('start_time')
         .limit(5),
 
-      // Active academic term
-      supabase
-        .from('academic_terms')
-        .select('id, name, start_date, end_date')
-        .eq('org_id', orgId)
-        .eq('is_active', true)
-        .single(),
-
       // Personal notifications (most recent 30)
       supabase
         .from('notifications')
@@ -246,34 +237,27 @@ export default function MemberHomeScreen() {
       if (unread === 0) clearBadge().catch(() => {});
     }
 
-    const term = termResult.data;
-    if (term) {
-      setTermLabel(term.name);
+    // Attendance stats (all-time)
+    const [eventsTotal, userAttendance] = await Promise.all([
+      supabase
+        .from('events')
+        .select('id', { count: 'exact', head: false })
+        .eq('org_id', orgId)
+        .eq('type', 'mandatory')
+        .eq('is_deleted', false),
 
-      // Attendance stats for current term
-      const [eventsInTerm, userAttendance] = await Promise.all([
-        supabase
-          .from('events')
-          .select('id', { count: 'exact', head: false })
-          .eq('org_id', orgId)
-          .eq('type', 'mandatory')
-          .eq('is_deleted', false)
-          .gte('start_time', `${term.start_date}T00:00:00Z`)
-          .lte('start_time', `${term.end_date}T23:59:59Z`),
+      supabase
+        .from('event_attendance')
+        .select('id', { count: 'exact', head: false })
+        .eq('user_id', userId)
+        .eq('org_id', orgId)
+        .eq('status', 'present'),
+    ]);
 
-        supabase
-          .from('event_attendance')
-          .select('id', { count: 'exact', head: false })
-          .eq('user_id', userId)
-          .eq('org_id', orgId)
-          .eq('status', 'present'),
-      ]);
-
-      setAttendance({
-        total:    eventsInTerm.count ?? 0,
-        attended: userAttendance.count ?? 0,
-      });
-    }
+    setAttendance({
+      total:    eventsTotal.count ?? 0,
+      attended: userAttendance.count ?? 0,
+    });
 
     setLoading(false);
     setRefreshing(false);
@@ -407,7 +391,7 @@ export default function MemberHomeScreen() {
             </Text>
             <DonutChart percent={attendancePct} size={120} strokeWidth={14} />
             <Text size="sm" color={theme.colors.textMuted} style={{ textAlign: 'center' }}>
-              {termLabel || 'Current term'} · {attendance.attended}/{attendance.total} meetings
+              {attendance.attended}/{attendance.total} meetings attended
             </Text>
           </Card>
 

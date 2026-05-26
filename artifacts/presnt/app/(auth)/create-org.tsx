@@ -39,15 +39,6 @@ function generateJoinCode(name: string): string {
   return `${base}-${rand}`;
 }
 
-function getCurrentSemester() {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  if (month <= 5)  return { name: `Spring ${year}`, start: `${year}-01-15`, end: `${year}-05-15` };
-  if (month <= 7)  return { name: `Summer ${year}`, start: `${year}-05-16`, end: `${year}-08-15` };
-  return { name: `Fall ${year}`, start: `${year}-08-16`, end: `${year}-12-20` };
-}
-
 export default function CreateOrgScreen() {
   const theme = useThemeStore((s) => s.theme);
   const { user, setMembership } = useAuthStore();
@@ -127,14 +118,14 @@ export default function CreateOrgScreen() {
     });
 
     // ── 3. Create the first Chapter under this org ────────────────────────────
+    // Insert into chapters table; trigger syncs back to organizations automatically.
     const joinCode = generateJoinCode(chapterName);
     const { data: chapter, error: chapterError } = await supabase
-      .from('organizations')
+      .from('chapters')
       .insert({
         name:          chapterName.trim(),
         slug:          slugify(chapterName),
-        type:          'chapter',
-        parent_org_id: org.id,
+        org_id:        org.id,
         institution:   institution.trim(),
         primary_color: primaryColor,
         timezone:      'America/New_York',
@@ -170,16 +161,6 @@ export default function CreateOrgScreen() {
       setError(membershipError?.message ?? 'Failed to create membership.');
       return;
     }
-
-    // ── 5. Seed first academic term ───────────────────────────────────────────
-    const semester = getCurrentSemester();
-    await supabase.from('academic_terms').insert({
-      org_id:     chapter.id,
-      name:       semester.name,
-      start_date: semester.start,
-      end_date:   semester.end,
-      is_active:  true,
-    });
 
     // Fetch the org_admin membership (for the parent org) so the auth store
     // has the correct role — routes the user to the org-admin portal.

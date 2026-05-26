@@ -55,6 +55,105 @@ export type Database = {
           },
         ]
       }
+      chapters: {
+        Row: {
+          id: string
+          org_id: string
+          name: string
+          slug: string
+          institution: string | null
+          greek_letter_org: string | null
+          founding_year: number | null
+          timezone: string
+          join_code: string | null
+          is_active: boolean | null
+          primary_color: string | null
+          secondary_color: string | null
+          background_color: string | null
+          text_color: string | null
+          accent_color: string | null
+          color_scheme: string | null
+          custom_font: string | null
+          app_display_name: string | null
+          logo_url: string | null
+          banner_url: string | null
+          created_by: string | null
+          is_deleted: boolean | null
+          deleted_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          name: string
+          slug: string
+          institution?: string | null
+          greek_letter_org?: string | null
+          founding_year?: number | null
+          timezone?: string
+          join_code?: string | null
+          is_active?: boolean | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          background_color?: string | null
+          text_color?: string | null
+          accent_color?: string | null
+          color_scheme?: string | null
+          custom_font?: string | null
+          app_display_name?: string | null
+          logo_url?: string | null
+          banner_url?: string | null
+          created_by?: string | null
+          is_deleted?: boolean | null
+          deleted_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          name?: string
+          slug?: string
+          institution?: string | null
+          greek_letter_org?: string | null
+          founding_year?: number | null
+          timezone?: string
+          join_code?: string | null
+          is_active?: boolean | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          background_color?: string | null
+          text_color?: string | null
+          accent_color?: string | null
+          color_scheme?: string | null
+          custom_font?: string | null
+          app_display_name?: string | null
+          logo_url?: string | null
+          banner_url?: string | null
+          created_by?: string | null
+          is_deleted?: boolean | null
+          deleted_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapters_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chapters_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           audience: string

@@ -1,4 +1,4 @@
-import { boolean, index, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod/v4';
 import { profiles } from './profiles';
@@ -51,6 +51,61 @@ export const academicTerms = pgTable(
   },
   (t) => [index('idx_terms_org').on(t.orgId)],
 );
+
+// ─── Chapters ──────────────────────────────────────────────────────────────────
+// Chapters are the leaf entities — they belong to exactly one organization.
+// The organizations table still holds a synced copy (via trigger) so all
+// existing FK-linked tables (memberships, events, etc.) need no changes.
+
+export const chapters = pgTable(
+  'chapters',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id').references(() => organizations.id).notNull(),
+    name: text('name').notNull(),
+    slug: text('slug').unique().notNull(),
+    institution: text('institution'),
+    greekLetterOrg: text('greek_letter_org'),
+    foundingYear: integer('founding_year'),
+    timezone: text('timezone').notNull().default('America/New_York'),
+    joinCode: text('join_code').unique(),
+    isActive: boolean('is_active').default(true),
+    primaryColor: text('primary_color').default('#F08862'),
+    secondaryColor: text('secondary_color').default('#E26B4A'),
+    backgroundColor: text('background_color').default('#1A1411'),
+    textColor: text('text_color').default('#FBF6EE'),
+    accentColor: text('accent_color').default('#E0B250'),
+    colorScheme: text('color_scheme').default('dark'),
+    customFont: text('custom_font'),
+    appDisplayName: text('app_display_name'),
+    logoUrl: text('logo_url'),
+    bannerUrl: text('banner_url'),
+    createdBy: uuid('created_by').references(() => profiles.id),
+    isDeleted: boolean('is_deleted').default(false),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    index('idx_chapters_org').on(t.orgId),
+    index('idx_chapters_join_code').on(t.joinCode),
+    index('idx_chapters_slug').on(t.slug),
+  ],
+);
+
+export const insertChapterSchema = createInsertSchema(chapters, {
+  colorScheme: z.enum(['dark', 'light', 'system']).optional(),
+  primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  backgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+}).omit({ id: true, createdAt: true, updatedAt: true, isDeleted: true, deletedAt: true });
+
+export const selectChapterSchema = createSelectSchema(chapters);
+
+export type InsertChapter = z.infer<typeof insertChapterSchema>;
+export type Chapter = typeof chapters.$inferSelect;
 
 export const insertOrgSchema = createInsertSchema(organizations, {
   type: z.enum(['chapter', 'council', 'national_hq', 'organization']),

@@ -20,7 +20,6 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -29,12 +28,12 @@ import {
   StyleSheet,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line } from 'react-native-svg';
 
-import { Text } from '@/components/ui';
+import { Text, useAlert } from '@/components/ui';
 import { MapPickerModal } from '@/lib/MapPicker';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -65,8 +64,8 @@ type LocationForm = {
 };
 
 const BLANK_FORM: LocationForm = {
-  name: '', address: '', radius_meters: 100, latitude: null, longitude: null,
-};
+  name: '', address: '', radius_meters: 100, latitude: null, longitude: null
+} ;
 
 // ─── Map preview ──────────────────────────────────────────────────────────────
 
@@ -74,8 +73,8 @@ function MapPreview({
   lat,
   lng,
   radiusM,
-  height = 140,
-}: {
+  height = 140
+} : {
   lat?:    number | null;
   lng?:    number | null;
   radiusM?: number | null;
@@ -128,8 +127,8 @@ function MapPreview({
 
 const mp2 = StyleSheet.create({
   pinOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  pin:        { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#fff' },
-});
+  pin:        { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#fff' }
+} );
 
 // ─── Location Form Modal ──────────────────────────────────────────────────────
 
@@ -138,8 +137,8 @@ function LocationFormModal({
   initial,
   onClose,
   onSave,
-  saving,
-}: {
+  saving
+} : {
   visible: boolean;
   initial: OrgLocation | null;
   onClose: () => void;
@@ -159,8 +158,8 @@ function LocationFormModal({
         address:       initial.address ?? '',
         radius_meters: initial.radius_meters ?? 100,
         latitude:      initial.latitude ?? null,
-        longitude:     initial.longitude ?? null,
-      } : { ...BLANK_FORM });
+        longitude:     initial.longitude ?? null
+}  : { ...BLANK_FORM });
     }
   }, [visible, initial]);
 
@@ -289,8 +288,8 @@ function LocationFormModal({
             ...f,
             latitude:  lat || null,
             longitude: lng || null,
-            address:   address || f.address,
-          }));
+            address:   address || f.address
+} ));
           setShowMapPicker(false);
         }}
         onClose={() => setShowMapPicker(false)}
@@ -312,8 +311,8 @@ const lf = StyleSheet.create({
   radiusInput:{ flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, textAlign: 'center' },
   coordCard:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 4 },
   cancelBtn:  { borderWidth: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
-  saveBtn:    { borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
-});
+  saveBtn:    { borderRadius: 10, paddingVertical: 13, alignItems: 'center' }
+} );
 
 // ─── Location Card ────────────────────────────────────────────────────────────
 
@@ -322,8 +321,8 @@ function LocationCard({
   usageCount,
   onEdit,
   onDelete,
-  onUse,
-}: {
+  onUse
+} : {
   location:   OrgLocation;
   usageCount: number;
   onEdit:     () => void;
@@ -408,8 +407,8 @@ const lc = StyleSheet.create({
   radiusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   menu:       { position: 'absolute', right: 0, top: 24, zIndex: 200, borderWidth: 1, borderRadius: 10, width: 110, overflow: 'hidden' },
   menuItem:   { padding: 12, borderBottomWidth: 1 },
-  useBtn:     { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5 },
-});
+  useBtn:     { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5 }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -419,6 +418,7 @@ export default function LocationsScreen() {
   const { membership, profile } = useAuthStore();
   const userView       = useUserViewStore((s) => s.session);
   const { width }      = useWindowDimensions();
+  const { confirm } = useAlert();
   const isWide         = width >= DESKTOP;
   const c = theme.colors;
 
@@ -479,8 +479,8 @@ export default function LocationsScreen() {
         address:       form.address.trim() || null,
         latitude:      form.latitude ?? null,
         longitude:     form.longitude ?? null,
-        radius_meters: form.radius_meters,
-      };
+        radius_meters: form.radius_meters
+} ;
       const editingLoc: OrgLocation | null = editing === false || editing === null ? null : editing;
       if (editingLoc?.id) {
         await supabase.from('org_locations').update(payload).eq('id', editingLoc.id);
@@ -495,16 +495,15 @@ export default function LocationsScreen() {
   }
 
   function handleDelete(loc: OrgLocation) {
-    Alert.alert('Delete Location', `Delete "${loc.name}"? Events using it won't be affected.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          await supabase.from('org_locations').update({ is_deleted: true }).eq('id', loc.id);
-          await load();
-        },
+    confirm(
+      'Delete Location',
+      `Delete "${loc.name}"? Events using it won't be affected.`,
+      async () => {
+        await supabase.from('org_locations').update({ is_deleted: true }).eq('id', loc.id);
+        await load();
       },
-    ]);
+      { confirmLabel: 'Delete', destructive: true }
+    );
   }
 
   if (loading) {
@@ -633,5 +632,5 @@ const ls = StyleSheet.create({
   gridItem:     { width: '31%', minWidth: 260 },
   listItem:     { width: '100%' },
   ghostCard:    { borderWidth: 1.5, borderRadius: 16, borderStyle: 'dashed', height: 220, alignItems: 'center', justifyContent: 'center' },
-  empty:        { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
-});
+  empty:        { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 }
+} );

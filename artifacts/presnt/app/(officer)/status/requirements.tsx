@@ -1,7 +1,7 @@
 /**
- * Admin — Compliance Requirements
+ * Officer — Compliance Requirements
  *
- * Create, edit, and delete status_requirements for the active academic term.
+ * Create, edit, and delete status_requirements for the chapter.
  * Each requirement has a name, min_points, optional min_events, applies_to,
  * and an optional warning_threshold.
  *
@@ -14,17 +14,16 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Text } from '@/components/ui';
+import { Button, Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -43,8 +42,6 @@ type Requirement = {
   consequence:       string | null;
 };
 
-type AcademicTerm = { id: string; name: string; start_date: string; end_date: string };
-
 const APPLIES_OPTIONS = [
   { value: 'all',        label: 'All members' },
   { value: 'active',     label: 'Active only' },
@@ -60,8 +57,8 @@ const BLANK: Omit<Requirement, 'id'> = {
   applies_to:        'all',
   warning_threshold: 80,
   is_mandatory:      true,
-  consequence:       '',
-};
+  consequence:       ''
+} ;
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
 
@@ -69,8 +66,8 @@ function RequirementForm({
   initial,
   onSave,
   onCancel,
-  saving,
-}: {
+  saving
+} : {
   initial:  Omit<Requirement, 'id'>;
   onSave:   (v: Omit<Requirement, 'id'>) => void;
   onCancel: () => void;
@@ -85,8 +82,8 @@ function RequirementForm({
   const labelStyle = {
     textTransform: 'uppercase' as const,
     letterSpacing: 0.8,
-    marginBottom:  6,
-  };
+    marginBottom:  6
+} ;
 
   return (
     <View style={{ gap: 16 }}>
@@ -168,8 +165,8 @@ function RequirementForm({
                 onPress={() => set('applies_to', o.value)}
                 style={[f.chip, {
                   borderColor:     active ? c.primary : c.border,
-                  backgroundColor: active ? c.primary + '14' : 'transparent',
-                }]}
+                  backgroundColor: active ? c.primary + '14' : 'transparent'
+} ]}
               >
                 <Text size="xs" weight={active ? 'medium' : 'regular'} color={active ? c.primary : c.textMuted}>
                   {o.label}
@@ -190,8 +187,8 @@ function RequirementForm({
           <Text size="xs" color={c.textSubtle}>Non-compliance has consequences</Text>
         </View>
         <View style={[f.toggleDot, {
-          backgroundColor: form.is_mandatory ? c.primary : c.border,
-        }]}>
+          backgroundColor: form.is_mandatory ? c.primary : c.border
+} ]}>
           <View style={[f.toggleThumb, { transform: [{ translateX: form.is_mandatory ? 18 : 0 }] }]} />
         </View>
       </Pressable>
@@ -232,8 +229,8 @@ const f = StyleSheet.create({
   chip:      { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   toggle:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
   toggleDot: { width: 40, height: 22, borderRadius: 11, padding: 2 },
-  toggleThumb: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff' },
-});
+  toggleThumb: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff' }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -243,10 +240,10 @@ export default function OfficerRequirementsScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
+  const { showAlert, confirm } = useAlert();
   const { membership } = useAuthStore();
   const orgId = membership?.org_id ?? '';
 
-  const [term,         setTerm]         = useState<AcademicTerm | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [editing,      setEditing]      = useState<Requirement | null>(null);
@@ -255,38 +252,31 @@ export default function OfficerRequirementsScreen() {
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const { data: termData } = await supabase
-      .from('academic_terms').select('id, name, start_date, end_date')
-      .eq('org_id', orgId).eq('is_active', true).single();
-    setTerm(termData ?? null);
-    if (termData) {
-      const { data } = await supabase
-        .from('status_requirements')
-        .select('id, name, description, min_points, min_events, applies_to, warning_threshold, is_mandatory, consequence')
-        .eq('org_id', orgId).eq('term_id', termData.id).eq('is_deleted', false)
-        .order('name');
-      setRequirements((data ?? []) as Requirement[]);
-    }
+    const { data } = await supabase
+      .from('status_requirements')
+      .select('id, name, description, min_points, min_events, applies_to, warning_threshold, is_mandatory, consequence')
+      .eq('org_id', orgId).eq('is_deleted', false)
+      .order('name');
+    setRequirements((data ?? []) as Requirement[]);
     setLoading(false);
   }, [orgId]);
 
   useEffect(() => { load(); }, [load]);
 
   async function handleSave(form: Omit<Requirement, 'id'>) {
-    if (!form.name.trim()) { Alert.alert('Required', 'Requirement name is required.'); return; }
-    if (!term) { Alert.alert('No term', 'No active academic term found.'); return; }
+    if (!form.name.trim()) { showAlert('Required', 'Requirement name is required.'); return; }
     setSaving(true);
     if (editing) {
       const { error } = await supabase
         .from('status_requirements')
         .update({ ...form, updated_at: new Date().toISOString() })
         .eq('id', editing.id);
-      if (error) { Alert.alert('Error', error.message); setSaving(false); return; }
+      if (error) { showAlert('Error', error.message); setSaving(false); return; }
     } else {
       const { error } = await supabase
         .from('status_requirements')
-        .insert({ ...form, org_id: orgId, term_id: term.id });
-      if (error) { Alert.alert('Error', error.message); setSaving(false); return; }
+        .insert({ ...form, org_id: orgId });
+      if (error) { showAlert('Error', error.message); setSaving(false); return; }
     }
     setSaving(false);
     setShowForm(false);
@@ -295,18 +285,17 @@ export default function OfficerRequirementsScreen() {
   }
 
   async function handleDelete(req: Requirement) {
-    Alert.alert('Delete requirement', `Remove "${req.name}"? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          await supabase.from('status_requirements')
-            .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-            .eq('id', req.id);
-          load();
-        },
+    confirm(
+      'Delete requirement',
+      `Remove "${req.name}"? This cannot be undone.`,
+      async () => {
+        await supabase.from('status_requirements')
+          .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+          .eq('id', req.id);
+        load();
       },
-    ]);
+      { confirmLabel: 'Delete', destructive: true }
+    );
   }
 
   if (loading) {
@@ -326,37 +315,20 @@ export default function OfficerRequirementsScreen() {
 
   const list = (
     <View style={{ gap: 12 }}>
-      {/* Term header */}
-      {term ? (
-        <View style={[s.termPill, { backgroundColor: c.primary + '14', borderColor: c.primary + '40' }]}>
-          <Ionicons name="calendar-outline" size={14} color={c.primary} />
-          <Text size="xs" weight="medium" color={c.primary}>
-            {term.name} · {term.start_date} → {term.end_date}
-          </Text>
-        </View>
-      ) : (
-        <View style={[s.termPill, { backgroundColor: c.warning + '14', borderColor: c.warning + '40' }]}>
-          <Ionicons name="alert-circle-outline" size={14} color={c.warning} />
-          <Text size="xs" weight="medium" color={c.warning}>No active term — go to Settings → Date Terms to create one</Text>
-        </View>
-      )}
-
       {/* Add button */}
-      {!!term && (
-        <Pressable
-          onPress={() => { setEditing(null); setShowForm(true); }}
-          style={[s.addBtn, { borderColor: c.primary, backgroundColor: c.primary + '0f' }]}
-        >
-          <Ionicons name="add-circle-outline" size={18} color={c.primary} />
-          <Text size="sm" weight="medium" color={c.primary}>Add requirement</Text>
-        </Pressable>
-      )}
+      <Pressable
+        onPress={() => { setEditing(null); setShowForm(true); }}
+        style={[s.addBtn, { borderColor: c.primary, backgroundColor: c.primary + '0f' }]}
+      >
+        <Ionicons name="add-circle-outline" size={18} color={c.primary} />
+        <Text size="sm" weight="medium" color={c.primary}>Add requirement</Text>
+      </Pressable>
 
-      {requirements.length === 0 && !!term && (
+      {requirements.length === 0 && (
         <Card style={{ alignItems: 'center', gap: 10, paddingVertical: 32 }}>
           <Ionicons name="clipboard-outline" size={36} color={c.textSubtle} />
           <Text size="sm" color={c.textMuted} style={{ textAlign: 'center' }}>
-            No requirements for this term.{'\n'}Add one to start tracking compliance.
+            No requirements yet.{'\n'}Add one to start tracking compliance.
           </Text>
         </Card>
       )}
@@ -425,8 +397,8 @@ export default function OfficerRequirementsScreen() {
       {/* Header */}
       <View style={[s.header, {
         paddingTop: isWide ? 20 : insets.top + 12,
-        backgroundColor: c.surface, borderBottomColor: c.border,
-      }]}>
+        backgroundColor: c.surface, borderBottomColor: c.border
+} ]}>
         <Pressable onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="chevron-back" size={20} color={c.text} />
           <Text size="sm" weight="medium" color={c.text}>Status</Text>
@@ -434,7 +406,7 @@ export default function OfficerRequirementsScreen() {
         <View style={{ flex: 1 }}>
           <Text size="xxl" weight="bold">Compliance Requirements</Text>
           <Text size="xs" color={c.textMuted} style={{ marginTop: 2 }}>
-            Define attendance & points thresholds for the active term
+            Define attendance & points thresholds for your chapter
           </Text>
         </View>
       </View>
@@ -469,8 +441,7 @@ const s = StyleSheet.create({
   scroll:      { padding: 16, gap: 16 },
   scrollWide:  { padding: 32 },
   wideCols:    { flexDirection: 'row', gap: 24, alignItems: 'flex-start' },
-  termPill:    { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
   addBtn:      { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, borderStyle: 'dashed' },
   badge:       { borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 },
-  iconBtn:     { width: 32, height: 32, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-});
+  iconBtn:     { width: 32, height: 32, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }
+} );

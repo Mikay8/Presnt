@@ -61,10 +61,6 @@ type MemberRow = {
   isCompliant: boolean;
 };
 
-type AcademicTerm = {
-  id: string; name: string; start_date: string; end_date: string;
-};
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function pct(earned: number, required: number) {
@@ -145,7 +141,7 @@ function MemberItem({ m, reqs, c }: { m: MemberRow; reqs: Requirement[]; c: any 
 
         {/* No snapshots yet */}
         {m.snapshots.length === 0 && (
-          <Text size="xs" color={c.textSubtle}>No requirements set for this term</Text>
+          <Text size="xs" color={c.textSubtle}>No requirements tracked yet</Text>
         )}
       </View>
 
@@ -177,7 +173,6 @@ export default function OfficerStatusScreen() {
   const { membership } = useAuthStore();
   const orgId = membership?.org_id ?? '';
 
-  const [term,         setTerm]         = useState<AcademicTerm | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [members,      setMembers]      = useState<MemberRow[]>([]);
   const [loading,      setLoading]      = useState(true);
@@ -188,31 +183,16 @@ export default function OfficerStatusScreen() {
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
 
-    // 1. Active term
-    const { data: termData } = await supabase
-      .from('academic_terms')
-      .select('id, name, start_date, end_date')
+    // 1. Requirements (no term filter)
+    const { data: reqData } = await supabase
+      .from('status_requirements')
+      .select('id, name, min_points, min_events, warning_threshold')
       .eq('org_id', orgId)
-      .eq('is_active', true)
-      .single();
+      .eq('is_deleted', false)
+      .order('name');
+    setRequirements((reqData ?? []) as Requirement[]);
 
-    setTerm(termData ?? null);
-
-    // 2. Requirements for this term
-    const reqs: Requirement[] = [];
-    if (termData) {
-      const { data: reqData } = await supabase
-        .from('status_requirements')
-        .select('id, name, min_points, min_events, warning_threshold')
-        .eq('org_id', orgId)
-        .eq('term_id', termData.id)
-        .eq('is_deleted', false)
-        .order('name');
-      reqs.push(...((reqData ?? []) as Requirement[]));
-    }
-    setRequirements(reqs);
-
-    // 3. All active memberships
+    // 2. All active memberships
     const { data: membData } = await supabase
       .from('memberships')
       .select('id, dues_hold, profiles!user_id(first_name, last_name, email)')
@@ -221,18 +201,17 @@ export default function OfficerStatusScreen() {
       .eq('status', 'active')
       .order('user_id');
 
-    // 4. Snapshots for this term
+    // 3. Snapshots (no term filter)
     const snapshots: Snapshot[] = [];
-    if (termData && membData && membData.length > 0) {
+    if (membData && membData.length > 0) {
       const { data: snapData } = await supabase
         .from('status_snapshots')
         .select('membership_id, requirement_id, points_earned, points_required, events_attended, events_required, is_compliant, is_at_risk')
-        .eq('org_id', orgId)
-        .eq('term_id', termData.id);
+        .eq('org_id', orgId);
       snapshots.push(...((snapData ?? []) as Snapshot[]));
     }
 
-    // 5. Assemble member rows
+    // 4. Assemble member rows
     const rows: MemberRow[] = ((membData ?? []) as any[]).map((m) => {
       const mySnaps = snapshots.filter((s) => s.membership_id === m.id);
       const isAtRisk   = mySnaps.some((s) => s.is_at_risk);
@@ -311,7 +290,7 @@ export default function OfficerStatusScreen() {
         </View>
         <ComplianceBar value={overallPct} color={overallColor} />
         <Text size="xs" color={c.textSubtle}>
-          {compliant} of {total} members meeting all requirements · {term?.name ?? 'Current term'}
+          {compliant} of {total} members meeting all requirements
         </Text>
       </Card>
 
@@ -344,7 +323,7 @@ export default function OfficerStatusScreen() {
           ))}
           {requirements.length === 0 && (
             <View style={{ alignItems: 'center', paddingVertical: 20, gap: 6 }}>
-              <Text size="sm" color={c.textSubtle}>No requirements set for this term</Text>
+              <Text size="sm" color={c.textSubtle}>No requirements set yet</Text>
               <Pressable onPress={() => router.push('/(officer)/status/requirements' as any)}>
                 <Text size="sm" color={c.primary}>+ Add requirements</Text>
               </Pressable>
@@ -357,7 +336,7 @@ export default function OfficerStatusScreen() {
         <Card style={{ alignItems: 'center', gap: 10, paddingVertical: 24 }}>
           <Ionicons name="clipboard-outline" size={32} color={c.textSubtle} />
           <Text size="sm" color={c.textMuted} style={{ textAlign: 'center' }}>
-            No status requirements set for this term.{'\n'}Add requirements so member progress can be tracked.
+            No status requirements set yet.{'\n'}Add requirements so member progress can be tracked.
           </Text>
         </Card>
       )}
@@ -428,7 +407,7 @@ export default function OfficerStatusScreen() {
       <View>
         <Text size="xxl" weight="bold">Status</Text>
         <Text size="xs" color={c.textMuted} style={{ marginTop: 2 }}>
-          {term?.name ?? 'No active term'} · {total} members
+          {total} members
         </Text>
       </View>
     </View>

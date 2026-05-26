@@ -16,6 +16,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import { DemoBanner } from '@/components/DemoBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AlertProvider } from '@/components/ui';
 import { DOMAIN, logEvent } from '@/lib/apiLogger';
 import {
   clearPushToken,
@@ -436,23 +437,25 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(auth)"       />
-                <Stack.Screen name="(demo)"       />
-                <Stack.Screen name="(member)"     />
-                <Stack.Screen name="(officer)"    />
-                <Stack.Screen name="(admin)"      />
-                <Stack.Screen name="(org-admin)"  />
-                <Stack.Screen name="(superuser)"  />
-                <Stack.Screen name="super-user"   />
-                <Stack.Screen name="logout"       />
-                <Stack.Screen name="+not-found"   />
-              </Stack>
-              <RootLayoutNav />
-              <UserViewBanner />
-              <DemoBanner />
-            </KeyboardProvider>
+            <AlertProvider>
+              <KeyboardProvider>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="(auth)"       />
+                  <Stack.Screen name="(demo)"       />
+                  <Stack.Screen name="(member)"     />
+                  <Stack.Screen name="(officer)"    />
+                  <Stack.Screen name="(admin)"      />
+                  <Stack.Screen name="(org-admin)"  />
+                  <Stack.Screen name="(superuser)"  />
+                  <Stack.Screen name="super-user"   />
+                  <Stack.Screen name="logout"       />
+                  <Stack.Screen name="+not-found"   />
+                </Stack>
+                <RootLayoutNav />
+                <UserViewBanner />
+                <DemoBanner />
+              </KeyboardProvider>
+            </AlertProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
       </ErrorBoundary>

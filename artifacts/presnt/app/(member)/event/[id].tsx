@@ -3,19 +3,18 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 
-import { Avatar, Button, Card, Text } from '@/components/ui';
+import { Avatar, Button, Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -54,8 +53,8 @@ type AttendeePreview = {
 const TYPE_COLOR: Record<string, string> = {
   mandatory: '#E26B4A',
   social:    '#A855F7',
-  optional:  '#22C55E',
-};
+  optional:  '#22C55E'
+} ;
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -78,8 +77,8 @@ function openGoogleCalendar(ev: EventDetail) {
     text:     ev.title,
     dates:    `${toCalStamp(start)}/${toCalStamp(end)}`,
     details:  ev.description ?? '',
-    location: ev.location ?? '',
-  });
+    location: ev.location ?? ''
+} );
   Linking.openURL(`https://calendar.google.com/calendar/render?${params.toString()}`);
 }
 
@@ -111,7 +110,7 @@ function downloadIcal(ev: EventDetail) {
     // On native, open as a data URI so the OS can handle .ics
     const encoded = encodeURIComponent(ics);
     Linking.openURL(`data:text/calendar;charset=utf-8,${encoded}`).catch(() => {
-      Alert.alert('Export failed', 'Could not open the calendar file on this device.');
+      showAlert('Export failed', 'Could not open the calendar file on this device.');
     });
   }
 }
@@ -124,6 +123,7 @@ export default function EventDetailScreen() {
   const { width }     = useWindowDimensions();
   const insets        = useSafeAreaInsets();
   const isWide        = width >= 800;
+  const { showAlert } = useAlert();
   const { profile, membership, organization } = useAuthStore();
 
   const [event, setEvent]               = useState<EventDetail | null>(null);
@@ -155,19 +155,27 @@ export default function EventDetailScreen() {
           .eq('is_deleted', false)
           .single();
 
-    const [evResult, rsvpCountResult, userRsvpResult, attendeesResult] = await Promise.all([
-      evQuery,
+    // Resolve event first so related queries always use the UUID
+    const evResult = await evQuery;
+    if (evResult.error || !evResult.data) {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
+    setEvent(evResult.data as EventDetail);
+    const eventUuid = evResult.data.id;
 
+    const [rsvpCountResult, userRsvpResult, attendeesResult] = await Promise.all([
       supabase
         .from('rsvps')
         .select('id', { count: 'exact', head: true })
-        .eq('event_id', id)
+        .eq('event_id', eventUuid)
         .eq('status', 'going'),
 
       supabase
         .from('rsvps')
         .select('id, status')
-        .eq('event_id', id)
+        .eq('event_id', eventUuid)
         .eq('user_id', userId)
         .maybeSingle(),
 
@@ -175,16 +183,10 @@ export default function EventDetailScreen() {
       supabase
         .from('rsvps')
         .select('profiles!user_id(first_name, last_name)')
-        .eq('event_id', id)
+        .eq('event_id', eventUuid)
         .eq('status', 'going')
         .limit(6),
     ]);
-
-    if (evResult.error || !evResult.data) {
-      setNotFound(true);
-    } else {
-      setEvent(evResult.data as EventDetail);
-    }
 
     setRsvpCount(rsvpCountResult.count ?? 0);
     setUserRsvp(userRsvpResult.data ?? null);
@@ -196,8 +198,9 @@ export default function EventDetailScreen() {
 
   // ── RSVP toggle ─────────────────────────────────────────────────────────────
   async function handleRsvp() {
-    if (!userId || !orgId || !id) return;
+    if (!userId || !orgId || !event) return;
     setRsvpLoading(true);
+    const eventUuid = event.id;
 
     if (userRsvp) {
       // Remove RSVP
@@ -208,7 +211,7 @@ export default function EventDetailScreen() {
       // Add RSVP
       const { data } = await supabase
         .from('rsvps')
-        .insert({ event_id: id, user_id: userId, org_id: orgId, status: 'going' })
+        .insert({ event_id: eventUuid, user_id: userId, org_id: orgId, status: 'going' })
         .select('id, status')
         .single();
       if (data) {
@@ -252,6 +255,14 @@ export default function EventDetailScreen() {
       <Text size="sm" weight="medium" color={typeColor}>{typeLabel}</Text>
     </View>
   );
+
+  // ── Public pill ──
+  const publicPill = event.is_public ? (
+    <View style={[styles.categoryPill, { backgroundColor: '#22C55E20', borderColor: '#22C55E' }]}>
+      <Ionicons name="globe-outline" size={13} color="#22C55E" />
+      <Text size="sm" weight="medium" color="#22C55E">Public</Text>
+    </View>
+  ) : null;
 
   // ── Info chips (date, time, location) ──
   const chips = (
@@ -367,7 +378,7 @@ export default function EventDetailScreen() {
       >
         <View style={styles.wideTitleRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Pressable onPress={() => router.back()}
+            <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(member)' as any)}
               style={[styles.backBtn, { borderColor: theme.colors.border }]}>
               <Ionicons name="arrow-back-outline" size={16} color={theme.colors.text} />
             </Pressable>
@@ -392,6 +403,7 @@ export default function EventDetailScreen() {
             {banner}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Text size="xl" weight="bold" style={{ flex: 1 }}>{event.title}</Text>
+              {publicPill}
               {categoryPill}
             </View>
             {chips}
@@ -428,7 +440,7 @@ export default function EventDetailScreen() {
   return (
     <View style={[styles.mobileRoot, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.mobileTopNav, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()}
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(member)' as any)}
           style={[styles.backBtn, { borderColor: theme.colors.border }]}>
           <Ionicons name="arrow-back-outline" size={16} color={theme.colors.text} />
         </Pressable>
@@ -444,6 +456,7 @@ export default function EventDetailScreen() {
         {banner}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 }}>
           <Text size="xl" weight="bold" style={{ flex: 1 }}>{event.title}</Text>
+          {publicPill}
           {categoryPill}
         </View>
         <View style={{ marginTop: 14 }}>{chips}</View>
@@ -474,8 +487,8 @@ export default function EventDetailScreen() {
       <View style={[styles.mobileActionBar, {
         borderTopColor:  theme.colors.border,
         backgroundColor: theme.colors.background,
-        paddingBottom:   insets.bottom + 12,
-      }]}>
+        paddingBottom:   insets.bottom + 12
+} ]}>
         <Button
           label={isRsvped ? 'Cancel RSVP' : 'RSVP'}
           variant={isRsvped ? 'outline' : 'primary'}
@@ -512,5 +525,5 @@ const styles = StyleSheet.create({
   calendarRow:   { flexDirection: 'row', gap: 10 },
   calBtn:        { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, flex: 1, justifyContent: 'center' },
   qrContainer:   { alignItems: 'center', paddingVertical: 8 },
-  qrInner:       { borderRadius: 12, padding: 12 },
-});
+  qrInner:       { borderRadius: 12, padding: 12 }
+} );

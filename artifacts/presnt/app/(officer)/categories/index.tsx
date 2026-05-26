@@ -13,7 +13,6 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -22,11 +21,11 @@ import {
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Text } from '@/components/ui';
+import { Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -68,15 +67,15 @@ type CategoryForm = {
 };
 
 const BLANK_FORM: CategoryForm = {
-  name: '', color: PRESET_COLORS[0], description: '',
-};
+  name: '', color: PRESET_COLORS[0], description: ''
+} ;
 
 // ─── Color Swatch Picker ──────────────────────────────────────────────────────
 
 function ColorPicker({
   value,
-  onChange,
-}: {
+  onChange
+} : {
   value: string;
   onChange: (c: string) => void;
 }) {
@@ -137,8 +136,8 @@ const cp = StyleSheet.create({
   swatch:         { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   swatchSelected: { borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
   hexRow:         { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  hexPreview:     { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)' },
-});
+  hexPreview:     { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)' }
+} );
 
 // ─── Category Form Modal ──────────────────────────────────────────────────────
 
@@ -148,8 +147,8 @@ function CategoryFormModal({
   onClose,
   onSave,
   onDelete,
-  saving,
-}: {
+  saving
+} : {
   visible:  boolean;
   initial:  Category | null;
   onClose:  () => void;
@@ -276,16 +275,16 @@ const cf = StyleSheet.create({
   actionRow:   { flexDirection: 'row', gap: 10 },
   cancelBtn:   { borderWidth: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
   saveBtn:     { borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
-  deleteBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingVertical: 12 },
-});
+  deleteBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingVertical: 12 }
+} );
 
 // ─── Category Card ────────────────────────────────────────────────────────────
 
 function CategoryCard({
   category,
   usageCount,
-  onEdit,
-}: {
+  onEdit
+} : {
   category:   Category;
   usageCount: number;
   onEdit:     () => void;
@@ -341,8 +340,8 @@ const cc = StyleSheet.create({
   titleRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot:       { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
   editBtn:   { padding: 4 },
-  badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 4 },
-});
+  badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 4 }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -352,6 +351,7 @@ export default function CategoriesScreen() {
   const { membership, profile } = useAuthStore();
   const userView        = useUserViewStore((s) => s.session);
   const { width }       = useWindowDimensions();
+  const { confirm } = useAlert();
   const isWide          = width >= DESKTOP;
   const c               = theme.colors;
 
@@ -410,8 +410,8 @@ export default function CategoriesScreen() {
       const payload = {
         name:        form.name.trim(),
         color:       form.color,
-        description: form.description.trim() || null,
-      };
+        description: form.description.trim() || null
+} ;
       const editingCat = editing === false || editing === null ? null : editing;
       if (editingCat?.id) {
         await supabase
@@ -460,33 +460,24 @@ export default function CategoriesScreen() {
 
     if (eventCount === 0 || otherCats.length === 0) {
       // No events to migrate, or no other categories to migrate to — just delete
-      Alert.alert(
+      confirm(
         'Delete category',
         eventCount > 0
           ? `"${cat.name}" has ${eventCount} event${eventCount !== 1 ? 's' : ''} — they will become uncategorised.`
           : `Delete "${cat.name}"?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => doDelete(null) },
-        ]
+        () => doDelete(null),
+        { confirmLabel: 'Delete', destructive: true }
       );
       return;
     }
 
     // Has events AND other categories exist — show reassignment picker
-    const options = [
-      ...otherCats.map(c => ({
-        text: c.name,
-        onPress: () => doDelete(c.id),
-      })),
-      { text: 'Leave uncategorised', onPress: () => doDelete(null) },
-      { text: 'Cancel', style: 'cancel' as const, onPress: () => {} },
-    ];
-
-    Alert.alert(
+    // Multi-option Alert.alert doesn't work on web; fall back to confirm with "leave uncategorised"
+    confirm(
       'Move events before deleting',
-      `"${cat.name}" has ${eventCount} event${eventCount !== 1 ? 's' : ''}. Move them to:`,
-      options
+      `"${cat.name}" has ${eventCount} event${eventCount !== 1 ? 's' : ''}. Events will be left uncategorised.`,
+      () => doDelete(null),
+      { confirmLabel: 'Delete & uncategorise', destructive: true }
     );
   }
 
@@ -504,8 +495,8 @@ export default function CategoriesScreen() {
       <View style={[ls.header, {
         paddingTop: isWide ? 20 : insets.top + 12,
         backgroundColor: c.background,
-        borderBottomColor: c.border,
-      }]}>
+        borderBottomColor: c.border
+} ]}>
         <Pressable onPress={() => router.back()} style={ls.backBtn}>
           <Ionicons name="arrow-back" size={16} color={c.text} />
         </Pressable>
@@ -631,5 +622,5 @@ const ls = StyleSheet.create({
   gridItem:      { width: '31%', minWidth: 240 },
   listItem:      { width: '100%' },
   ghostCard:     { borderWidth: 1.5, borderRadius: 14, borderStyle: 'dashed', height: 140, alignItems: 'center', justifyContent: 'center' },
-  empty:         { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
-});
+  empty:         { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 }
+} );
