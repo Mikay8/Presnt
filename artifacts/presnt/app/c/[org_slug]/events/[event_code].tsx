@@ -167,12 +167,12 @@ function GuestForm({
 
   async function handleSubmit() {
     if (!first.trim() || !last.trim() || !email.trim()) {
-      Alert.alert('Missing info', 'Please fill in all fields.');
+      showAlert('Missing info', 'Please fill in all fields.');
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      showAlert('Invalid email', 'Please enter a valid email address.');
       return;
     }
     setSubmitting(true);
@@ -190,7 +190,7 @@ function GuestForm({
       if (error) throw error;
       setDone(true);
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Something went wrong. Please try again.');
+      showAlert('Error', e?.message ?? 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -290,6 +290,7 @@ export default function PublicEventPage() {
   const { width }  = useWindowDimensions();
   const insets     = useSafeAreaInsets();
   const isWide     = width >= 680;
+  const { showAlert } = useAlert();
 
   const [org,     setOrg]     = useState<PublicOrg | null>(null);
   const [event,   setEvent]   = useState<PublicEvent | null>(null);
@@ -362,7 +363,7 @@ export default function PublicEventPage() {
         navigator.share({ title: event!.title, url: publicUrl }).catch(() => {});
       } else {
         navigator?.clipboard?.writeText(publicUrl);
-        Alert.alert('Copied!', 'Link copied to clipboard.');
+        showAlert('Copied!', 'Link copied to clipboard.');
       }
     } else {
       Share.share({ message: publicUrl, title: event!.title }).catch(() => {});
