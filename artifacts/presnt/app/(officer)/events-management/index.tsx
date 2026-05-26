@@ -1408,7 +1408,7 @@ function EventTableRow({
 
   return (
     <Pressable
-      onPress={() => router.push(`/(officer)/events-management/${event.id}` as any)}
+      onPress={() => router.push(`/(officer)/events-management/${(event as any).event_code ?? event.id}` as any)}
       style={({ pressed }) => [dt.row, { borderBottomColor: c.border, backgroundColor: pressed ? c.surfaceAlt : 'transparent' }]}
     >
       <View style={[dt.dateBadge, { backgroundColor: c.surfaceAlt }]}>
@@ -1510,7 +1510,7 @@ function EventCard({ event, catMap, onEdit, onScan, canManage }: { event: Event;
 
   return (
     <Pressable
-      onPress={() => router.push(`/(officer)/events-management/${event.id}` as any)}
+      onPress={() => router.push(`/(officer)/events-management/${(event as any).event_code ?? event.id}` as any)}
       style={[mc.card, { backgroundColor: c.surface, borderColor: c.border }]}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -1621,7 +1621,7 @@ export default function OfficerEventsScreen() {
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const [evRes, catRes] = await Promise.all([
+    const [evRes, occRes, catRes] = await Promise.all([
       loggedQuery({
         domain: DOMAIN.EVENTS, method: 'GET', endpoint: 'events',
         orgId, userId: profile?.id,
@@ -1633,13 +1633,29 @@ export default function OfficerEventsScreen() {
           .eq('is_occurrence', false)
           .order('start_time', { ascending: false }),
       }),
+      // Upcoming occurrences (children of recurring masters)
+      supabase
+        .from('events')
+        .select('*')
+        .eq('org_id', orgId)
+        .eq('is_deleted', false)
+        .eq('is_occurrence', true)
+        .gte('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true }),
       supabase
         .from('event_categories')
         .select('id, name, color')
         .eq('org_id', orgId)
         .eq('is_deleted', false),
     ]);
-    setEvents((evRes.data ?? []) as Event[]);
+    const masters    = (evRes.data  ?? []) as Event[];
+    const upcomingOcc= (occRes.data ?? []) as Event[];
+    const seen = new Set<string>(masters.map(e => e.id));
+    const merged = [...masters];
+    for (const occ of upcomingOcc) {
+      if (!seen.has(occ.id)) { merged.push(occ); seen.add(occ.id); }
+    }
+    setEvents(merged);
     const map: Record<string, EventCategory> = {};
     for (const cat of (catRes.data ?? []) as EventCategory[]) map[cat.id] = cat;
     setCatMap(map);

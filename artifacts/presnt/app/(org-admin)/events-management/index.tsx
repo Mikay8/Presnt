@@ -1039,7 +1039,7 @@ function TableRow({ event, catMap, chapters, onEdit, onCancel, onScan }: {
 
   return (
     <Pressable
-      onPress={() => router.push(`/(org-admin)/events-management/${event.id}` as any)}
+      onPress={() => router.push(`/(org-admin)/events-management/${(event as any).event_code ?? event.id}` as any)}
       style={[tr.row, { borderBottomColor: c.border, opacity: isChapterEvent ? 0.85 : 1 }]}
     >
       <View style={[tr.dateBadge, { backgroundColor: c.surfaceAlt }]}>
@@ -1163,7 +1163,7 @@ function MobileCard({ event, catMap, chapters, onEdit, onScan }: {
 
   return (
     <Pressable
-      onPress={() => router.push(`/(org-admin)/events-management/${event.id}` as any)}
+      onPress={() => router.push(`/(org-admin)/events-management/${(event as any).event_code ?? event.id}` as any)}
       style={[mc.card, { backgroundColor: c.surface, borderColor: c.border, opacity: isChapterEvent ? 0.85 : 1 }]}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -1296,21 +1296,31 @@ export default function OrgAdminEventsScreen() {
     // chapter events have org_id = one of the chapterIds
     const allOrgIds = [parentOrgId, ...chapterIds];
 
-    const [evRes, catRes] = await Promise.all([
+    const [evRes, occRes, catRes] = await Promise.all([
       supabase.from('events').select('*')
         .in('org_id', allOrgIds).eq('is_deleted', false)
         .eq('is_occurrence', false)
         .order('start_time', { ascending: false }),
+      // Upcoming occurrences (children of recurring masters)
+      supabase.from('events').select('*')
+        .in('org_id', allOrgIds).eq('is_deleted', false)
+        .eq('is_occurrence', true)
+        .gte('start_time', new Date().toISOString())
+        .order('start_time', { ascending: true }),
       // Load categories from ALL orgs (parent + all chapters) so that chapter
       // events display their category badges correctly in the list view.
-      // RLS ensures we only get categories we're allowed to see.
-      // The org-admin can only CREATE categories for their own org (parentOrgId) —
-      // see the EventForm which scopes its category fetch to orgId (parentOrgId).
       supabase.from('event_categories').select('id, name, color')
         .in('org_id', allOrgIds).eq('is_deleted', false),
     ]);
 
-    setEvents((evRes.data ?? []) as Event[]);
+    const masters    = (evRes.data  ?? []) as Event[];
+    const upcomingOcc= (occRes.data ?? []) as Event[];
+    const seen = new Set<string>(masters.map(e => e.id));
+    const merged = [...masters];
+    for (const occ of upcomingOcc) {
+      if (!seen.has(occ.id)) { merged.push(occ); seen.add(occ.id); }
+    }
+    setEvents(merged);
     const map: Record<string, EventCategory> = {};
     for (const cat of (catRes.data ?? []) as EventCategory[]) map[cat.id] = cat;
     setCatMap(map);

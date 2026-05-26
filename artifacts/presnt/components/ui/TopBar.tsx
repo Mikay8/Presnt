@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useUserViewStore } from '@/stores/userViewStore';
@@ -10,7 +9,7 @@ import { Text } from './Text';
 
 export function TopBar() {
   const { theme } = useThemeStore();
-  const { profile, membership, organization } = useAuthStore();
+  const { profile, membership } = useAuthStore();
   const userView  = useUserViewStore((s) => s.session);
 
   const firstName = profile?.first_name ?? '';
@@ -26,20 +25,6 @@ export function TopBar() {
     ? displayRole.toUpperCase().replace('_', ' ')
     : 'MEMBER';
 
-  // Active term — fetch once on mount
-  const [termName, setTermName] = useState<string | null>(null);
-  useEffect(() => {
-    const orgId = userView?.org?.id ?? organization?.id;
-    if (!orgId) return;
-    supabase
-      .from('academic_terms')
-      .select('name')
-      .eq('org_id', orgId)
-      .eq('is_active', true)
-      .single()
-      .then(({ data }) => setTermName(data?.name ?? null));
-  }, [organization?.id, userView?.org?.id]);
-
   return (
     <View
       style={[
@@ -50,14 +35,6 @@ export function TopBar() {
         },
       ]}
     >
-      {/* Active term pill — left of search */}
-      {termName && (
-        <View style={[styles.termPill, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Ionicons name="calendar-outline" size={12} color={theme.colors.textMuted} />
-          <Text size="xs" color={theme.colors.textMuted} style={{ letterSpacing: 0.3 }}>{termName}</Text>
-        </View>
-      )}
-
       {/* Search */}
       <View
         style={[
@@ -147,16 +124,6 @@ const styles = StyleSheet.create({
     alignItems:    'center',
     gap:           12,
     marginLeft:    'auto',
-  },
-  termPill: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            5,
-    borderWidth:    1,
-    borderRadius:   20,
-    paddingHorizontal: 10,
-    paddingVertical:    5,
-    flexShrink:     0,
   },
   iconBtn: {
     width:          36,

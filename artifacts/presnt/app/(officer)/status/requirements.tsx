@@ -1,7 +1,7 @@
 /**
- * Admin — Compliance Requirements
+ * Officer — Compliance Requirements
  *
- * Create, edit, and delete status_requirements for the active academic term.
+ * Create, edit, and delete status_requirements for the chapter.
  * Each requirement has a name, min_points, optional min_events, applies_to,
  * and an optional warning_threshold.
  *
@@ -42,8 +42,6 @@ type Requirement = {
   is_mandatory:      boolean;
   consequence:       string | null;
 };
-
-type AcademicTerm = { id: string; name: string; start_date: string; end_date: string };
 
 const APPLIES_OPTIONS = [
   { value: 'all',        label: 'All members' },
@@ -246,7 +244,6 @@ export default function OfficerRequirementsScreen() {
   const { membership } = useAuthStore();
   const orgId = membership?.org_id ?? '';
 
-  const [term,         setTerm]         = useState<AcademicTerm | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [editing,      setEditing]      = useState<Requirement | null>(null);
@@ -255,18 +252,12 @@ export default function OfficerRequirementsScreen() {
 
   const load = useCallback(async () => {
     if (!orgId) { setLoading(false); return; }
-    const { data: termData } = await supabase
-      .from('academic_terms').select('id, name, start_date, end_date')
-      .eq('org_id', orgId).eq('is_active', true).single();
-    setTerm(termData ?? null);
-    if (termData) {
-      const { data } = await supabase
-        .from('status_requirements')
-        .select('id, name, description, min_points, min_events, applies_to, warning_threshold, is_mandatory, consequence')
-        .eq('org_id', orgId).eq('term_id', termData.id).eq('is_deleted', false)
-        .order('name');
-      setRequirements((data ?? []) as Requirement[]);
-    }
+    const { data } = await supabase
+      .from('status_requirements')
+      .select('id, name, description, min_points, min_events, applies_to, warning_threshold, is_mandatory, consequence')
+      .eq('org_id', orgId).eq('is_deleted', false)
+      .order('name');
+    setRequirements((data ?? []) as Requirement[]);
     setLoading(false);
   }, [orgId]);
 
@@ -274,7 +265,6 @@ export default function OfficerRequirementsScreen() {
 
   async function handleSave(form: Omit<Requirement, 'id'>) {
     if (!form.name.trim()) { Alert.alert('Required', 'Requirement name is required.'); return; }
-    if (!term) { Alert.alert('No term', 'No active academic term found.'); return; }
     setSaving(true);
     if (editing) {
       const { error } = await supabase
@@ -285,7 +275,7 @@ export default function OfficerRequirementsScreen() {
     } else {
       const { error } = await supabase
         .from('status_requirements')
-        .insert({ ...form, org_id: orgId, term_id: term.id });
+        .insert({ ...form, org_id: orgId });
       if (error) { Alert.alert('Error', error.message); setSaving(false); return; }
     }
     setSaving(false);
@@ -326,37 +316,20 @@ export default function OfficerRequirementsScreen() {
 
   const list = (
     <View style={{ gap: 12 }}>
-      {/* Term header */}
-      {term ? (
-        <View style={[s.termPill, { backgroundColor: c.primary + '14', borderColor: c.primary + '40' }]}>
-          <Ionicons name="calendar-outline" size={14} color={c.primary} />
-          <Text size="xs" weight="medium" color={c.primary}>
-            {term.name} · {term.start_date} → {term.end_date}
-          </Text>
-        </View>
-      ) : (
-        <View style={[s.termPill, { backgroundColor: c.warning + '14', borderColor: c.warning + '40' }]}>
-          <Ionicons name="alert-circle-outline" size={14} color={c.warning} />
-          <Text size="xs" weight="medium" color={c.warning}>No active term — go to Settings → Date Terms to create one</Text>
-        </View>
-      )}
-
       {/* Add button */}
-      {!!term && (
-        <Pressable
-          onPress={() => { setEditing(null); setShowForm(true); }}
-          style={[s.addBtn, { borderColor: c.primary, backgroundColor: c.primary + '0f' }]}
-        >
-          <Ionicons name="add-circle-outline" size={18} color={c.primary} />
-          <Text size="sm" weight="medium" color={c.primary}>Add requirement</Text>
-        </Pressable>
-      )}
+      <Pressable
+        onPress={() => { setEditing(null); setShowForm(true); }}
+        style={[s.addBtn, { borderColor: c.primary, backgroundColor: c.primary + '0f' }]}
+      >
+        <Ionicons name="add-circle-outline" size={18} color={c.primary} />
+        <Text size="sm" weight="medium" color={c.primary}>Add requirement</Text>
+      </Pressable>
 
-      {requirements.length === 0 && !!term && (
+      {requirements.length === 0 && (
         <Card style={{ alignItems: 'center', gap: 10, paddingVertical: 32 }}>
           <Ionicons name="clipboard-outline" size={36} color={c.textSubtle} />
           <Text size="sm" color={c.textMuted} style={{ textAlign: 'center' }}>
-            No requirements for this term.{'\n'}Add one to start tracking compliance.
+            No requirements yet.{'\n'}Add one to start tracking compliance.
           </Text>
         </Card>
       )}
@@ -434,7 +407,7 @@ export default function OfficerRequirementsScreen() {
         <View style={{ flex: 1 }}>
           <Text size="xxl" weight="bold">Compliance Requirements</Text>
           <Text size="xs" color={c.textMuted} style={{ marginTop: 2 }}>
-            Define attendance & points thresholds for the active term
+            Define attendance & points thresholds for your chapter
           </Text>
         </View>
       </View>
@@ -469,7 +442,6 @@ const s = StyleSheet.create({
   scroll:      { padding: 16, gap: 16 },
   scrollWide:  { padding: 32 },
   wideCols:    { flexDirection: 'row', gap: 24, alignItems: 'flex-start' },
-  termPill:    { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
   addBtn:      { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, borderStyle: 'dashed' },
   badge:       { borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 },
   iconBtn:     { width: 32, height: 32, borderWidth: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

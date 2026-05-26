@@ -43,7 +43,6 @@ type Snapshot = {
   is_at_risk:     boolean;
 };
 
-type AcademicTerm = { id: string; name: string; start_date: string; end_date: string; };
 
 // Future-excuse events (for the top button picker)
 type FutureEvent = { id: string; title: string; start_time: string; };
@@ -483,13 +482,11 @@ export default function StatusScreen() {
   const isWide       = width >= 800;
   const { profile, membership, organization } = useAuthStore();
 
-  const [term,         setTerm]         = useState<AcademicTerm | null>(null);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [snapshots,    setSnapshots]    = useState<Snapshot[]>([]);
   const [records,      setRecords]      = useState<AttendanceRecord[]>([]);
   const [futureEvents, setFutureEvents] = useState<FutureEvent[]>([]);
   const [totalMandatory, setTotal]      = useState(0);
-  const [weeksLeft,    setWeeksLeft]    = useState(0);
   const [loading,      setLoading]      = useState(true);
   const [refreshing,   setRefreshing]   = useState(false);
 
@@ -505,37 +502,23 @@ export default function StatusScreen() {
   const load = useCallback(async () => {
     if (!orgId || !userId) { setLoading(false); return; }
 
-    // 1. Active term
-    const { data: termData } = await supabase
-      .from('academic_terms').select('id, name, start_date, end_date')
-      .eq('org_id', orgId).eq('is_active', true).single();
-    setTerm(termData ?? null);
+    // 1. Requirements (no term filter)
+    const { data: rData } = await supabase
+      .from('status_requirements')
+      .select('id, name, min_points, min_events, warning_threshold, consequence')
+      .eq('org_id', orgId).eq('is_deleted', false).order('name');
+    setRequirements((rData ?? []) as Requirement[]);
 
-    if (termData) {
-      const end = new Date(termData.end_date);
-      const ms  = end.getTime() - Date.now();
-      setWeeksLeft(Math.max(0, Math.ceil(ms / (7 * 24 * 60 * 60 * 1000))));
-    }
-
-    // 2. Requirements for this term
-    if (termData) {
-      const { data: rData } = await supabase
-        .from('status_requirements')
-        .select('id, name, min_points, min_events, warning_threshold, consequence')
-        .eq('org_id', orgId).eq('term_id', termData.id).eq('is_deleted', false).order('name');
-      setRequirements((rData ?? []) as Requirement[]);
-    }
-
-    // 3. My snapshots for this term
-    if (termData && membId) {
+    // 2. My snapshots (no term filter)
+    if (membId) {
       const { data: sData } = await supabase
         .from('status_snapshots')
         .select('requirement_id, points_earned, points_required, events_attended, events_required, is_compliant, is_at_risk')
-        .eq('membership_id', membId).eq('term_id', termData.id);
+        .eq('membership_id', membId);
       setSnapshots((sData ?? []) as Snapshot[]);
     }
 
-    // 4. Attendance records (recent 50)
+    // 3. Attendance records (recent 50)
     const { data: attData } = await supabase
       .from('event_attendance')
       .select('id, status, checked_in_at, events(id, title, type, start_time)')
@@ -543,17 +526,13 @@ export default function StatusScreen() {
       .order('created_at', { ascending: false }).limit(50);
     if (attData) setRecords(attData as AttendanceRecord[]);
 
-    // 5. Total mandatory events in term (for headline donut)
-    if (termData) {
-      const { count } = await supabase
-        .from('events').select('id', { count: 'exact', head: true })
-        .eq('org_id', orgId).eq('type', 'mandatory').eq('is_deleted', false)
-        .gte('start_time', `${termData.start_date}T00:00:00Z`)
-        .lte('start_time', `${termData.end_date}T23:59:59Z`);
-      setTotal(count ?? 0);
-    }
+    // 4. Total mandatory events (all time for this org)
+    const { count } = await supabase
+      .from('events').select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId).eq('type', 'mandatory').eq('is_deleted', false);
+    setTotal(count ?? 0);
 
-    // 6. Upcoming events (for "future excuse" picker)
+    // 5. Upcoming events (for "future excuse" picker)
     const { data: upcomingData } = await supabase
       .from('events')
       .select('id, title, start_time')
@@ -594,7 +573,6 @@ export default function StatusScreen() {
   const attended   = records.filter((r) => r.status === 'present' || r.status === 'late').length;
   const excused    = records.filter((r) => r.status === 'excused').length;
   const pct        = totalMandatory > 0 ? Math.round((attended / totalMandatory) * 100) : 0;
-  const termLabel  = term?.name ?? 'Current term';
 
   const mandatoryRecs = records.filter((r) => r.events?.type === 'mandatory');
   const socialRecs    = records.filter((r) => r.events?.type === 'social');
@@ -687,7 +665,7 @@ export default function StatusScreen() {
             <View>
               <Text size="h1" weight="bold">Status</Text>
               <Text size="sm" color={c.textMuted} style={{ marginTop: 4 }}>
-                {termLabel}{weeksLeft > 0 ? ` · ${weeksLeft} week${weeksLeft !== 1 ? 's' : ''} remaining` : ''}
+                Attendance & Compliance
               </Text>
             </View>
             <Button label="Submit excuse" size="sm" onPress={openFutureExcuse} />
@@ -701,7 +679,7 @@ export default function StatusScreen() {
                   style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
                   Attendance
                 </Text>
-                <DonutChart percent={pct} size={180} strokeWidth={20} sublabel={termLabel} />
+                <DonutChart percent={pct} size={180} strokeWidth={20} />
                 <Text size="sm" color={c.textMuted}>
                   {attended} of {totalMandatory} meetings attended
                 </Text>
@@ -780,7 +758,7 @@ export default function StatusScreen() {
         <View style={styles.mobileDonut}>
           <DonutChart percent={pct} size={180} strokeWidth={20} />
           <Text size="sm" color={c.textMuted} style={{ marginTop: 12, textAlign: 'center' }}>
-            {attended} of {totalMandatory} meetings attended · {termLabel}
+            {attended} of {totalMandatory} meetings attended
           </Text>
         </View>
 

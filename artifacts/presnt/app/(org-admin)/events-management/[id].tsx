@@ -52,6 +52,8 @@ type EventDetail = {
   checkin_open_minutes:  number | null;
   checkin_grace_minutes: number | null;
   is_org_wide:   boolean | null;
+  is_public:     boolean | null;
+  event_code:    string | null;
   org_id:        string;
   location_lat:  number | null;
   location_lng:  number | null;
@@ -80,7 +82,21 @@ type Member = {
   profiles: { first_name: string; last_name: string; email: string } | null;
 };
 
+type GuestRow = {
+  id:         string;
+  first_name: string;
+  last_name:  string;
+  email:      string;
+  type:       'rsvp' | 'attendance';
+  created_at: string | null;
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Returns true if the string looks like a UUID v4. */
+function isUuid(s: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -265,6 +281,7 @@ export default function OrgAdminEventDetailScreen() {
   const [event,      setEvent]      = useState<EventDetail | null>(null);
   const [rsvps,      setRsvps]      = useState<RsvpRow[]>([]);
   const [attendance, setAttendance] = useState<AttendRow[]>([]);
+  const [guests,     setGuests]     = useState<GuestRow[]>([]);
   const [allMembers, setAllMembers] = useState<Member[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [tab,        setTab]        = useState<TabKey>('registrations');
@@ -276,31 +293,41 @@ export default function OrgAdminEventDetailScreen() {
   const load = useCallback(async () => {
     if (!id || !parentOrgId) { setLoading(false); return; }
 
-    // Load event first so we know which org owns it
-    const evRes = await supabase
-      .from('events')
-      .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide, org_id, location_lat, location_lng, geofence_radius_m, geofence_required')
-      .eq('id', id)
-      .single();
+    // Load event first so we know which org owns it (support UUID or event_code slug)
+    const evQuery = isUuid(id)
+      ? supabase
+          .from('events')
+          .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide, is_public, event_code, org_id, location_lat, location_lng, geofence_radius_m, geofence_required')
+          .eq('id', id)
+          .single()
+      : supabase
+          .from('events')
+          .select('id, title, type, start_time, end_time, location, meeting_url, description, is_cancelled, rsvp_required, points, checkin_open_minutes, checkin_grace_minutes, is_org_wide, is_public, event_code, org_id, location_lat, location_lng, geofence_radius_m, geofence_required')
+          .eq('event_code', id)
+          .eq('is_deleted', false)
+          .single();
+
+    const evRes = await evQuery;
 
     const ev = evRes.data as EventDetail | null;
     if (ev) setEvent(ev);
 
-    // Use the event's actual org_id for RSVP / attendance queries
+    // Use the event's actual UUID and org_id for RSVP / attendance queries
+    const eventUuid  = ev?.id ?? id;
     const eventOrgId = ev?.org_id ?? parentOrgId;
 
-    const [rsvpRes, attendRes, membRes] = await Promise.all([
+    const [rsvpRes, attendRes, membRes, guestRes] = await Promise.all([
       supabase
         .from('rsvps')
         .select('id, user_id, status, created_at, profiles(first_name, last_name, email)')
-        .eq('event_id', id)
+        .eq('event_id', eventUuid)
         .eq('org_id', eventOrgId)
         .order('created_at'),
 
       supabase
         .from('event_attendance')
         .select('id, user_id, status, checked_in_at, profiles(first_name, last_name, email)')
-        .eq('event_id', id)
+        .eq('event_id', eventUuid)
         .eq('org_id', eventOrgId)
         .order('checked_in_at'),
 
@@ -311,11 +338,18 @@ export default function OrgAdminEventDetailScreen() {
         .eq('org_id', eventOrgId)
         .is('deleted_at', null)
         .order('user_id'),
+
+      supabase
+        .from('public_event_guests')
+        .select('id, first_name, last_name, email, type, created_at')
+        .eq('event_id', eventUuid)
+        .order('created_at'),
     ]);
 
     if (rsvpRes.data)   setRsvps(rsvpRes.data as unknown as RsvpRow[]);
     if (attendRes.data) setAttendance(attendRes.data as unknown as AttendRow[]);
     if (membRes.data)   setAllMembers(membRes.data as unknown as Member[]);
+    if (guestRes.data)  setGuests(guestRes.data as GuestRow[]);
     setLoading(false);
   }, [id, parentOrgId]);
 
@@ -474,6 +508,12 @@ export default function OrgAdminEventDetailScreen() {
             <Text size="xs" weight="medium" color={c.textSubtle}>Chapter Event</Text>
           </View>
         )}
+        {event.is_public && (
+          <View style={[ip.typeBadge, { backgroundColor: '#22C55E18', borderColor: '#22C55E50', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+            <Ionicons name="globe-outline" size={11} color="#22C55E" />
+            <Text size="xs" weight="medium" color="#22C55E">Public</Text>
+          </View>
+        )}
       </View>
 
       <Text size="xl" weight="bold" style={{ marginBottom: 4 }}>{event.title}</Text>
@@ -529,12 +569,12 @@ export default function OrgAdminEventDetailScreen() {
       {/* Stats */}
       <View style={[ip.stats, { borderTopColor: c.border, marginTop: 16, paddingTop: 14 }]}>
         <View style={ip.stat}>
-          <Text size="xl" weight="bold" color={c.primary}>{rsvps.length}</Text>
+          <Text size="xl" weight="bold" color={c.primary}>{rsvps.length + guestRsvps.length}</Text>
           <Text size="xs" color={c.textSubtle}>Registered</Text>
         </View>
         <View style={[ip.statDivider, { backgroundColor: c.border }]} />
         <View style={ip.stat}>
-          <Text size="xl" weight="bold" color="#22C55E">{attendance.length}</Text>
+          <Text size="xl" weight="bold" color="#22C55E">{attendance.length + guestAttend.length}</Text>
           <Text size="xs" color={c.textSubtle}>Attended</Text>
         </View>
       </View>
@@ -563,8 +603,20 @@ export default function OrgAdminEventDetailScreen() {
 
   // ── Tabs panel ────────────────────────────────────────────────────────────
 
+  const guestRsvps  = guests.filter((g) => g.type === 'rsvp');
+  const guestAttend = guests.filter((g) => g.type === 'attendance');
+
+  function GuestBadge() {
+    return (
+      <View style={[ls.statusChip, { backgroundColor: '#8B5CF618', borderColor: '#8B5CF6' }]}>
+        <Text size="xs" weight="medium" color="#8B5CF6">Guest</Text>
+      </View>
+    );
+  }
+
   function RsvpList() {
-    if (rsvps.length === 0) {
+    const hasAny = rsvps.length > 0 || guestRsvps.length > 0;
+    if (!hasAny) {
       return (
         <View style={ls.emptyBox}>
           <Ionicons name="person-outline" size={28} color={c.textSubtle} />
@@ -600,12 +652,27 @@ export default function OrgAdminEventDetailScreen() {
             )}
           </View>
         ))}
+        {guestRsvps.map((g) => (
+          <View key={g.id} style={[ls.personRow, { borderBottomColor: c.border }]}>
+            <View style={[ls.avatar, { backgroundColor: '#8B5CF622' }]}>
+              <Text size="sm" weight="bold" color="#8B5CF6">
+                {g.first_name[0] ?? '?'}{g.last_name[0] ?? ''}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text size="sm" weight="medium">{g.first_name} {g.last_name}</Text>
+              <Text size="xs" color={c.textMuted}>{g.email}</Text>
+            </View>
+            <GuestBadge />
+          </View>
+        ))}
       </>
     );
   }
 
   function AttendList() {
-    if (attendance.length === 0) {
+    const hasAny = attendance.length > 0 || guestAttend.length > 0;
+    if (!hasAny) {
       return (
         <View style={ls.emptyBox}>
           <Ionicons name="checkmark-circle-outline" size={28} color={c.textSubtle} />
@@ -641,6 +708,20 @@ export default function OrgAdminEventDetailScreen() {
             )}
           </View>
         ))}
+        {guestAttend.map((g) => (
+          <View key={g.id} style={[ls.personRow, { borderBottomColor: c.border }]}>
+            <View style={[ls.avatar, { backgroundColor: '#8B5CF622' }]}>
+              <Text size="sm" weight="bold" color="#8B5CF6">
+                {g.first_name[0] ?? '?'}{g.last_name[0] ?? ''}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text size="sm" weight="medium">{g.first_name} {g.last_name}</Text>
+              <Text size="xs" color={c.textMuted}>{g.email}</Text>
+            </View>
+            <GuestBadge />
+          </View>
+        ))}
       </>
     );
   }
@@ -650,7 +731,7 @@ export default function OrgAdminEventDetailScreen() {
       <View style={[tp.tabBar, { borderBottomColor: c.border }]}>
         {(['registrations', 'attendance'] as TabKey[]).map((t) => {
           const active = tab === t;
-          const count  = t === 'registrations' ? rsvps.length : attendance.length;
+          const count  = t === 'registrations' ? rsvps.length + guestRsvps.length : attendance.length + guestAttend.length;
           return (
             <Pressable key={t} onPress={() => setTab(t)}
               style={[tp.tabBtn, active && [tp.tabBtnActive, { borderBottomColor: c.primary }]]}>
@@ -705,7 +786,7 @@ export default function OrgAdminEventDetailScreen() {
         borderBottomColor: c.border,
         backgroundColor: c.background,
       }]}>
-        <Pressable onPress={() => router.back()} style={sc.backBtn}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(org-admin)/events-management' as any)} style={sc.backBtn}>
           <Ionicons name="arrow-back-outline" size={18} color={c.text} />
           <Text size="sm" weight="medium">Events</Text>
         </Pressable>

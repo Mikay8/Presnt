@@ -39,6 +39,7 @@ import { useThemeStore } from '@/stores/themeStore';
 import type { Tables } from '@/types/database';
 
 type Organization = Tables<'organizations'>;
+type Chapter = Tables<'chapters'>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,15 +55,6 @@ function generateJoinCode(name: string): string {
   const base = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
   const rand  = Math.random().toString(36).slice(2, 5).toUpperCase();
   return `${base}-${rand}`;
-}
-
-function getCurrentSemester() {
-  const now   = new Date();
-  const month = now.getMonth() + 1;
-  const year  = now.getFullYear();
-  if (month <= 5) return { name: `Spring ${year}`, start: `${year}-01-15`, end: `${year}-05-15` };
-  if (month <= 7) return { name: `Summer ${year}`, start: `${year}-05-16`, end: `${year}-08-15` };
-  return { name: `Fall ${year}`, start: `${year}-08-16`, end: `${year}-12-20` };
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -101,12 +93,6 @@ export default function CreateChapterScreen() {
   const [codeEdited,   setCodeEdited]   = useState(false);
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
-
-  // ── Step 3: date term (optional) ──────────────────────────────────────────
-  const defaultTerm = getCurrentSemester();
-  const [termName,  setTermName]  = useState(defaultTerm.name);
-  const [termStart, setTermStart] = useState(defaultTerm.start);
-  const [termEnd,   setTermEnd]   = useState(defaultTerm.end);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -189,14 +175,13 @@ export default function CreateChapterScreen() {
     setError('');
     setLoading(true);
 
-    // Create the chapter org row
-    const { data: org, error: orgError } = await supabase
-      .from('organizations')
+    // Create the chapter row (triggers sync to organizations table automatically)
+    const { data: chapter, error: chapterError } = await supabase
+      .from('chapters')
       .insert({
         name:             name.trim(),
         slug:             slugify(name),
-        type:             'chapter',
-        parent_org_id:    parentOrg?.id ?? null,
+        org_id:           parentOrg?.id ?? null as any,   // null for independent (no parent org)
         institution:      affiliation === 'independent' ? 'INDEPENDENT' : institution.trim(),
         greek_letter_org: greekLetter.trim() || null,
         primary_color:    primaryColor,
@@ -205,22 +190,23 @@ export default function CreateChapterScreen() {
         created_by:       userId,
         is_active:        true,
         is_deleted:       false,
-      })
+      } as any)
       .select()
       .single();
 
-    if (orgError || !org) {
+    if (chapterError || !chapter) {
       setLoading(false);
-      setError(orgError?.message ?? 'Failed to create chapter. The name may already be taken.');
+      setError(chapterError?.message ?? 'Failed to create chapter. The name may already be taken.');
       return;
     }
 
-    // Create admin membership
+    // Create admin membership — org_id still references the chapter's ID
+    // (memberships.org_id is the chapter ID, kept in sync with organizations table)
     const { data: membership, error: membershipError } = await supabase
       .from('memberships')
       .insert({
         user_id:    userId,
-        org_id:     org.id,
+        org_id:     chapter.id,
         status:     'active',
         role:       'admin',
         is_deleted: false,
@@ -235,20 +221,15 @@ export default function CreateChapterScreen() {
       return;
     }
 
-    // Seed first academic term (use user-supplied values, or auto-detected defaults)
-    const tName  = termName.trim()  || defaultTerm.name;
-    const tStart = termStart.trim() || defaultTerm.start;
-    const tEnd   = termEnd.trim()   || defaultTerm.end;
-    await supabase.from('academic_terms').insert({
-      org_id:     org.id,
-      name:       tName,
-      start_date: tStart,
-      end_date:   tEnd,
-      is_active:  true,
-    });
+    // Fetch the synced organizations row so the auth store shape stays consistent
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('id', chapter.id)
+      .maybeSingle();
 
     await supabase.auth.refreshSession();
-    setMembership(membership, org);
+    setMembership(membership, org ?? null);
     setLoading(false);
     router.replace('/(admin)/dashboard');
   }
@@ -479,41 +460,6 @@ export default function CreateChapterScreen() {
                 >
                   <Ionicons name="refresh-outline" size={18} color={c.textMuted} />
                 </Pressable>
-              </View>
-
-              {/* Date Term */}
-              <View style={styles.sectionDivider} />
-              <Text size="xs" weight="medium" color={c.textMuted} style={styles.sectionLabel}>First Academic Term</Text>
-              <Text size="xs" color={c.textSubtle} style={{ marginBottom: 4, marginTop: -4 }}>
-                Pre-filled with the current semester. You can change it any time in Settings.
-              </Text>
-
-              <Input
-                label="Term name"
-                value={termName}
-                onChangeText={setTermName}
-                placeholder="e.g. Fall 2026"
-              />
-
-              <View style={[styles.row, !isWide && styles.col]}>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    label="Start date"
-                    value={termStart}
-                    onChangeText={setTermStart}
-                    placeholder="YYYY-MM-DD"
-                    autoCorrect={false}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    label="End date"
-                    value={termEnd}
-                    onChangeText={setTermEnd}
-                    placeholder="YYYY-MM-DD"
-                    autoCorrect={false}
-                  />
-                </View>
               </View>
 
               {/* Branding */}

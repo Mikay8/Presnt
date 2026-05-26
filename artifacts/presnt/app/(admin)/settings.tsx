@@ -373,15 +373,9 @@ export default function AdminSettingsScreen() {
         <SectionHeader label="Compliance" />
         <Card style={{ paddingVertical: 0 }}>
           <SettingRow
-            icon="calendar-number-outline"
-            label="Date Terms"
-            value="Manage academic terms (semesters / quarters)"
-            onPress={() => router.push('/(admin)/date-terms' as any)}
-          />
-          <SettingRow
             icon="clipboard-outline"
             label="Requirements"
-            value="Set attendance & points thresholds for the active term"
+            value="Set attendance & points thresholds for your chapter"
             onPress={() => router.push('/(admin)/status/requirements' as any)}
             last
           />

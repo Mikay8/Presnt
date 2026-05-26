@@ -30,7 +30,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import type { Tables } from '@/types/database';
 
-type Chapter = Tables<'organizations'> & { memberCount?: number };
+type Chapter = Tables<'chapters'> & { memberCount?: number };
 
 const ORG_ADMIN_BLUE = '#3B82F6';
 
@@ -46,15 +46,6 @@ function generateJoinCode(name: string): string {
   const base = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
   const rand  = Math.random().toString(36).slice(2, 5).toUpperCase();
   return `${base}-${rand}`;
-}
-
-function getCurrentSemester() {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year  = now.getFullYear();
-  if (month <= 5) return { name: `Spring ${year}`, start: `${year}-01-15`, end: `${year}-05-15` };
-  if (month <= 7) return { name: `Summer ${year}`, start: `${year}-05-16`, end: `${year}-08-15` };
-  return { name: `Fall ${year}`, start: `${year}-08-16`, end: `${year}-12-20` };
 }
 
 // ─── Create Chapter Modal ─────────────────────────────────────────────────────
@@ -101,12 +92,11 @@ function CreateChapterModal({
 
     const joinCode = generateJoinCode(name);
     const { data: chapter, error: chErr } = await supabase
-      .from('organizations')
+      .from('chapters')
       .insert({
         name:          name.trim(),
         slug:          slugify(name),
-        type:          'chapter',
-        parent_org_id: parentOrgId,
+        org_id:        parentOrgId,
         institution:   institution.trim(),
         primary_color: primaryColor,
         timezone:      'America/New_York',
@@ -121,16 +111,6 @@ function CreateChapterModal({
       setLoading(false);
       return;
     }
-
-    // Seed first academic term
-    const semester = getCurrentSemester();
-    await supabase.from('academic_terms').insert({
-      org_id:     chapter.id,
-      name:       semester.name,
-      start_date: semester.start,
-      end_date:   semester.end,
-      is_active:  true,
-    });
 
     setLoading(false);
     reset();
@@ -297,9 +277,9 @@ export default function OrgAdminChaptersScreen() {
     if (!orgId) { setLoading(false); return; }
 
     const { data: chaptersData } = await supabase
-      .from('organizations')
+      .from('chapters')
       .select('*')
-      .eq('parent_org_id', orgId)
+      .eq('org_id', orgId)
       .eq('is_deleted', false)
       .order('name');
 
@@ -341,7 +321,7 @@ export default function OrgAdminChaptersScreen() {
           style: isActive ? 'destructive' : 'default',
           onPress: async () => {
             await supabase
-              .from('organizations')
+              .from('chapters')
               .update({ is_active: !isActive })
               .eq('id', chapter.id);
             load();
