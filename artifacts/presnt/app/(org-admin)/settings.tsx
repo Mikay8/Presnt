@@ -12,18 +12,17 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Clipboard,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Input, Text } from '@/components/ui';
+import { Button, Input, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -89,6 +88,7 @@ export default function OrgAdminSettingsScreen() {
   const { width }        = useWindowDimensions();
   const isWide           = width >= 800;
   const { organization, profile } = useAuthStore();
+  const { showAlert } = useAlert();
 
   const [orgName,    setOrgName]    = useState(organization?.name ?? '');
   const [orgCode,    setOrgCode]    = useState(organization?.join_code ?? '');
@@ -134,15 +134,15 @@ export default function OrgAdminSettingsScreen() {
       .from('organizations')
       .update({
         name:      orgName.trim(),
-        join_code: trimmedCode || null,
-      })
+        join_code: trimmedCode || null
+} )
       .eq('id', organization.id);
     setSaving(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
     } else {
       setCodeEdited(false);
-      Alert.alert('Saved', 'Organization settings updated.');
+      showAlert('Saved', 'Organization settings updated.');
     }
   }
 
@@ -359,5 +359,5 @@ const styles = StyleSheet.create({
   chapterRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
   noCode:      { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
 
-  signOutBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 14 },
-});
+  signOutBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 14 }
+} );

@@ -14,7 +14,6 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,7 +23,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Text } from '@/components/ui';
+import { Button, Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -241,6 +240,7 @@ export default function AdminRequirementsScreen() {
   const insets       = useSafeAreaInsets();
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
+  const { showAlert, confirm } = useAlert();
   const { membership } = useAuthStore();
   const orgId = membership?.org_id ?? '';
 
@@ -264,19 +264,19 @@ export default function AdminRequirementsScreen() {
   useEffect(() => { load(); }, [load]);
 
   async function handleSave(form: Omit<Requirement, 'id'>) {
-    if (!form.name.trim()) { Alert.alert('Required', 'Requirement name is required.'); return; }
+    if (!form.name.trim()) { showAlert('Required', 'Requirement name is required.'); return; }
     setSaving(true);
     if (editing) {
       const { error } = await supabase
         .from('status_requirements')
         .update({ ...form, updated_at: new Date().toISOString() })
         .eq('id', editing.id);
-      if (error) { Alert.alert('Error', error.message); setSaving(false); return; }
+      if (error) { showAlert('Error', error.message); setSaving(false); return; }
     } else {
       const { error } = await supabase
         .from('status_requirements')
         .insert({ ...form, org_id: orgId });
-      if (error) { Alert.alert('Error', error.message); setSaving(false); return; }
+      if (error) { showAlert('Error', error.message); setSaving(false); return; }
     }
     setSaving(false);
     setShowForm(false);
@@ -285,18 +285,17 @@ export default function AdminRequirementsScreen() {
   }
 
   async function handleDelete(req: Requirement) {
-    Alert.alert('Delete requirement', `Remove "${req.name}"? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          await supabase.from('status_requirements')
-            .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-            .eq('id', req.id);
-          load();
-        },
+    confirm(
+      'Delete requirement',
+      `Remove "${req.name}"? This cannot be undone.`,
+      async () => {
+        await supabase.from('status_requirements')
+          .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+          .eq('id', req.id);
+        load();
       },
-    ]);
+      { confirmLabel: 'Delete', destructive: true }
+    );
   }
 
   if (loading) {

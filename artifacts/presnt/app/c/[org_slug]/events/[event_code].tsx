@@ -17,7 +17,6 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Platform,
   Pressable,
@@ -30,7 +29,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Text } from '@/components/ui';
+import { Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -160,6 +159,7 @@ function GuestForm({
   const [email,     setEmail]     = useState('');
   const [submitting,setSubmitting]= useState(false);
   const [done,      setDone]      = useState(false);
+  const { showAlert } = useAlert();
 
   const isRsvp = phase === 'upcoming';
   const label  = isRsvp ? 'RSVP' : 'Check In';

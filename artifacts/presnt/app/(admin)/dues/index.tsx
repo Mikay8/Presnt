@@ -9,18 +9,17 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -47,8 +46,8 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }>
   paid:    { label: 'Paid',    bg: '#dcfce7', text: '#15803d' },
   due:     { label: 'Due',     bg: '#fef3c7', text: '#92400e' },
   overdue: { label: 'Overdue', bg: '#fee2e2', text: '#b91c1c' },
-  hold:    { label: 'Hold',    bg: '#f3e8ff', text: '#7e22ce' },
-};
+  hold:    { label: 'Hold',    bg: '#f3e8ff', text: '#7e22ce' }
+} ;
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
@@ -138,6 +137,7 @@ export default function AdminDuesScreen() {
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
   const { membership } = useAuthStore();
+  const { showAlert } = useAlert();
 
   const [members, setMembers]       = useState<DuesMember[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -164,8 +164,8 @@ export default function AdminDuesScreen() {
     // Normalize: Supabase may return related rows as arrays when FK direction is ambiguous
     const normalized: DuesMember[] = ((data ?? []) as any[]).map((m) => ({
       ...m,
-      profiles:  Array.isArray(m.profiles)  ? (m.profiles[0]  ?? null) : m.profiles,
-    }));
+      profiles:  Array.isArray(m.profiles)  ? (m.profiles[0]  ?? null) : m.profiles
+} ));
     setMembers(normalized);
     setLoading(false);
     setRefreshing(false);
@@ -204,7 +204,7 @@ export default function AdminDuesScreen() {
       `Status: ${m.dues_hold ? 'On Hold' : m.dues_status}`,
       `Last paid: ${m.dues_last_paid_at ? new Date(m.dues_last_paid_at).toLocaleDateString() : 'Never'}`,
     ].join('\n');
-    Alert.alert(name, info);
+    showAlert(name, info);
   }
 
   const c = theme.colors;
@@ -356,5 +356,5 @@ const styles = StyleSheet.create({
   avatar:      { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, minWidth: 58, alignItems: 'center' },
 
-  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-});
+  empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 }
+} );

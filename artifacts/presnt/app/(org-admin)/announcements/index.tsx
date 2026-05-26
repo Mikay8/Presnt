@@ -13,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -25,7 +24,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -118,6 +117,7 @@ export default function OrgAdminAnnouncementsScreen() {
   const { width }        = useWindowDimensions();
   const isWide           = width >= 768;
   const { organization, membership } = useAuthStore();
+  const { showAlert, confirm } = useAlert();
   const c                = theme.colors;
 
   // org-admin accent blue
@@ -155,13 +155,41 @@ export default function OrgAdminAnnouncementsScreen() {
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
   // ── Send ─────────────────────────────────────────────────────────────────────
+  async function doSend() {
+    setSending(true);
+    try {
+      const now = new Date().toISOString();
+      const { error } = await supabase.from('announcements').insert({
+        org_id:       orgId,
+        scope,
+        title:        title.trim(),
+        body:         body.trim(),
+        author_id:    membership!.user_id,
+        created_by:   membership!.user_id,
+        send_push:    true,
+        audience:     'all',
+        published_at: now,
+      });
+      if (error) throw error;
+      showAlert('Sent!', 'Your announcement has been delivered.');
+      setTitle('');
+      setBody('');
+      setScope('chapter');
+      loadHistory();
+    } catch (err: any) {
+      showAlert('Error', err?.message ?? 'Failed to send announcement.');
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function handleSend() {
     if (!title.trim()) {
-      Alert.alert('Title required', 'Please enter a title for your announcement.');
+      showAlert('Title required', 'Please enter a title for your announcement.');
       return;
     }
     if (!body.trim()) {
-      Alert.alert('Message required', 'Please enter a message body.');
+      showAlert('Message required', 'Please enter a message body.');
       return;
     }
 
@@ -169,42 +197,11 @@ export default function OrgAdminAnnouncementsScreen() {
       ? 'all members across the entire organization'
       : 'all members in this chapter';
 
-    Alert.alert(
+    confirm(
       'Send Announcement',
       `Send "${title.trim()}" to ${scopeLabel}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send',
-          onPress: async () => {
-            setSending(true);
-            try {
-              const now = new Date().toISOString();
-              const { error } = await supabase.from('announcements').insert({
-                org_id:       orgId,
-                scope,
-                title:        title.trim(),
-                body:         body.trim(),
-                author_id:    membership!.user_id,
-                created_by:   membership!.user_id,
-                send_push:    true,
-                audience:     'all',
-                published_at: now,
-              });
-              if (error) throw error;
-              Alert.alert('Sent!', 'Your announcement has been delivered.');
-              setTitle('');
-              setBody('');
-              setScope('chapter');
-              loadHistory();
-            } catch (err: any) {
-              Alert.alert('Error', err?.message ?? 'Failed to send announcement.');
-            } finally {
-              setSending(false);
-            }
-          },
-        },
-      ]
+      doSend,
+      { confirmLabel: 'Send' }
     );
   }
 

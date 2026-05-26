@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
   Clipboard,
   Platform,
   Pressable,
@@ -17,13 +16,13 @@ import {
   Share,
   StyleSheet,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/lib/permissions';
 import { useAuthStore } from '@/stores/authStore';
@@ -32,8 +31,8 @@ import { useThemeStore } from '@/stores/themeStore';
 // ─── Setting row ──────────────────────────────────────────────────────────────
 
 function SettingRow({
-  icon, label, value, onPress, last,
-}: {
+  icon, label, value, onPress, last
+} : {
   icon:    string;
   label:   string;
   value?:  string;
@@ -80,6 +79,7 @@ export default function OfficerSettingsScreen() {
   const { width }                        = useWindowDimensions();
   const isWide                           = width >= 800;
   const { organization, membership, profile } = useAuthStore();
+  const { confirm } = useAlert();
   const { can }                          = usePermissions();
   const [codeCopied, setCodeCopied]      = useState(false);
   const [linkShared, setLinkShared]      = useState(false);
@@ -87,16 +87,15 @@ export default function OfficerSettingsScreen() {
   const canManageRequirements = can(PERMISSIONS.MANAGE_TERMS);
 
   async function handleSignOut() {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out', style: 'destructive',
-        onPress: async () => {
-          await supabase.auth.signOut();
-          router.replace('/logout' as any);
-        },
+    confirm(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      async () => {
+        await supabase.auth.signOut();
+        router.replace('/logout' as any);
       },
-    ]);
+      { confirmLabel: 'Sign Out', destructive: true }
+    );
   }
 
   function handleCopyCode() {
@@ -256,5 +255,5 @@ const styles = StyleSheet.create({
   codeSection:  { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 10 },
   codeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   codeAction:   { width: 32, height: 32, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  codeDisplay:  { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
-});
+  codeDisplay:  { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 }
+} );

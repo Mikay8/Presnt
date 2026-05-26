@@ -12,7 +12,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -20,11 +19,11 @@ import {
   StyleSheet,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -98,8 +97,8 @@ function RecordTxModal({
   onSaved,
   officerId,
   membershipId,
-  orgId,
-}: {
+  orgId
+} : {
   visible:      boolean;
   balanceId:    string;
   onClose:      () => void;
@@ -110,6 +109,7 @@ function RecordTxModal({
 }) {
   const { theme } = useThemeStore();
   const c = theme.colors;
+  const { showAlert } = useAlert();
 
   const [txType,  setTxType]  = useState<TxType>('payment');
   const [amount,  setAmount]  = useState('');
@@ -120,7 +120,7 @@ function RecordTxModal({
   async function save() {
     const amt = parseFloat(amount);
     if (!amount || isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid amount', 'Enter a positive number.');
+      showAlert('Invalid amount', 'Enter a positive number.');
       return;
     }
     setSaving(true);
@@ -136,12 +136,12 @@ function RecordTxModal({
       description:      desc.trim() || `${txType.charAt(0).toUpperCase() + txType.slice(1)} recorded`,
       payment_method:   txType === 'payment' ? method : null,
       recorded_by:      officerId,
-      transaction_date: new Date().toISOString(),
-    });
+      transaction_date: new Date().toISOString()
+} );
 
     if (error) {
       setSaving(false);
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
       return;
     }
 
@@ -156,8 +156,8 @@ function RecordTxModal({
         amount_paid:   txType === 'payment' ? String(paid) : undefined,
         amount_waived: txType === 'waiver'  ? String(waived) : undefined,
         status:        newStatus,
-        updated_at:    new Date().toISOString(),
-      }).eq('id', balanceId);
+        updated_at:    new Date().toISOString()
+} ).eq('id', balanceId);
 
       if (newStatus === 'paid') {
         await supabase.from('memberships').update({ dues_hold: false, dues_status: 'current' }).eq('id', membershipId);
@@ -193,8 +193,8 @@ function RecordTxModal({
                 onPress={() => setTxType(value)}
                 style={[mo.typeChip, {
                   backgroundColor: txType === value ? c.primary : c.surfaceAlt,
-                  borderColor:     txType === value ? c.primary : c.border,
-                }]}
+                  borderColor:     txType === value ? c.primary : c.border
+} ]}
               >
                 <Text size="sm" weight={txType === value ? 'medium' : 'regular'}
                   style={{ color: txType === value ? '#fff' : c.text }}>{label}</Text>
@@ -224,8 +224,8 @@ function RecordTxModal({
                     onPress={() => setMethod(m)}
                     style={[mo.typeChip, {
                       backgroundColor: method === m ? c.primary : c.surfaceAlt,
-                      borderColor:     method === m ? c.primary : c.border,
-                    }]}
+                      borderColor:     method === m ? c.primary : c.border
+} ]}
                   >
                     <Text size="sm" weight={method === m ? 'medium' : 'regular'}
                       style={{ color: method === m ? '#fff' : c.text }}>
@@ -275,8 +275,8 @@ const mo = StyleSheet.create({
   label:    { textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
   input:    { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14, fontSize: 14 },
   typeChip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-  btn:      { borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-});
+  btn:      { borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -487,8 +487,8 @@ export default function MemberDuesScreen() {
       <View style={[xs.header, {
         paddingTop: isWide ? 20 : insets.top + 12,
         backgroundColor: c.background,
-        borderBottomColor: c.border,
-      }]}>
+        borderBottomColor: c.border
+} ]}>
         <Pressable onPress={() => router.back()} style={xs.backBtn}>
           <Ionicons name="arrow-back-outline" size={20} color={c.text} />
         </Pressable>
@@ -538,5 +538,5 @@ const xs = StyleSheet.create({
 
   badge:     { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   recordBtn: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  empty:     { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
-});
+  empty:     { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 }
+} );

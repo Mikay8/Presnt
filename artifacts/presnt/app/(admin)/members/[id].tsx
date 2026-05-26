@@ -10,7 +10,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -21,7 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -253,6 +252,7 @@ export default function AdminMemberDetailScreen() {
   const insets                        = useSafeAreaInsets();
   const { width }                     = useWindowDimensions();
   const isWide                        = width >= DESKTOP;
+  const { confirm } = useAlert();
   const { membership, profile }       = useAuthStore();
   const c                             = theme.colors;
 
@@ -342,26 +342,20 @@ export default function AdminMemberDetailScreen() {
     if (!member) return;
     const isBlocked = !!member.is_blocked;
     const action = isBlocked ? 'Unblock' : 'Block';
-    Alert.alert(
+    confirm(
       `${action} Member`,
       isBlocked
         ? 'Remove the block from this member?'
         : 'Block this member from accessing chapter features?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: action,
-          style: isBlocked ? 'default' : 'destructive',
-          onPress: async () => {
-            setSavingBlock(true);
-            await supabase.from('memberships')
-              .update(isBlocked ? { is_blocked: false, block_reason: null } : { is_blocked: true })
-              .eq('id', member.id);
-            setSavingBlock(false);
-            await load();
-          },
-        },
-      ],
+      async () => {
+        setSavingBlock(true);
+        await supabase.from('memberships')
+          .update(isBlocked ? { is_blocked: false, block_reason: null } : { is_blocked: true })
+          .eq('id', member.id);
+        setSavingBlock(false);
+        await load();
+      },
+      { confirmLabel: action, destructive: !isBlocked }
     );
   }
 

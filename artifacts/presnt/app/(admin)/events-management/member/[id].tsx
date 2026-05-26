@@ -13,19 +13,18 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -58,8 +57,8 @@ const TYPE_COLOR: Record<string, string> = {
   mandatory: '#E26B4A',
   social:    '#A855F7',
   optional:  '#22C55E',
-  meeting:   '#3B82F6',
-};
+  meeting:   '#3B82F6'
+} ;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -76,8 +75,8 @@ function openGoogleCalendar(ev: EventDetail) {
   const params = new URLSearchParams({
     action: 'TEMPLATE', text: ev.title,
     dates:  `${toCalStamp(start)}/${toCalStamp(end)}`,
-    details: ev.description ?? '', location: ev.location ?? '',
-  });
+    details: ev.description ?? '', location: ev.location ?? ''
+} );
   Linking.openURL(`https://calendar.google.com/calendar/render?${params.toString()}`);
 }
 function downloadIcal(ev: EventDetail) {
@@ -99,7 +98,7 @@ function downloadIcal(ev: EventDetail) {
     URL.revokeObjectURL(url);
   } else {
     Linking.openURL(`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`).catch(() => {
-      Alert.alert('Export failed', 'Could not open the calendar file on this device.');
+      showAlert('Export failed', 'Could not open the calendar file on this device.');
     });
   }
 }
@@ -111,6 +110,7 @@ export default function AdminMemberViewScreen() {
   const { theme } = useThemeStore();
   const c         = theme.colors;
   const { width } = useWindowDimensions();
+  const { showAlert } = useAlert();
   const insets    = useSafeAreaInsets();
   const isWide    = width >= 800;
   const { profile } = useAuthStore();
@@ -200,8 +200,8 @@ export default function AdminMemberViewScreen() {
         { label: formatDate(event.start_time), icon: 'calendar-outline' as const },
         {
           label: formatTime(event.start_time) + (event.end_time ? ` – ${formatTime(event.end_time)}` : ''),
-          icon: 'time-outline' as const,
-        },
+          icon: 'time-outline' as const
+} ,
         ...(event.meeting_url
           ? [{ label: 'Remote', icon: 'videocam-outline' as const }]
           : event.location
@@ -401,8 +401,8 @@ export default function AdminMemberViewScreen() {
 
       {/* Bottom RSVP bar — shown but disabled (preview) */}
       <View style={[s.mobileActionBar, {
-        borderTopColor: c.border, backgroundColor: c.background, paddingBottom: insets.bottom + 12,
-      }]}>
+        borderTopColor: c.border, backgroundColor: c.background, paddingBottom: insets.bottom + 12
+} ]}>
         <View style={[s.rsvpPreviewFull, { borderColor: c.primary, backgroundColor: c.primary + '10' }]}>
           <Text size="md" weight="medium" color={c.primary}>RSVP</Text>
         </View>
@@ -439,5 +439,5 @@ const s = StyleSheet.create({
   avatarRow:     { flexDirection: 'row', alignItems: 'center' },
   goingAvatar:   { width: 36, height: 36, borderRadius: 18, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   qrContainer:   { alignItems: 'center', paddingVertical: 8 },
-  qrInner:       { borderRadius: 12, padding: 12 },
-});
+  qrInner:       { borderRadius: 12, padding: 12 }
+} );

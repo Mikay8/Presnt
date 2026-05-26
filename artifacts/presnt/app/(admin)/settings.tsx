@@ -10,7 +10,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Clipboard,
   Platform,
   Pressable,
@@ -23,7 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Text } from '@/components/ui';
+import { Button, Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -88,6 +87,7 @@ export default function AdminSettingsScreen() {
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
   const { organization, membership, profile, setMembership } = useAuthStore();
+  const { showAlert } = useAlert();
 
   const [displayName, setDisplayName] = useState(organization?.app_display_name ?? organization?.name ?? '');
   const [institution, setInstitution] = useState(organization?.institution ?? '');
@@ -124,9 +124,9 @@ export default function AdminSettingsScreen() {
     setDirty(false);
 
     if (error) {
-      Alert.alert('Error', 'Failed to save settings. Please try again.');
+      showAlert('Error', 'Failed to save settings. Please try again.');
     } else {
-      Alert.alert('Saved', 'Organization settings updated.');
+      showAlert('Saved', 'Organization settings updated.');
     }
   }
 
@@ -144,10 +144,10 @@ export default function AdminSettingsScreen() {
     if (error || !updated) {
       // RLS blocks the update silently (no error, but 0 rows) — treat both as failure
       setJoinCode(organization.join_code ?? ''); // revert field to actual DB value
-      Alert.alert('Error', 'Failed to update join code. Make sure you have admin permissions for this chapter.');
+      showAlert('Error', 'Failed to update join code. Make sure you have admin permissions for this chapter.');
     } else {
       setMembership(membership, { ...organization, join_code: updated.join_code });
-      Alert.alert('Updated', `Join code is now ${updated.join_code}`);
+      showAlert('Updated', `Join code is now ${updated.join_code}`);
     }
   }
 
@@ -172,7 +172,7 @@ export default function AdminSettingsScreen() {
       .single();
     setCodeSaving(false);
     if (error || !updated) {
-      Alert.alert('Error', 'Failed to regenerate join code. Make sure you have admin permissions for this chapter.');
+      showAlert('Error', 'Failed to regenerate join code. Make sure you have admin permissions for this chapter.');
     } else {
       setJoinCode(updated.join_code ?? newCode);
       setMembership(membership, { ...organization, join_code: updated.join_code });

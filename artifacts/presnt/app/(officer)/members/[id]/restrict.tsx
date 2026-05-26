@@ -18,18 +18,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Text } from '@/components/ui';
+import { Text, useAlert } from '@/components/ui';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
@@ -60,56 +59,56 @@ const TYPE_DEFAULTS: Record<RestrictionType, Defaults> = {
     blocksCalendarView:     false,
     blocksExcuseSubmission: false,
     blocksVoting:           false,
-    defaultAutoLift:        'dues_paid',
-  },
+    defaultAutoLift:        'dues_paid'
+} ,
   manual_block: {
     blocksEventAttendance:  true,
     blocksEventRsvp:        true,
     blocksCalendarView:     false,
     blocksExcuseSubmission: true,
     blocksVoting:           true,
-    defaultAutoLift:        'officer_approval',
-  },
+    defaultAutoLift:        'officer_approval'
+} ,
   suspension: {
     blocksEventAttendance:  true,
     blocksEventRsvp:        true,
     blocksCalendarView:     false,
     blocksExcuseSubmission: true,
     blocksVoting:           true,
-    defaultAutoLift:        'officer_approval',
-  },
+    defaultAutoLift:        'officer_approval'
+} ,
   probation: {
     blocksEventAttendance:  false,
     blocksEventRsvp:        false,
     blocksCalendarView:     false,
     blocksExcuseSubmission: false,
     blocksVoting:           false,
-    defaultAutoLift:        'term_end',
-  },
+    defaultAutoLift:        'term_end'
+} ,
   inactive: {
     blocksEventAttendance:  true,
     blocksEventRsvp:        true,
     blocksCalendarView:     false,
     blocksExcuseSubmission: true,
     blocksVoting:           true,
-    defaultAutoLift:        '',
-  },
-};
+    defaultAutoLift:        ''
+} 
+} ;
 
 const TYPE_LABELS: Record<RestrictionType, string> = {
   dues_hold:    'Dues Hold',
   manual_block: 'Manual Block',
   suspension:   'Suspension',
   probation:    'Probation',
-  inactive:     'Inactive',
-};
+  inactive:     'Inactive'
+} ;
 
 const AUTO_LIFT_LABELS: Record<string, string> = {
   dues_paid:        'When dues are paid',
   officer_approval: 'Officer must lift manually',
   term_end:         'End of term',
-  '':               'None (manual)',
-};
+  '':               'None (manual)'
+} ;
 
 // ─── Toggle Row ───────────────────────────────────────────────────────────────
 
@@ -117,8 +116,8 @@ function ToggleRow({
   label,
   description,
   value,
-  onChange,
-}: {
+  onChange
+} : {
   label:       string;
   description: string;
   value:       boolean;
@@ -143,8 +142,8 @@ function ToggleRow({
 }
 
 const tr = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
-});
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -154,6 +153,7 @@ export default function ApplyRestrictionScreen() {
   const insets                     = useSafeAreaInsets();
   const { width }                  = useWindowDimensions();
   const isWide                     = width >= DESKTOP;
+  const { showAlert, confirm } = useAlert();
   const { profile }  = useAuthStore();
   const userView                   = useUserViewStore((s) => s.session);
   const { can }                    = usePermissions();
@@ -199,11 +199,11 @@ export default function ApplyRestrictionScreen() {
 
   async function handleSave() {
     if (!reason.trim()) {
-      Alert.alert('Reason required', 'Please enter a reason visible to the member.');
+      showAlert('Reason required', 'Please enter a reason visible to the member.');
       return;
     }
     if (!canManage) {
-      Alert.alert('Insufficient permissions');
+      showAlert('Insufficient permissions');
       return;
     }
 
@@ -223,14 +223,14 @@ export default function ApplyRestrictionScreen() {
       blocks_voting:           blocks.blocksVoting,
       auto_lift_condition:     autoLift || null,
       ends_at:                 endsAt ? new Date(endsAt).toISOString() : null,
-      is_active:               true,
-    };
+      is_active:               true
+} ;
 
     const { error } = await (supabase as any).from('member_restrictions').insert(payload);
 
     if (error) {
       setSaving(false);
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
       return;
     }
 
@@ -249,9 +249,12 @@ export default function ApplyRestrictionScreen() {
     }
 
     setSaving(false);
-    Alert.alert('Restriction applied', `${TYPE_LABELS[type]} has been applied to ${memberName || 'this member'}.`, [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    confirm(
+      'Restriction applied',
+      `${TYPE_LABELS[type]} has been applied to ${memberName || 'this member'}.`,
+      () => router.back(),
+      { confirmLabel: 'OK' }
+    );
   }
 
   const form = (
@@ -269,8 +272,8 @@ export default function ApplyRestrictionScreen() {
             onPress={() => selectType(t)}
             style={[xs.typeChip, {
               backgroundColor: type === t ? c.primary : c.surfaceAlt,
-              borderColor:     type === t ? c.primary : c.border,
-            }]}
+              borderColor:     type === t ? c.primary : c.border
+} ]}
           >
             <Text size="sm" weight={type === t ? 'semibold' : 'regular'}
               style={{ color: type === t ? '#fff' : c.text }}>
@@ -389,8 +392,8 @@ export default function ApplyRestrictionScreen() {
       <View style={[xs.header, {
         paddingTop: isWide ? 20 : insets.top + 12,
         backgroundColor: c.background,
-        borderBottomColor: c.border,
-      }]}>
+        borderBottomColor: c.border
+} ]}>
         <Pressable onPress={() => router.back()} style={xs.backBtn}>
           <Ionicons name="arrow-back-outline" size={20} color={c.text} />
         </Pressable>
@@ -422,5 +425,5 @@ const xs = StyleSheet.create({
   card:        { borderWidth: 1, borderRadius: 12, overflow: 'hidden', paddingHorizontal: 14 },
   radioRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, borderBottomWidth: 1 },
   radio:       { width: 16, height: 16, borderRadius: 8, borderWidth: 2 },
-  saveBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 16, marginTop: 28 },
-});
+  saveBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 16, marginTop: 28 }
+} );

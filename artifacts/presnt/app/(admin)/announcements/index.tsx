@@ -13,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -26,7 +25,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Text } from '@/components/ui';
+import { Card, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -51,6 +50,7 @@ export default function AdminAnnouncementsScreen() {
   const { width }        = useWindowDimensions();
   const isWide           = width >= 768;
   const { organization, membership } = useAuthStore();
+  const { showAlert, confirm } = useAlert();
   const c                = theme.colors;
 
   const [title,       setTitle]       = useState('');
@@ -85,52 +85,48 @@ export default function AdminAnnouncementsScreen() {
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
   // ── Send announcement ────────────────────────────────────────────────────────
+  async function doSend() {
+    setSending(true);
+    try {
+      const now = new Date().toISOString();
+      const { error } = await supabase.from('announcements').insert({
+        org_id:       orgId,
+        scope:        'chapter',
+        title:        title.trim(),
+        body:         body.trim(),
+        author_id:    membership!.user_id,
+        created_by:   membership!.user_id,
+        send_push:    true,
+        audience:     'all',
+        published_at: now,
+      });
+      if (error) throw error;
+      showAlert('Sent!', 'Your announcement has been delivered.');
+      setTitle('');
+      setBody('');
+      loadHistory();
+    } catch (err: any) {
+      showAlert('Error', err?.message ?? 'Failed to send announcement.');
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function handleSend() {
     if (!title.trim()) {
-      Alert.alert('Title required', 'Please enter a title for your announcement.');
+      showAlert('Title required', 'Please enter a title for your announcement.');
       return;
     }
     if (!body.trim()) {
-      Alert.alert('Message required', 'Please enter a message body.');
+      showAlert('Message required', 'Please enter a message body.');
       return;
     }
 
-    Alert.alert(
+    confirm(
       'Send Announcement',
       `Send "${title.trim()}" to all chapter members?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send',
-          style: 'default',
-          onPress: async () => {
-            setSending(true);
-            try {
-              const now = new Date().toISOString();
-              const { error } = await supabase.from('announcements').insert({
-                org_id:       orgId,
-                scope:        'chapter',
-                title:        title.trim(),
-                body:         body.trim(),
-                author_id:    membership!.user_id,
-                created_by:   membership!.user_id,
-                send_push:    true,
-                audience:     'all',
-                published_at: now,
-              });
-              if (error) throw error;
-              Alert.alert('Sent!', 'Your announcement has been delivered.');
-              setTitle('');
-              setBody('');
-              loadHistory();
-            } catch (err: any) {
-              Alert.alert('Error', err?.message ?? 'Failed to send announcement.');
-            } finally {
-              setSending(false);
-            }
-          },
-        },
-      ]
+      doSend,
+      { confirmLabel: 'Send' }
     );
   }
 

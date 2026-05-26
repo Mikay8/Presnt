@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -21,7 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Text } from '@/components/ui';
+import { Button, Card, Text, useAlert } from '@/components/ui';
 import { DOMAIN, loggedQuery } from '@/lib/apiLogger';
 import { ALL_PERMISSIONS, ROLE_COLORS, type Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabase';
@@ -248,6 +247,7 @@ export default function AdminRolesScreen() {
   const { width }    = useWindowDimensions();
   const isWide       = width >= 800;
   const { membership, profile } = useAuthStore();
+  const { confirm } = useAlert();
 
   const [roles, setRoles]         = useState<OrgRole[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -311,25 +311,19 @@ export default function AdminRolesScreen() {
   }
 
   async function handleDelete(role: OrgRole) {
-    Alert.alert(
+    confirm(
       'Delete Role',
       `Delete "${role.name}"? Members assigned this role will be set to plain officer.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await loggedQuery({
-              domain: DOMAIN.ROLES, method: 'DELETE', endpoint: 'org_roles',
-              orgId, userId,
-              requestBody: { id: role.id },
-              query: supabase.from('org_roles').delete().eq('id', role.id),
-            });
-            await load();
-          },
-        },
-      ],
+      async () => {
+        await loggedQuery({
+          domain: DOMAIN.ROLES, method: 'DELETE', endpoint: 'org_roles',
+          orgId, userId,
+          requestBody: { id: role.id },
+          query: supabase.from('org_roles').delete().eq('id', role.id),
+        });
+        await load();
+      },
+      { confirmLabel: 'Delete', destructive: true }
     );
   }
 

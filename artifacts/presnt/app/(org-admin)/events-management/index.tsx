@@ -15,7 +15,6 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -24,11 +23,11 @@ import {
   Switch,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Text } from '@/components/ui';
+import { Text, useAlert } from '@/components/ui';
 import { QRCheckinModal } from '@/lib/QRCheckin';
 import { supabase } from '@/lib/supabase';
 import { MapPickerModal } from '@/lib/MapPicker';
@@ -40,15 +39,15 @@ import {
   combineDateTime,
   formatDateDisplay,
   formatDateRange,
-  formatTimeDisplay,
-} from '@/lib/pickers';
+  formatTimeDisplay
+}  from '@/lib/pickers';
 import {
   BLANK_RULE,
   RecurrencePickerModal,
   RecurrenceRule,
   buildRRule,
-  describeRule,
-} from '@/lib/recurrence';
+  describeRule
+}  from '@/lib/recurrence';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import type { Tables } from '@/types/database';
@@ -136,8 +135,8 @@ const BLANK_FORM: EventFormState = {
   checkin_open_minutes:  '15',
   checkin_grace_minutes: '15',
   is_public:             false,
-  event_code:            '',
-};
+  event_code:            ''
+} ;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -146,8 +145,8 @@ function fmtDate(iso: string) {
   return {
     month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
     day:   d.getDate(),
-    time:  d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-  };
+    time:  d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+} ;
 }
 
 const NTH_DOW_MAP: Record<string, number> = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
@@ -245,14 +244,14 @@ const STATUS_COLOR: Record<ReturnType<typeof eventStatus>, string> = {
   cancelled: '#EF4444',
   ongoing:   '#F59E0B',
   upcoming:  '#22C55E',
-  past:      '',
-};
+  past:      ''
+} ;
 const STATUS_LABEL: Record<ReturnType<typeof eventStatus>, string> = {
   cancelled: 'Cancelled',
   ongoing:   'Ongoing',
   upcoming:  'Upcoming',
-  past:      'Past',
-};
+  past:      'Past'
+} ;
 
 function displayDate(event: Event): string {
   const rrule = (event as any).recurrence_rule as string | null;
@@ -294,8 +293,8 @@ function formFromEvent(e: Event): EventFormState {
     checkin_open_minutes:  (e as any).checkin_open_minutes  != null ? String((e as any).checkin_open_minutes)  : '',
     checkin_grace_minutes: (e as any).checkin_grace_minutes != null ? String((e as any).checkin_grace_minutes) : '',
     is_public:             !!(e as any).is_public,
-    event_code:            (e as any).event_code ?? '',
-  };
+    event_code:            (e as any).event_code ?? ''
+} ;
 }
 
 // ─── Org-wide badge ───────────────────────────────────────────────────────────
@@ -306,8 +305,8 @@ function OrgWideBadge({ small = false }: { small?: boolean }) {
       flexDirection: 'row', alignItems: 'center', gap: 3,
       backgroundColor: '#3B82F618', borderWidth: 1, borderColor: '#3B82F650',
       borderRadius: 6, paddingHorizontal: small ? 5 : 7, paddingVertical: small ? 1 : 3,
-      alignSelf: 'flex-start',
-    }}>
+      alignSelf: 'flex-start'
+} }>
       <Ionicons name="globe-outline" size={small ? 9 : 11} color="#3B82F6" />
       <Text size="xs" color="#3B82F6" weight="medium" style={{ fontSize: small ? 9 : 11 }}>
         Org Wide
@@ -319,8 +318,8 @@ function OrgWideBadge({ small = false }: { small?: boolean }) {
 // ─── Location Picker Modal ────────────────────────────────────────────────────
 
 function LocationPickerModal({
-  visible, orgId, selectedId, onSelect, onClose,
-}: {
+  visible, orgId, selectedId, onSelect, onClose
+} : {
   visible: boolean; orgId: string; selectedId: string | null;
   onSelect: (loc: OrgLocation | null) => void; onClose: () => void;
 }) {
@@ -368,8 +367,8 @@ function LocationPickerModal({
                 style={[lp.locRow, {
                   backgroundColor: pending === null ? c.primary + '10' : 'transparent',
                   borderColor: pending === null ? c.primary : c.border,
-                  borderWidth: pending === null ? 1.5 : 1, marginBottom: 8, marginTop: 16,
-                }]}>
+                  borderWidth: pending === null ? 1.5 : 1, marginBottom: 8, marginTop: 16
+} ]}>
                 <Ionicons name="close-circle-outline" size={16} color={c.textSubtle} />
                 <Text size="sm" color={c.textMuted}>No location</Text>
               </Pressable>
@@ -380,8 +379,8 @@ function LocationPickerModal({
                     style={[lp.locRow, {
                       backgroundColor: sel ? c.primary + '10' : 'transparent',
                       borderColor: sel ? c.primary : c.border,
-                      borderWidth: sel ? 1.5 : 1, marginBottom: 8,
-                    }]}>
+                      borderWidth: sel ? 1.5 : 1, marginBottom: 8
+} ]}>
                     <Ionicons name="location" size={16} color={sel ? c.primary : c.textSubtle} />
                     <View style={{ flex: 1 }}>
                       <Text size="sm" weight="medium" color={sel ? c.primary : c.text}>{loc.name}</Text>
@@ -410,8 +409,8 @@ const lp = StyleSheet.create({
   searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   locRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, padding: 14 },
   checkCircle: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  useBtn:      { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-});
+  useBtn:      { borderRadius: 14, paddingVertical: 14, alignItems: 'center' }
+} );
 
 // ─── Picker trigger button ────────────────────────────────────────────────────
 
@@ -434,14 +433,14 @@ function PickerBtn({ label, value, icon, onPress, color }: {
 }
 
 const pb = StyleSheet.create({
-  btn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
-});
+  btn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }
+} );
 
 // ─── Event Form (org-admin version — org-wide events) ────────────────────────
 
 function EventForm({
-  visible, initial, orgId, orgSlug, onClose, onSave, onDelete, saving, codeErrorMsg, onClearCodeError,
-}: {
+  visible, initial, orgId, orgSlug, onClose, onSave, onDelete, saving, codeErrorMsg, onClearCodeError
+} : {
   visible: boolean; initial: Event | null; orgId: string; orgSlug: string;
   onClose: () => void; onSave: (form: EventFormState) => void;
   onDelete: (event: Event, mode: 'this' | 'series') => void; saving: boolean;
@@ -496,8 +495,8 @@ function EventForm({
     setCodeGenerating(true);
     try {
       const { data } = await supabase.rpc('generate_event_code', {
-        p_org_id: orgId, p_type: 'event', p_start: date.toISOString(),
-      });
+        p_org_id: orgId, p_type: 'event', p_start: date.toISOString()
+} );
       if (data) setForm(f => ({ ...f, event_code: data as string }));
     } finally {
       setCodeGenerating(false);
@@ -617,8 +616,8 @@ function EventForm({
               style={({ pressed }) => ({
                 borderWidth: 1, borderColor: c.border, borderRadius: 10,
                 paddingHorizontal: 12, paddingVertical: 13,
-                backgroundColor: pressed ? c.surfaceAlt : c.surface, opacity: codeGenerating ? 0.5 : 1,
-              })}
+                backgroundColor: pressed ? c.surfaceAlt : c.surface, opacity: codeGenerating ? 0.5 : 1
+} )}
             >
               {codeGenerating
                 ? <ActivityIndicator size="small" color={c.primary} />
@@ -697,8 +696,8 @@ function EventForm({
             <Pressable key={String(multi)} onPress={() => set('isMultiDay')(multi)}
               style={[ef.modeChip, {
                 backgroundColor: form.isMultiDay === multi ? '#3B82F6' : c.surfaceAlt,
-                borderColor: form.isMultiDay === multi ? '#3B82F6' : c.border,
-              }]}>
+                borderColor: form.isMultiDay === multi ? '#3B82F6' : c.border
+} ]}>
               <Text size="sm" weight={form.isMultiDay === multi ? 'bold' : 'regular'}
                 color={form.isMultiDay === multi ? '#fff' : c.text}>
                 {multi ? 'Multi-day' : 'Single day'}
@@ -779,8 +778,8 @@ function EventForm({
                 style={[ef.modeChip, {
                   backgroundColor: active ? '#3B82F6' : c.surfaceAlt,
                   borderColor:     active ? '#3B82F6' : c.border,
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                }]}>
+                  flexDirection: 'row', alignItems: 'center', gap: 6
+} ]}>
                 <Ionicons name={mode === 'remote' ? 'videocam-outline' : 'location-outline'} size={14}
                   color={active ? '#fff' : c.textSubtle} />
                 <Text size="sm" weight={active ? 'bold' : 'regular'} color={active ? '#fff' : c.text}>
@@ -1015,8 +1014,8 @@ const ef = StyleSheet.create({
   panel:       { borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
   panelSection:{ padding: 16 },
   toggleRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
-  checkinRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-});
+  checkinRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 }
+} );
 
 // ─── Desktop Table Row ────────────────────────────────────────────────────────
 
@@ -1057,8 +1056,8 @@ function TableRow({ event, catMap, chapters, onEdit, onCancel, onScan }: {
               flexDirection: 'row', alignItems: 'center', gap: 3,
               backgroundColor: (chapter.primary_color ?? '#6B7280') + '18',
               borderWidth: 1, borderColor: (chapter.primary_color ?? '#6B7280') + '50',
-              borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1,
-            }}>
+              borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1
+} }>
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: chapter.primary_color ?? '#6B7280' }} />
               <Text size="xs" color={chapter.primary_color ?? '#6B7280'} weight="medium" style={{ fontSize: 9 }}>
                 {chapter.name}
@@ -1140,8 +1139,8 @@ const tr = StyleSheet.create({
   statusChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, width: 90, alignItems: 'center' },
   scanBtn:    { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, width: 80, justifyContent: 'center' },
   menu:       { position: 'absolute', right: 0, top: 28, zIndex: 200, borderWidth: 1, borderRadius: 10, width: 120, overflow: 'hidden' },
-  menuItem:   { padding: 12, borderBottomWidth: 1 },
-});
+  menuItem:   { padding: 12, borderBottomWidth: 1 }
+} );
 
 // ─── Mobile Card ─────────────────────────────────────────────────────────────
 
@@ -1182,8 +1181,8 @@ function MobileCard({ event, catMap, chapters, onEdit, onScan }: {
                 flexDirection: 'row', alignItems: 'center', gap: 3,
                 backgroundColor: (chapter.primary_color ?? '#6B7280') + '18',
                 borderWidth: 1, borderColor: (chapter.primary_color ?? '#6B7280') + '50',
-                borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1,
-              }}>
+                borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1
+} }>
                 <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: chapter.primary_color ?? '#6B7280' }} />
                 <Text size="xs" color={chapter.primary_color ?? '#6B7280'} weight="medium" style={{ fontSize: 9 }}>
                   {chapter.name}
@@ -1244,8 +1243,8 @@ const mc = StyleSheet.create({
   card:       { borderWidth: 1, borderRadius: 14, padding: 14 },
   dateBadge:  { width: 48, height: 48, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   statusChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  editBtn:    { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
-});
+  editBtn:    { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -1258,6 +1257,7 @@ export default function OrgAdminEventsScreen() {
   const { organization, membership, profile } = useAuthStore();
   const { width }                    = useWindowDimensions();
   const isWide                       = width >= DESKTOP;
+  const { showAlert, confirm } = useAlert();
   const c                            = theme.colors;
 
   // The org admin's membership is on the PARENT org; that's where org-wide events live
@@ -1385,8 +1385,8 @@ export default function OrgAdminEventsScreen() {
         checkin_grace_minutes: form.checkin_grace_minutes.trim() !== '' ? parseInt(form.checkin_grace_minutes) || null : null,
         is_public:             form.is_public,
         event_code:            form.event_code.trim() || null,
-        category_id:           form.category_id ?? null,
-      };
+        category_id:           form.category_id ?? null
+} ;
 
       const editingEvent: Event | null = editing === false || editing === null ? null : editing;
       if (editingEvent?.id) {
@@ -1399,8 +1399,8 @@ export default function OrgAdminEventsScreen() {
           ...payload,
           org_id:      parentOrgId,
           is_org_wide: true,
-          created_by:  profile?.id ?? null,
-        });
+          created_by:  profile?.id ?? null
+} );
         if (error?.code === '23505') { setCodeErrorMsg('That event code is already in use.'); setSaving(false); return; }
         if (error) throw error;
       }
@@ -1408,7 +1408,7 @@ export default function OrgAdminEventsScreen() {
       setCodeErrorMsg(null);
       setEditing(false);
     } catch {
-      Alert.alert('Error', 'Failed to save event.');
+      showAlert('Error', 'Failed to save event.');
     } finally {
       setSaving(false);
     }
@@ -1430,23 +1430,22 @@ export default function OrgAdminEventsScreen() {
       await load();
       setEditing(false);
     } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Failed to delete event.');
+      showAlert('Error', err?.message ?? 'Failed to delete event.');
     }
   }
 
   async function handleCancel(event: Event) {
     // Org-admin can only cancel org-wide events that belong to their parent org
     if (!(event as any).is_org_wide) return;
-    Alert.alert('Cancel Event', `Cancel "${event.title}"?`, [
-      { text: 'Never mind', style: 'cancel' },
-      {
-        text: 'Cancel Event', style: 'destructive',
-        onPress: async () => {
-          await supabase.from('events').update({ is_cancelled: true }).eq('id', event.id);
-          await load();
-        },
+    confirm(
+      'Cancel Event',
+      `Cancel "${event.title}"?`,
+      async () => {
+        await supabase.from('events').update({ is_cancelled: true }).eq('id', event.id);
+        await load();
       },
-    ]);
+      { confirmLabel: 'Cancel Event', destructive: true }
+    );
   }
 
   if (loading) {
@@ -1486,8 +1485,8 @@ export default function OrgAdminEventsScreen() {
         <Pressable onPress={() => setChapterFilter(null)}
           style={[sc.filterChip, {
             backgroundColor: chapterFilter === null ? '#3B82F618' : c.surfaceAlt,
-            borderColor:     chapterFilter === null ? '#3B82F6'   : c.border,
-          }]}>
+            borderColor:     chapterFilter === null ? '#3B82F6'   : c.border
+} ]}>
           <Text size="sm" weight={chapterFilter === null ? 'medium' : 'regular'}
             color={chapterFilter === null ? '#3B82F6' : c.textMuted}>All chapters</Text>
         </Pressable>
@@ -1498,8 +1497,8 @@ export default function OrgAdminEventsScreen() {
             <Pressable key={ch.id} onPress={() => setChapterFilter(active ? null : ch.id)}
               style={[sc.filterChip, {
                 backgroundColor: active ? color + '18' : c.surfaceAlt,
-                borderColor:     active ? color        : c.border,
-              }]}>
+                borderColor:     active ? color        : c.border
+} ]}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
               <Text size="sm" weight={active ? 'medium' : 'regular'} color={active ? color : c.textMuted}>
                 {ch.name}
@@ -1611,5 +1610,5 @@ const sc = StyleSheet.create({
   tabChip:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 5 },
   tableHeader:   { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
   mobileScroll:  { padding: 14, gap: 10, paddingBottom: 48 },
-  empty:         { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
-});
+  empty:         { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 }
+} );

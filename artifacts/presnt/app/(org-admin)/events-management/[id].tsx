@@ -14,7 +14,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Linking,
   Modal,
@@ -24,11 +23,11 @@ import {
   StyleSheet,
   TextInput,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Text } from '@/components/ui';
+import { Text, useAlert } from '@/components/ui';
 import { registerGeofenceForEvent, unregisterGeofenceForEvent } from '@/lib/geofence';
 import { QRCheckinModal } from '@/lib/QRCheckin';
 import { supabase } from '@/lib/supabase';
@@ -100,8 +99,8 @@ function isUuid(s: string) {
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-  });
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+} );
 }
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -123,8 +122,8 @@ function openGoogleCalendar(ev: EventDetail) {
     text:     ev.title,
     dates:    `${toCalStamp(start)}/${toCalStamp(end)}`,
     details:  ev.description ?? '',
-    location: ev.location ?? '',
-  });
+    location: ev.location ?? ''
+} );
   Linking.openURL(`https://calendar.google.com/calendar/render?${params.toString()}`);
 }
 
@@ -155,7 +154,7 @@ function downloadIcal(ev: EventDetail) {
   } else {
     const encoded = encodeURIComponent(ics);
     Linking.openURL(`data:text/calendar;charset=utf-8,${encoded}`).catch(() => {
-      Alert.alert('Export failed', 'Could not open the calendar file on this device.');
+      showAlert('Export failed', 'Could not open the calendar file on this device.');
     });
   }
 }
@@ -163,8 +162,8 @@ function downloadIcal(ev: EventDetail) {
 // ─── Add-member modal ─────────────────────────────────────────────────────────
 
 function AddMemberModal({
-  visible, title, members, alreadyAdded, onAdd, onClose,
-}: {
+  visible, title, members, alreadyAdded, onAdd, onClose
+} : {
   visible: boolean; title: string; members: Member[];
   alreadyAdded: Set<string>; onAdd: (m: Member) => Promise<void>; onClose: () => void;
 }) {
@@ -261,8 +260,8 @@ const am = StyleSheet.create({
   searchInput:{ flex: 1, fontSize: 14 },
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
   avatar:    { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  addBtn:    { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
-});
+  addBtn:    { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }
+} );
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -274,6 +273,7 @@ export default function OrgAdminEventDetailScreen() {
   const c         = theme.colors;
   const { width } = useWindowDimensions();
   const insets    = useSafeAreaInsets();
+  const { showAlert, confirm } = useAlert();
   const isWide    = width >= 800;
   const { organization } = useAuthStore();
   const parentOrgId = organization?.id ?? '';
@@ -377,8 +377,8 @@ export default function OrgAdminEventDetailScreen() {
         eventId:  id,
         lat:      event.location_lat,
         lng:      event.location_lng,
-        radiusM:  event.geofence_radius_m ?? 100,
-      }).catch(() => {});
+        radiusM:  event.geofence_radius_m ?? 100
+} ).catch(() => {});
     } else if (now > winClose) {
       unregisterGeofenceForEvent(id).catch(() => {});
     }
@@ -389,9 +389,9 @@ export default function OrgAdminEventDetailScreen() {
   async function addRsvp(m: Member) {
     if (!event?.is_org_wide) return;
     const { error } = await supabase.from('rsvps').upsert({
-      event_id: id, org_id: event.org_id, user_id: m.user_id, status: 'confirmed',
-    }, { onConflict: 'event_id,user_id' });
-    if (error) { Alert.alert('Error', error.message); return; }
+      event_id: id, org_id: event.org_id, user_id: m.user_id, status: 'confirmed'
+} , { onConflict: 'event_id,user_id' });
+    if (error) { showAlert('Error', error.message); return; }
     await load();
   }
 
@@ -399,32 +399,30 @@ export default function OrgAdminEventDetailScreen() {
     if (!event?.is_org_wide) return;
     const { error } = await supabase.from('event_attendance').upsert({
       event_id: id, org_id: event.org_id, user_id: m.user_id,
-      status: 'present', checked_in_at: new Date().toISOString(), check_in_method: 'manual',
-    }, { onConflict: 'event_id,user_id' });
-    if (error) { Alert.alert('Error', error.message); return; }
+      status: 'present', checked_in_at: new Date().toISOString(), check_in_method: 'manual'
+} , { onConflict: 'event_id,user_id' });
+    if (error) { showAlert('Error', error.message); return; }
     await load();
   }
 
   async function removeRsvp(rsvpId: string) {
     if (!event?.is_org_wide) return;
-    Alert.alert('Remove registration', 'Remove this person from the registration list?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => {
-        await supabase.from('rsvps').delete().eq('id', rsvpId);
-        await load();
-      }},
-    ]);
+    confirm(
+      'Remove registration',
+      'Remove this person from the registration list?',
+      async () => { await supabase.from('rsvps').delete().eq('id', rsvpId); await load(); },
+      { confirmLabel: 'Remove', destructive: true }
+    );
   }
 
   async function removeAttendance(attendId: string) {
     if (!event?.is_org_wide) return;
-    Alert.alert('Remove attendance', 'Remove this attendance record?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => {
-        await supabase.from('event_attendance').delete().eq('id', attendId);
-        await load();
-      }},
-    ]);
+    confirm(
+      'Remove attendance',
+      'Remove this attendance record?',
+      async () => { await supabase.from('event_attendance').delete().eq('id', attendId); await load(); },
+      { confirmLabel: 'Remove', destructive: true }
+    );
   }
 
   const rsvpUserIds   = new Set(rsvps.map((r) => r.user_id));
@@ -456,8 +454,8 @@ export default function OrgAdminEventDetailScreen() {
   // ── Status ────────────────────────────────────────────────────────────────
 
   const TYPE_COLORS: Record<string, string> = {
-    mandatory: '#E26B4A', social: '#A855F7', optional: '#22C55E', meeting: '#3B82F6',
-  };
+    mandatory: '#E26B4A', social: '#A855F7', optional: '#22C55E', meeting: '#3B82F6'
+} ;
   const typeColor = TYPE_COLORS[event.type] ?? c.primary;
 
   const _now       = new Date();
@@ -639,8 +637,8 @@ export default function OrgAdminEventDetailScreen() {
             </View>
             <View style={[ls.statusChip, {
               backgroundColor: r.status === 'confirmed' ? '#22C55E18' : '#F5940018',
-              borderColor:     r.status === 'confirmed' ? '#22C55E'   : '#F59400',
-            }]}>
+              borderColor:     r.status === 'confirmed' ? '#22C55E'   : '#F59400'
+} ]}>
               <Text size="xs" weight="medium" color={r.status === 'confirmed' ? '#22C55E' : '#F59400'}>
                 {r.status}
               </Text>
@@ -784,8 +782,8 @@ export default function OrgAdminEventDetailScreen() {
       <View style={[sc.topBar, {
         paddingTop: isWide ? 20 : insets.top + 12,
         borderBottomColor: c.border,
-        backgroundColor: c.background,
-      }]}>
+        backgroundColor: c.background
+} ]}>
         <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(org-admin)/events-management' as any)} style={sc.backBtn}>
           <Ionicons name="arrow-back-outline" size={18} color={c.text} />
           <Text size="sm" weight="medium">Events</Text>
@@ -849,8 +847,8 @@ export default function OrgAdminEventDetailScreen() {
 
 const sc = StyleSheet.create({
   topBar:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-});
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 }
+} );
 
 const ip = StyleSheet.create({
   panel:      { borderWidth: 1, borderRadius: 16, padding: 20 },
@@ -860,15 +858,15 @@ const ip = StyleSheet.create({
   stat:       { alignItems: 'center', gap: 2 },
   statDivider:{ width: 1, height: 36 },
   editBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingVertical: 10 },
-  calBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, flex: 1, justifyContent: 'center' },
-});
+  calBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, flex: 1, justifyContent: 'center' }
+} );
 
 const tp = StyleSheet.create({
   tabBar:       { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1 },
   tabBtn:       { paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabBtnActive: { borderBottomWidth: 2 },
-  addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-});
+  addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }
+} );
 
 const ls = StyleSheet.create({
   list:       { paddingHorizontal: 12, paddingTop: 8 },
@@ -876,5 +874,5 @@ const ls = StyleSheet.create({
   personRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: 1 },
   avatar:     { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   statusChip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  removeBtn:  { padding: 6 },
-});
+  removeBtn:  { padding: 6 }
+} );

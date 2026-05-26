@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -20,11 +19,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   useWindowDimensions,
-  View,
-} from 'react-native';
+  View
+}  from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Input, Text } from '@/components/ui';
+import { Button, Card, Input, Text, useAlert } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -55,8 +54,8 @@ function CreateChapterModal({
   parentOrgId,
   parentOrgName,
   onClose,
-  onCreated,
-}: {
+  onCreated
+} : {
   visible:       boolean;
   parentOrgId:   string;
   parentOrgName: string;
@@ -101,8 +100,8 @@ function CreateChapterModal({
         primary_color: primaryColor,
         timezone:      'America/New_York',
         join_code:     joinCode,
-        created_by:    userId,
-      })
+        created_by:    userId
+} )
       .select()
       .single();
 
@@ -181,8 +180,8 @@ function CreateChapterModal({
 
 function ChapterCard({
   chapter,
-  onToggleActive,
-}: {
+  onToggleActive
+} : {
   chapter:        Chapter;
   onToggleActive: (ch: Chapter) => void;
 }) {
@@ -238,8 +237,8 @@ function ChapterCard({
               styles.cardActionBtn,
               {
                 borderColor: isActive ? c.error : '#22C55E',
-                opacity: pressed ? 0.7 : 1,
-              },
+                opacity: pressed ? 0.7 : 1
+} ,
             ]}
           >
             <Ionicons
@@ -265,6 +264,7 @@ export default function OrgAdminChaptersScreen() {
   const { width }        = useWindowDimensions();
   const isWide           = width >= 800;
   const { organization } = useAuthStore();
+  const { confirm } = useAlert();
 
   const [chapters, setChapters]     = useState<Chapter[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -309,25 +309,19 @@ export default function OrgAdminChaptersScreen() {
     const isActive = chapter.is_active ?? true;
     const action   = isActive ? 'deactivate' : 'reactivate';
 
-    Alert.alert(
+    confirm(
       `${action.charAt(0).toUpperCase() + action.slice(1)} chapter`,
       isActive
         ? `Deactivating "${chapter.name}" will prevent members from joining and hide it from the active chapter list. Members keep their data.`
         : `Reactivating "${chapter.name}" will make it visible and joinable again.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: isActive ? 'Deactivate' : 'Reactivate',
-          style: isActive ? 'destructive' : 'default',
-          onPress: async () => {
-            await supabase
-              .from('chapters')
-              .update({ is_active: !isActive })
-              .eq('id', chapter.id);
-            load();
-          },
-        },
-      ],
+      async () => {
+        await supabase
+          .from('chapters')
+          .update({ is_active: !isActive })
+          .eq('id', chapter.id);
+        load();
+      },
+      { confirmLabel: isActive ? 'Deactivate' : 'Reactivate', destructive: isActive }
     );
   }
 
@@ -442,5 +436,5 @@ const styles = StyleSheet.create({
   swatches:     { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 4 },
   swatch:       { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   swatchSelected: { borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
-});
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 }
+} );
